@@ -288,33 +288,39 @@ function warehouse(mode: Status, f: number) {
   blocked(mode);
 }
 
-function springMotor(mode: Status, f: number) {
-  const a = pose(mode, f) * Math.PI / 2;
-  rect("#6a5940", 18, 60, 7, 10);
-  rect("#6a5940", 45, 60, 7, 10);
-  rect("#b09462", 12, 69, 47, 3);
-  oval("#9f8453", 35, 36, 27, 28);
-  oval("#424347", 35, 36, 24, 25);
-  oval("#1d252d", 35, 36, 21, 22);
-  // A broad continuous spiral reads as wound spring steel, not wheel spokes.
-  g.strokeStyle = "#e0bd75";
-  g.lineWidth = 2;
-  g.beginPath();
-  for (let i = 0; i <= 64; i++) {
-    const t = i / 64;
-    const angle = a + t * Math.PI * 5;
-    const r = 3 + t * 17;
-    const x = 35 + Math.cos(angle) * r;
-    const y = 36 + Math.sin(angle) * r;
-    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+function gear(x: number, y: number, radius: number, teeth: number, turn: number) {
+  for (let i = 0; i < teeth; i++) {
+    const t = turn + (i / teeth) * Math.PI * 2;
+    line("#c4ced4", 3, x, y, x + Math.cos(t) * (radius + 2), y + Math.sin(t) * (radius + 2));
   }
-  g.stroke();
-  oval("#f0d89c", 35, 36, 4, 4);
-  // External winding crank, visibly separated from the spring housing.
-  line("#a8b2ba", 3, 60, 36, 66, 36);
-  const crankY = 36 + [10, 0, -10, 0][pose(mode, f)];
-  line("#cad2d5", 3, 66, 36, 66, crankY);
-  rect("#b88a54", 64, crankY - 2, 9, 4);
+  oval("#8d9ca6", x, y, radius, radius);
+  oval("#2a333c", x, y, radius * 0.45, radius * 0.45);
+  oval("#d9c08a", x, y, 1.5, 1.5);
+}
+
+function springMotor(mode: Status, f: number) {
+  const step = pose(mode, f);
+  // A geared box wound by a key on top. Each pose turns the gears one quarter of a tooth.
+  const turn = step * Math.PI / 16;
+  rect("#55616d", 8, 68, 60, 4);
+  rect("#a5b2bd", 8, 68, 60, 1);
+  rect("#6a5940", 12, 28, 44, 40);
+  rect("#b09462", 12, 28, 44, 3);
+  rect("#463a2a", 12, 64, 44, 4);
+  rect("#171e26", 17, 34, 34, 28);
+  for (const x of [14, 53]) for (const y of [33, 62]) rect("#e0bd75", x, y, 1, 1);
+  gear(29, 47, 10, 8, turn);
+  gear(45, 53, 5, 6, -turn * 8 / 6);
+  // Output shaft leaving the box.
+  rect("#a8b2ba", 56, 50, 12, 4);
+  rect("#d0d9dd", 56, 50, 12, 1);
+  rect("#b88a54", 66, 47, 4, 10);
+  // The wind-up key narrows as it spins on its stem.
+  const wing = [10, 6, 2, 6][step];
+  rect("#a8b2ba", 32, 16, 5, 12);
+  oval("#e0bd75", 34.5 - wing, 11, wing, 6);
+  oval("#e0bd75", 34.5 + wing, 11, wing, 6);
+  oval("#fff0c0", 34.5, 12, 3, 3);
   blocked(mode);
 }
 

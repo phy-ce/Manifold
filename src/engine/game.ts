@@ -7,7 +7,7 @@ export const SAVE_VERSION = 13;
 export const SPRING_MAX = 200;
 export const WIND = 5;
 /** A wound spring slowly runs down by itself, losing 1 force this often. */
-export const SPRING_LEAK_MS = 10_000;
+export const SPRING_LEAK_MS = 2_000;
 export const STACK = 64;
 export const INV_SLOTS = 8;
 /** The most the player can carry and still walk. */
