@@ -1,6 +1,6 @@
 import "./style.css";
-import { MILESTONE, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, deliver, eat, overloaded, sortSlots, step, trashCursor, upgradeSave, walkTo, wheelStack } from "./engine/game";
+import { PLAYABLE_STAGES, STAGES, itemCode, itemColor, itemName } from "./content";
+import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, sortSlots, step, trashCursor, upgradeSave, walkTo, wheelStack } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -51,10 +51,6 @@ const top = document.createElement("header");
 top.className = "top";
 const goal = document.createElement("div");
 goal.className = "goal";
-const deliverButton = document.createElement("button");
-deliverButton.type = "button";
-deliverButton.className = "tech";
-deliverButton.textContent = "납품";
 const travel = document.createElement("button");
 travel.type = "button";
 travel.className = "tech";
@@ -95,7 +91,7 @@ const testStart = document.createElement("button");
 testStart.type = "button";
 testStart.className = "tech";
 testStart.textContent = "테스트 시작";
-testStart.dataset.tip = "감긴 태엽 동력기, 제련로, 재료가 찬 창고로 시작합니다";
+testStart.dataset.tip = "S1-2가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다";
 testStart.addEventListener("click", () => {
   if (testStart.dataset.armed !== "1") {
     testStart.dataset.armed = "1";
@@ -110,7 +106,7 @@ testStart.addEventListener("click", () => {
   save();
   location.reload();
 });
-top.append(goal, vitals, deliverButton, travel, indexButton, speedBar, saveButton, testStart, reset);
+top.append(goal, vitals, travel, indexButton, speedBar, saveButton, testStart, reset);
 
 // A small number shows the damage taken. No full-screen flash: it was hard on the eyes.
 const hurtFlash = document.createElement("div");
@@ -275,13 +271,13 @@ invBox.append(invTools, invGrid);
 const win = document.createElement("div");
 win.className = "win";
 win.hidden = true;
-win.innerHTML = `<div class="window"><h2>S1-1 완료</h2><p>첫 증기기관을 납품했습니다.</p></div>`;
+win.innerHTML = `<div class="window"><h2></h2><p></p></div>`;
 const keepPlaying = document.createElement("button");
 keepPlaying.type = "button";
 keepPlaying.className = "tech";
 keepPlaying.textContent = "계속하기";
 keepPlaying.addEventListener("click", () => {
-  state.winSeen = true;
+  state.announced = null;
   redraw();
 });
 win.firstElementChild!.append(keepPlaying);
@@ -289,11 +285,6 @@ win.firstElementChild!.append(keepPlaying);
 document.body.append(itemIndex.root);
 app.append(top, notice, graph.root, map.root, invBox, windowView.root, buildView.root, routeView.root, saveView.root, win);
 
-deliverButton.addEventListener("click", () => {
-  deliver(state);
-  save();
-  redraw();
-});
 travel.addEventListener("click", () => {
   if (atBase(state)) screen = screen === "base" ? "map" : "base";
   else walkTo(state, BASE);
@@ -330,11 +321,13 @@ function redraw(): void {
 
   const place = home ? (screen === "base" ? "지도" : "기지로") : "기지로 복귀";
   if (travel.textContent !== place) travel.textContent = place;
-  const { item, amount } = MILESTONE.goal;
-  const target = `${item}|${state.delivered}`;
+  const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
+  const { item, amount } = stage.goal;
+  const made = state.made[item] ?? 0;
+  const target = `${stage.id}|${made}`;
   if (goal.dataset.key !== target) {
     goal.dataset.key = target;
-    goal.innerHTML = `<span style="color:${itemColor(item)}">${itemCode(item)}</span> ${itemName(item)} ${state.delivered}/${amount}`;
+    goal.innerHTML = `${stage.id} <span style="color:${itemColor(item)}">${itemCode(item)}</span> ${itemName(item)} ${Math.min(made, amount)}/${amount}`;
   }
   const seasonLeft = Math.ceil((SEASON_MS - (state.time % SEASON_MS)) / 1000);
   const clock = `${Math.floor(seasonLeft / 60)}:${String(seasonLeft % 60).padStart(2, "0")}`;
@@ -354,14 +347,20 @@ function redraw(): void {
   } else if (!notice.hidden && performance.now() > noticeUntil) {
     notice.hidden = true;
   }
-  deliverButton.hidden = !home || state.won || !state.inv.some((slot) => slot?.id === item);
   state.inv.forEach((stack, i) => paintSlot(invSlots[i], stack));
   const wasHidden = held.hidden;
   held.hidden = !state.cursor;
   if (state.cursor) paintSlot(heldSlot, state.cursor);
   if (wasHidden && !held.hidden) held.style.transform = `translate(${pointer.x + 6}px, ${pointer.y + 6}px)`;
   trashButton.disabled = !state.cursor;
-  win.hidden = !state.won || state.winSeen;
+  win.hidden = !state.announced;
+  if (state.announced && win.dataset.stage !== state.announced) {
+    win.dataset.stage = state.announced;
+    win.querySelector("h2")!.textContent = `${state.announced} 완료`;
+    const next = STAGES[state.stage];
+    win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `다음 단계: ${next.id} ${next.name}` : `${next.id}은 아직 준비 중입니다.`;
+  }
+  graph.setStage(state.stage);
   if (showBase) graph.draw();
   else map.draw();
 }

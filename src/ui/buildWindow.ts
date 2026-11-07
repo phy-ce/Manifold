@@ -1,6 +1,6 @@
 // Build window: shows what a facility needs, then the player works it into existence.
-import { machineCost, machineName, machineWork } from "../content";
-import { GameState, canAfford, cancelProject, countOf, startProject, workProject } from "../engine/game";
+import { PUMP, machineCost, machineName, machineWork } from "../content";
+import { GameState, canStart, cancelProject, countOf, nearestRiver, startProject, workProject } from "../engine/game";
 import { COLS, renderArt } from "./art";
 import { makeSlot, paintSlot } from "./slots";
 
@@ -118,7 +118,8 @@ export class BuildWindow {
     this.work.disabled = !mine;
     this.cancel.hidden = !mine;
     this.start.hidden = !!mine;
-    this.start.disabled = !!s.project || !canAfford(s, this.type);
+    this.start.disabled = !!s.project || !canStart(s, this.type);
+    this.start.dataset.tip = this.type === PUMP && !nearestRiver(s) ? "지도에서 강가를 먼저 찾아야 합니다" : "";
 
     // The facility rises from the ground as the work fills up.
     const key = `${this.type}|${done}|${!!mine}`;

@@ -53,14 +53,6 @@ const veinSize = (rng: () => number, ore: string): number => {
 
 const RIVER_SPACING = 70;
 
-/** A unique number for each region of the endless map. */
-export function regionId(x: number, y: number): number {
-  const zig = (n: number) => (n >= 0 ? n * 2 : -n * 2 - 1);
-  const a = zig(chunkOf(x));
-  const b = zig(chunkOf(y));
-  return a >= b ? a * a + a + b : a + b * b;
-}
-
 /** The glyph, style and height of open ground. Shared by the map and terrain hazards. */
 export function terrain(x: number, y: number, seed: number): [string, string, number] {
   const bend = Math.round(Math.sin(y * 0.6 + seed) * 3);
@@ -115,6 +107,15 @@ export function chunkSites(seed: number, cx: number, cy: number): Omit<Site, "id
     sites.push({ ore, x, y, total, left: total, seed: seed + Math.abs(cx * 131 + cy * 17 + i) });
   }
   return sites;
+}
+
+/** Dry ground beside the nearest river on each side of the base. */
+export function riverBanks(seed: number): Point[] {
+  return [1, -1].map((way) => {
+    let x = BASE.x;
+    while (terrain(x + way, BASE.y, seed)[1] !== "t-water") x += way;
+    return { x, y: BASE.y };
+  });
 }
 
 export function linePath(a: Point, b: Point): Point[] {

@@ -5,6 +5,7 @@
     { "depth": 2, "name": "심부", "scanLevel": 3, "veinSize": [10000, 30000], "distance": [23, 33], "access": "auto" }
   ],
   "forage": { "ids": ["Be", "Mu"], "size": [3, 9], "seasons": { "Be": [1, 2], "Mu": [0, 2] } },
+  "river": { "reserve": 300, "regenMs": 2000 },
   "ores": {
     "Lm": { "name": "갈철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 0, "color": "#c9983f", "metal": "Fe", "byproducts": ["Si", "Mn"] },
     "Hm": { "name": "적철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 1, "color": "#c8453a", "metal": "Fe", "byproducts": ["Si", "Mn"] },

@@ -13,6 +13,7 @@
   "slag": { "code": "Sl", "color": "#e0764c" },
   "boiler": { "code": "Bo", "color": "#d0a060" },
   "steam_engine_unit": { "code": "SE", "color": "#ffd24a" },
+  "water": { "code": "Wa", "color": "#5aa9e6" },
   "Be": { "code": "Be", "color": "#d6456b" },
   "Mu": { "code": "Mu", "color": "#c9a27a" },
   "Bc": { "code": "Bc", "color": "#e0705a" },

@@ -286,6 +286,120 @@ function springMotor(mode: Status, f: number) {
   blocked(mode);
 }
 
+function steamEngine(mode: Status, f: number) {
+  const p = pose(mode, f);
+  const angle = p * Math.PI / 2;
+  // A complete engine on one heavy bed: boiler, chimney and driven cylinder.
+  rect("#515d68", 5, 66, 66, 6);
+  rect("#a7b5bf", 5, 66, 66, 2);
+  rect("#645044", 10, 50, 30, 16);
+  rect("#252a31", 15, 55, 12, 9);
+  rect("#bd854b", 17, 59, 8, 3);
+  oval("#7b684f", 35, 39, 9, 15);
+  rect("#ac8b5d", 16, 24, 19, 30);
+  rect("#dfc28c", 16, 27, 19, 4);
+  rect("#756044", 16, 48, 19, 6);
+  oval("#d4b47d", 16, 39, 10, 15);
+  oval("#8e704c", 16, 39, 7, 11);
+  rect("#4f606d", 12, 9, 7, 17);
+  rect("#9cb0be", 12, 9, 2, 17);
+  rect("#b6c3c9", 10, 7, 11, 3);
+  rect("#c7a875", 30, 18, 7, 7);
+  line("#b3c1c7", 3, 35, 20, 46, 20);
+  line("#b3c1c7", 3, 46, 20, 46, 37);
+  for (const y of [29, 38, 47]) rect("#eed29d", 32, y, 2, 2);
+  // The piston sits low on its own mounting, with an exposed connecting rod.
+  rect("#718694", 29, 51, 17, 10);
+  rect("#d0dce0", 29, 50, 3, 12);
+  rect("#c2d0d6", 43, 50, 3, 12);
+  rect("#53616a", 49, 59, 13, 7);
+  oval("#c3b18a", 56, 45, 16, 19);
+  oval("#5f676a", 56, 45, 13, 16);
+  oval("#1c252d", 56, 45, 10, 13);
+  for (let i = 0; i < 3; i++) {
+    const a = angle + i * Math.PI * 2 / 3;
+    line("#a5b5bc", 2, 56, 45, 56 + Math.cos(a) * 12, 45 + Math.sin(a) * 15);
+  }
+  const crankX = 56 + Math.cos(angle) * 6;
+  const crankY = 45 + Math.sin(angle) * 7;
+  line("#e0c290", 3, 39 + Math.cos(angle) * 3, 55, crankX, crankY);
+  oval("#e7d3a8", crankX, crankY, 2, 2);
+  oval("#d8e1e4", 56, 45, 3, 3);
+  if (mode === "run") {
+    for (let i = 0; i < 2; i++) {
+      const rise = (p + i * 2) % 4;
+      oval("#b4cbd3", 39 + rise * 2, 15 - rise * 3, 2 + rise / 2, 2);
+    }
+  }
+  blocked(mode);
+}
+
+function drainagePump(mode: Status, f: number) {
+  const p = pose(mode, f);
+  const lift = [0, 4, 8, 4][p];
+  // Narrow upright pump on a stone bank, with an intake reaching into the river.
+  polygon("#766d59", [[6, 56], [36, 54], [43, 62], [39, 72], [6, 72]]);
+  polygon("#315c79", [[40, 60], [70, 59], [73, 72], [37, 72]]);
+  line("#85bdd1", 1, 45, 64, 66, 64);
+  line("#679dbd", 1, 42, 69, 57, 69);
+  rect("#4c6674", 25, 46, 6, 18);
+  rect("#9fb5bf", 25, 46, 2, 18);
+  rect("#677b80", 17, 53, 22, 5);
+  rect("#bec8c6", 17, 53, 22, 2);
+  rect("#688d91", 20, 28, 16, 24);
+  rect("#b0ced0", 20, 28, 4, 24);
+  oval("#d3e2dd", 28, 28, 10, 3);
+  oval("#759293", 28, 50, 10, 3);
+  rect("#c8d6db", 26, 15 + lift, 4, 12 - lift);
+  line("#aebbc3", 3, 15, 19, 49, 10 + lift * 2);
+  oval("#e1d5b5", 15, 19, 3, 3);
+  rect("#a47d4f", 46, 8 + lift * 2, 9, 4);
+  rect("#7c9ba7", 35, 34, 22, 6);
+  rect("#c1d6dc", 35, 34, 22, 2);
+  rect("#7c9ba7", 52, 38, 5, 8);
+  oval("#c5d9dc", 54.5, 46, 4, 2);
+  oval("#263e4b", 54.5, 46, 2, 1);
+  if (mode === "run") {
+    for (let i = 0; i < 3; i++) {
+      rect("#a8dfed", 53 + i % 2, 48 + (p + i * 4) % 13, 2, 3);
+    }
+    line("#c6e8ef", 1, 50 - p, 63, 58 + p, 63);
+  }
+  blocked(mode);
+}
+
+function steamHammer(mode: Status, f: number) {
+  const p = pose(mode, f);
+  const headY = [31, 38, 46, 38][p];
+  // Twin cast pillars and an overhead steam cylinder enclose a heavy ram.
+  rect("#46535f", 8, 67, 58, 5);
+  rect("#acb9c1", 8, 67, 58, 2);
+  for (const x of [13, 53]) {
+    polygon("#596c79", [[x, 17], [x + 7, 17], [x + 7, 60], [x + 11, 67], [x - 3, 67], [x, 57]]);
+    rect("#a3b7c4", x, 20, 2, 42);
+    for (const y of [22, 61]) rect("#d5dfe2", x + 3, y, 2, 2);
+  }
+  rect("#8b9eab", 11, 17, 51, 6);
+  rect("#c6d3da", 11, 17, 51, 2);
+  rect("#738998", 27, 5, 20, 20);
+  rect("#aec6d3", 29, 6, 4, 17);
+  rect("#d5dfe0", 25, 4, 24, 3);
+  rect("#b9c9ce", 25, 23, 24, 3);
+  line("#b49a6b", 3, 48, 12, 59, 12);
+  line("#b49a6b", 3, 59, 12, 59, 32);
+  rect("#d4e1e7", 34, 26, 5, headY - 26);
+  rect("#637788", 24, headY, 26, 9);
+  rect("#a9becb", 24, headY, 26, 2);
+  rect("#dce5e7", 24, headY + 8, 26, 2);
+  polygon("#8093a0", [[20, 57], [51, 57], [51, 61], [44, 63], [47, 67], [25, 67], [28, 63], [20, 61]]);
+  rect("#e4be83", 28, 55, 17, 2);
+  if (mode === "run" && p === 2) {
+    line("#ffd28a", 1, 19, 54, 15, 51);
+    line("#ffd28a", 1, 53, 54, 58, 50);
+  }
+  blocked(mode);
+}
+
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
   smelter: (m, f) => furnace(m, f, [172, 92, 62]),
@@ -295,6 +409,9 @@ const SCENES: Record<string, (mode: Status, f: number) => void> = {
   engine_bench: engineBench,
   warehouse,
   spring_motor: springMotor,
+  steam_engine: steamEngine,
+  drainage_pump: drainagePump,
+  steam_hammer: steamHammer,
 };
 
 function drawScene(type: string, mode: Status, frame: number): void {

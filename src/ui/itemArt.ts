@@ -7,6 +7,7 @@ import { METAL_CHARS, SHAPES, SOLID_CHARS, printShape, rampOf } from "./iconSpri
 import { GLYPH, SIZE, charGrid } from "./theme";
 
 const SHAPE_OF: Record<string, string> = {
+  water: "water",
   brick: "brick",
   iron: "ingot", copper: "ingot", boiler: "boiler", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",

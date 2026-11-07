@@ -41,7 +41,7 @@ const variants = expanded.variants;
 const forms: Record<string, { label: string }> = materials.forms;
 const ores: Record<string, Ore> = oreData.ores;
 const display: Record<string, { code: string; color: string }> = displayData;
-const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number }> = era.machines;
+const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number; power?: number; powerOut?: number }> = era.machines;
 
 const food: Record<string, { hunger: number; hp: number }> = era.food;
 
@@ -61,6 +61,11 @@ export const MILESTONE = era.milestones[0];
 export const SURFACE = oreData.layers[0];
 export const WAREHOUSE = "warehouse";
 export const MOTOR = "spring_motor";
+export const ENGINE = "steam_engine";
+export const PUMP = "drainage_pump";
+export const WATER = "water";
+/** How much a riverbank holds, and how often it gains 1 back. */
+export const RIVER: { reserve: number; regenMs: number } = oreData.river;
 /** What a power line carries. Not an item: it drives other lines. */
 export const POWER = "power";
 /** Route channels. Filters that pick a single item come later, in the electric age. */
@@ -73,8 +78,22 @@ export const inputRole = (key: string): string => (era.fuels.includes(key) ? "�
 /** What an output slot is for: the first holds the product, the rest by-products. */
 export const outputRole = (index: number): string => (index === 0 ? "결과" : "부산물");
 
-/** Machines available in the current milestone. */
-export const MACHINE_TYPES: string[] = MILESTONE.unlockMachines;
+export const STAGES = era.milestones;
+/** Stages with their content built so far. */
+export const PLAYABLE_STAGES = 2;
+
+/** Machines open at a stage, counting every stage before it. */
+export const machinesAt = (stage: number): string[] =>
+  STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockMachines);
+
+/** Machines of the first stage. */
+export const MACHINE_TYPES: string[] = machinesAt(0);
+
+/** Force a machine uses each second, if it can run on power. */
+export const machinePower = (type: string): number => machines[type].power ?? 0;
+/** Force a steam engine gives each second. */
+export const machinePowerOut = (type: string): number => machines[type].powerOut ?? 0;
+export const isPowerSource = (type: string): boolean => type === MOTOR || type === ENGINE;
 
 /** Parts of later milestones that share a machine with this one. */
 const LATER_ITEMS = new Set(["port_flange"]);
@@ -113,7 +132,7 @@ function buildProcess(type: string, form: string): Process {
   const recipes = machineRecipes(type).filter((r) => !form || r.form === form);
   const first = Object.keys(recipes[0].in);
   const widest = Math.max(...recipes.map((r) => Object.keys(r.out).length));
-  const count = Math.max(widest, 1 + (machines[type].byproductSlots ?? 0));
+  const count = widest ? Math.max(widest, 1 + (machines[type].byproductSlots ?? 0)) : 0;
   const outSlots = Array.from({ length: count }, (_, i) =>
     [...new Set(recipes.flatMap((r) => Object.keys(r.out).slice(i, i + 1)))]);
   return {
@@ -160,7 +179,7 @@ export const matches = (item: string, ingredient: string): boolean =>
 
 // ---- Item order
 
-const rawItems = [...Object.keys(ores), ...FORAGE];
+const rawItems = [...Object.keys(ores), WATER, ...FORAGE];
 const metalOrder = Object.keys(materials.metals);
 const formOrder = ["ingot", ...Object.keys(materials.forms)];
 
@@ -199,15 +218,15 @@ export function compareItems(a: string, b: string): number {
 
 // ---- Item index
 
-const knownRecipes = (): Recipe[] => MACHINE_TYPES.flatMap(machineRecipes).filter((r) => !r.disposal);
+const knownRecipes = (stage: number): Recipe[] => machinesAt(stage).flatMap(machineRecipes).filter((r) => !r.disposal);
 
 /** The ores that fill a family such as "coal". */
 export const familyMembers = (id: string): string[] => SURFACE_ORES.filter((ore) => ores[ore].family === id);
 
 /** Every item the player can meet right now, so later tiers stay a surprise. */
-export function indexItems(): string[] {
+export function indexItems(stage = 0): string[] {
   const seen = new Set<string>([...SURFACE_ORES, ...FORAGE]);
-  for (const recipe of knownRecipes()) {
+  for (const recipe of knownRecipes(stage)) {
     for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
       if (!familyMembers(id).length) seen.add(id);
     }
@@ -215,18 +234,19 @@ export function indexItems(): string[] {
   return [...seen];
 }
 
-export const recipesFor = (id: string): Recipe[] => knownRecipes().filter((r) => id in r.out);
-export const usesOf = (id: string): Recipe[] =>
-  knownRecipes().filter((r) => Object.keys(r.in).some((key) => matches(id, key)));
+export const recipesFor = (id: string, stage = 0): Recipe[] => knownRecipes(stage).filter((r) => id in r.out);
+export const usesOf = (id: string, stage = 0): Recipe[] =>
+  knownRecipes(stage).filter((r) => Object.keys(r.in).some((key) => matches(id, key)));
 
 /** Machines that take this item as a building material. */
-export const buildUses = (id: string): [string, Record<string, number>][] =>
-  MACHINE_TYPES.filter((type) => Object.keys(machineCost(type)).some((key) => matches(id, key)))
+export const buildUses = (id: string, stage = 0): [string, Record<string, number>][] =>
+  machinesAt(stage).filter((type) => Object.keys(machineCost(type)).some((key) => matches(id, key)))
     .map((type) => [type, machineCost(type)]);
 
 /** Where a raw item comes from, for items no machine makes. */
 export function itemSource(id: string): string | null {
   if (SURFACE_ORES.includes(id)) return "지도의 광맥에서 캡니다";
   if (FORAGE.includes(id)) return "지도에서 채집합니다";
+  if (id === WATER) return "강가에서 펌프로 끌어옵니다";
   return null;
 }

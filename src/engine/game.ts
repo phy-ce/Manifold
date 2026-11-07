@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
-import { ALL, BYPRODUCT, MACHINE_TYPES, MAIN, MAX_PORTS, MILESTONE, MOTOR, POWER, Recipe, WAREHOUSE, compareItems, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
-import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, terrain } from "./world";
+import { ALL, BYPRODUCT, ENGINE, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, Recipe, STAGES, WAREHOUSE, WATER, compareItems, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, riverBanks, terrain } from "./world";
 
 export const SAVE_VERSION = 13;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
@@ -8,6 +8,8 @@ export const SPRING_MAX = 200;
 export const WIND = 5;
 /** A wound spring slowly runs down by itself, losing 1 force this often. */
 export const SPRING_LEAK_MS = 2_000;
+/** Steam can't really be stored: a boiler holds about three seconds of full output. */
+export const STEAM_MAX = 30;
 export const STACK = 64;
 export const INV_SLOTS = 8;
 /** The most the player can carry and still walk. */
@@ -61,8 +63,12 @@ export interface GameNode {
   paid: Stack[];
   /** Mistakes made on this machine, for difficulty penalties. */
   fails: number;
-  /** Stored force, for a spring motor. */
+  /** Stored force: a spring's wind or an engine's steam. */
   energy: number;
+  /** Share of full speed from power, last step. Zero means no power reached it. */
+  speed?: number;
+  /** The riverbank a pump draws from. */
+  siteId?: number;
 }
 
 /** A facility being built. Materials are paid when work starts. */
@@ -112,10 +118,12 @@ export interface GameState {
   weakUntil: number;
   /** What the last collapse cost, until the screen has shown it. */
   lost: Stack[] | null;
-  delivered: number;
-  won: boolean;
-  /** The player has dismissed the milestone screen and kept playing. */
-  winSeen: boolean;
+  /** Index into STAGES of the stage being played. */
+  stage: number;
+  /** How many of each item have ever been made. Goals check this, so nothing is handed in. */
+  made: Record<string, number>;
+  /** A stage just finished, until the screen has shown it. */
+  announced: string | null;
 }
 
 /** "manual" means loaded and waiting for the player to work it. */
@@ -160,9 +168,9 @@ export function createGame(seed: number): GameState {
     season: 0,
     weakUntil: 0,
     lost: null,
-    delivered: 0,
-    won: false,
-    winSeen: false,
+    stage: 0,
+    made: {},
+    announced: null,
   };
   state.nodes.push(newWarehouse(state, 40, 200));
   reveal(state, BASE, BASE_REVEAL);
@@ -253,6 +261,7 @@ export const seasonAt = (time: number): number => Math.floor(time / SEASON_MS) %
 
 /** Seasonal food can only be picked in its season. Ore is always there. */
 export function canHarvest(s: GameState, site: Site): boolean {
+  if (site.ore === WATER) return false;
   const seasons = forageSeasons(site.ore);
   return !seasons || seasons.includes(s.season);
 }
@@ -264,6 +273,26 @@ function turnSeason(s: GameState): void {
   s.season = season;
   for (const site of s.sites) {
     if (forageSeasons(site.ore)?.includes(season)) site.left = site.total;
+  }
+}
+
+/** Riverbanks open with the steam stage. Their water is only ever pumped. */
+function addRivers(s: GameState): void {
+  for (const bank of riverBanks(s.seed)) {
+    if (s.sites.some((site) => site.x === bank.x && site.y === bank.y)) continue;
+    s.sites.push({ ...bank, id: s.sites.length, ore: WATER, total: RIVER.reserve, left: RIVER.reserve, seed: s.seed });
+  }
+}
+
+/** The closest riverbank the player has found. */
+export function nearestRiver(s: GameState): Site | undefined {
+  const dist = (site: Site) => Math.hypot(site.x - BASE.x, site.y - BASE.y);
+  return s.sites.filter((site) => site.ore === WATER && isRevealed(s, site.x, site.y)).sort((a, b) => dist(a) - dist(b))[0];
+}
+
+function refillRivers(s: GameState): void {
+  for (const site of s.sites) {
+    if (site.ore === WATER) site.left = Math.min(site.total, site.left + 1);
   }
 }
 
@@ -300,7 +329,7 @@ const slotFor = (node: GameNode, item: string) =>
 export const inputCap = (node: GameNode, key: string): number => Math.max(16, batchOf(node, key) * 4);
 
 export function placeMachine(s: GameState, type: string, x: number, y: number): GameNode | null {
-  if (!atBase(s) || !MACHINE_TYPES.includes(type)) return null;
+  if (!atBase(s) || !machinesAt(s.stage).includes(type)) return null;
   if (type === WAREHOUSE) {
     const store = newWarehouse(s, x, y);
     s.nodes.push(store);
@@ -326,6 +355,7 @@ export function placeMachine(s: GameState, type: string, x: number, y: number): 
     fails: 0,
     energy: 0,
   };
+  if (type === PUMP) node.siteId = nearestRiver(s)?.id;
   s.nodes.push(node);
   return node;
 }
@@ -359,6 +389,10 @@ export function setForm(s: GameState, nodeId: number, form: string): boolean {
   cutLines(s, (line) => routeMaterials(s, line.from, line.to).includes(line.material));
   return true;
 }
+
+/** A pump also needs a riverbank to draw from, which the player has to find first. */
+export const canStart = (s: GameState, type: string): boolean =>
+  canAfford(s, type) && (type !== PUMP || !!nearestRiver(s));
 
 const stores = (s: GameState): Slots[] => s.nodes.filter((n) => n.type === WAREHOUSE).map((n) => n.store);
 
@@ -401,7 +435,7 @@ function refund(s: GameState, stacks: Stack[]): void {
 /** Pays for a facility and starts the work. One project runs at a time. */
 export function startProject(s: GameState, type: string): boolean {
   stowCursor(s);
-  if (!atBase(s) || s.project || !MACHINE_TYPES.includes(type) || !canAfford(s, type)) return false;
+  if (!atBase(s) || s.project || !machinesAt(s.stage).includes(type) || !canStart(s, type)) return false;
   const paid = Object.entries(machineCost(type)).flatMap(([key, need]) => spend(s, key, need));
   s.project = { type, done: 0, paid };
   return true;
@@ -428,8 +462,18 @@ export function cancelProject(s: GameState): boolean {
   return true;
 }
 
-/** Brings a save from an older layout up to date. The stove merged into the brick kiln. */
+/** Brings a save from an older layout up to date. */
 export function upgradeSave(s: GameState): GameState {
+  // Goals used to be handed in. Count what was handed in or still exists as made.
+  const old = s as GameState & { delivered?: number; won?: boolean };
+  if (s.stage === undefined) {
+    const { item } = STAGES[0].goal;
+    s.stage = old.won ? 1 : 0;
+    s.made = { [item]: (old.delivered ?? 0) + countOf(s, item) };
+    s.announced = null;
+  }
+  if (s.stage >= 1) addRivers(s);
+  // The stove merged into the brick kiln.
   if (s.project?.type === "stove") s.project.type = "brick_kiln";
   for (const node of s.nodes) {
     if (node.type === "stove") {
@@ -466,7 +510,7 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
   const from = nodeById(s, fromId);
   const to = nodeById(s, toId);
   if (!from || !to || from === to || to.type === MOTOR) return [];
-  if (from.type === MOTOR) return [POWER];
+  if (isPowerSource(from.type)) return to.type === ENGINE ? [] : [POWER];
   // A warehouse has no filter: it can only send what it holds, in turn.
   if (from.type === WAREHOUSE) return [ALL];
   const usable = (items: string[]) => items.length > 0 && (to.type === WAREHOUSE || items.some((item) => slotFor(to, item)));
@@ -593,9 +637,8 @@ export function takeStored(s: GameState, nodeId: number, index: number): boolean
   return true;
 }
 
-export function status(node: GameNode): Status {
-  if (node.type === WAREHOUSE) return "idle";
-  if (node.type === MOTOR) return node.energy > 0 ? "run" : "idle";
+/** Whether a machine has what it needs, power aside. */
+function readiness(node: GameNode): "ready" | "idle" | "blocked" {
   const recipe = recipeOf(node);
   const full = Object.entries(recipe.out).some(([item, qty]) => node.outs[item] + qty > OUTPUT_CAP);
   // Each output slot holds one item: a leftover of another metal must be taken out first.
@@ -603,21 +646,79 @@ export function status(node: GameNode): Status {
   const occupied = Object.keys(recipe.out).some((item, i) => outSlots[i].some((other) => other !== item && node.outs[other] > 0));
   if (full || occupied) return "blocked";
   const fed = nodeProcess(node).slots.every(({ key }) => (node.ins[key]?.n ?? 0) >= batchOf(node, key));
-  if (!fed) return "idle";
-  return machineManual(node.type) ? "manual" : "run";
+  return fed ? "ready" : "idle";
 }
 
-function runMachine(node: GameNode): void {
-  if (node.type === WAREHOUSE || node.type === MOTOR || status(node) !== "run") return;
-  const recipe = recipeOf(node);
-  advance(node, STEP_MS / (recipe.time * 1000));
+export function status(node: GameNode): Status {
+  if (node.type === WAREHOUSE) return "idle";
+  if (node.type === MOTOR) return node.energy > 0 ? "run" : "idle";
+  const state = readiness(node);
+  if (node.type === ENGINE) return node.energy > 0 || state === "ready" ? "run" : "idle";
+  if (state !== "ready") return state;
+  if (node.speed) return "run";
+  if (machineManual(node.type)) return "manual";
+  return machinePower(node.type) ? "idle" : "run";
+}
+
+/** Loaded and able to run, but no power is reaching it. */
+export const lacksPower = (node: GameNode): boolean =>
+  !!machinePower(node.type) && !machineManual(node.type) && readiness(node) === "ready" && !node.speed;
+
+/** An engine burns only while its boiler has room, so a quiet factory saves coal. */
+function boil(s: GameState, node: GameNode): void {
+  if (node.energy >= STEAM_MAX || readiness(node) !== "ready") return;
+  advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
+  node.energy = Math.min(STEAM_MAX, node.energy + (machinePowerOut(node.type) * STEP_MS) / 1000);
+}
+
+function runMachine(s: GameState, node: GameNode): void {
+  if (node.type === WAREHOUSE || node.type === MOTOR) return;
+  if (node.type === ENGINE) {
+    boil(s, node);
+    return;
+  }
+  if (status(node) !== "run") return;
+  const pace = machinePower(node.type) ? node.speed ?? 0 : 1;
+  advance(s, node, (pace * STEP_MS) / (recipeOf(node).time * 1000));
+}
+
+/**
+ * Shares each power source among the machines drawing on it. A source can only give what
+ * it has, so past its limit every machine on it slows down together.
+ */
+function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
+  const users = new Map<GameNode, GameNode[]>();
+  for (const node of s.nodes) {
+    if (!machinePower(node.type)) continue;
+    node.speed = 0;
+    if (readiness(node) !== "ready") continue;
+    if (node.type === PUMP && (s.sites[node.siteId ?? -1]?.left ?? 0) < 1) continue;
+    const source = drives.get(node.id)?.find((m) => m.energy > 0);
+    if (source) users.set(source, [...(users.get(source) ?? []), node]);
+  }
+  for (const [source, machines] of users) {
+    const demand = machines.reduce((sum, node) => sum + machinePower(node.type), 0) * (STEP_MS / 1000);
+    const share = Math.min(1, source.energy / demand);
+    source.energy -= demand * share;
+    for (const node of machines) node.speed = share;
+  }
+}
+
+/** Finishes the stage once its goal item has been made. The items stay with the player. */
+function checkGoal(s: GameState): void {
+  if (s.stage >= PLAYABLE_STAGES) return;
+  const stage = STAGES[s.stage];
+  if ((s.made[stage.goal.item] ?? 0) < stage.goal.amount) return;
+  s.announced = stage.id;
+  s.stage += 1;
+  addRivers(s);
 }
 
 /** One press of work by the player, worth one second of machine time. */
 export function workMachine(s: GameState, nodeId: number): boolean {
   const node = nodeById(s, nodeId);
   if (!atBase(s) || !node || status(node) !== "manual") return false;
-  advance(node, (isWeak(s) ? WEAK_WORK : 1) / recipeOf(node).time);
+  advance(s, node, (isWeak(s) ? WEAK_WORK : 1) / recipeOf(node).time);
   return true;
 }
 
@@ -642,7 +743,7 @@ export function failWork(s: GameState, nodeId: number): boolean {
   return true;
 }
 
-function advance(node: GameNode, amount: number): void {
+function advance(s: GameState, node: GameNode, amount: number): void {
   const recipe = recipeOf(node);
   node.progress += amount;
   if (node.progress < 1 - 1e-9) return;
@@ -652,7 +753,12 @@ function advance(node: GameNode, amount: number): void {
     slot.n -= batchOf(node, key);
     if (!slot.n) node.ins[key] = null;
   }
-  for (const [item, qty] of Object.entries(recipe.out)) node.outs[item] += qty;
+  for (const [item, qty] of Object.entries(recipe.out)) {
+    node.outs[item] += qty;
+    s.made[item] = (s.made[item] ?? 0) + qty;
+  }
+  if (node.type === PUMP) s.sites[node.siteId!].left -= 1;
+  checkGoal(s);
 }
 
 /** Winds a spring motor by hand. */
@@ -668,9 +774,10 @@ export function hasDrive(s: GameState, nodeId: number): boolean {
   return s.lines.some((l) => l.to === nodeId && l.material === POWER && (nodeById(s, l.from)?.energy ?? 0) > 0);
 }
 
-function leakSprings(s: GameState): void {
+/** Springs always run down. An engine only loses steam sitting full, never while it is working. */
+function leakForce(s: GameState): void {
   for (const node of s.nodes) {
-    if (node.type === MOTOR) node.energy = Math.max(0, node.energy - 1);
+    if (node.type === MOTOR || (node.type === ENGINE && node.energy >= STEAM_MAX)) node.energy = Math.max(0, node.energy - 1);
   }
 }
 
@@ -924,16 +1031,19 @@ export function trashCursor(s: GameState): void {
   s.cursor = null;
 }
 
-/** A running start for trying things out: a wound motor already driving a stocked warehouse. */
+/** A running start for trying things out: the steam stage open and a wound motor driving a stocked warehouse. */
 export function createTestGame(seed: number): GameState {
   const s = createGame(seed);
   const store = s.nodes[0];
   const stock: [string, number][] = [
-    ["Lm", 64], ["Ml", 64], ["Lg", 64], ["Kn", 64], ["iron", 32], ["copper", 32], ["iron_plate", 32], ["copper_tube", 32], ["brick", 32],
+    ["Lm", 64], ["Ml", 64], ["Lg", 64], ["Kn", 64], ["iron", 32], ["copper", 32], ["iron_plate", 32], ["copper_tube", 32], ["brick", 32], ["steam_engine_unit", 2], ["iron_cylinder", 8],
   ];
   stock.forEach(([id, n], i) => {
     store.store[i] = { id, n };
   });
+  s.stage = 1;
+  addRivers(s);
+  for (const bank of riverBanks(seed)) reveal(s, bank, REVEAL);
   const motor = placeMachine(s, MOTOR, 40, 40)!;
   motor.energy = SPRING_MAX;
   const smelter = placeMachine(s, "smelter", 300, 200)!;
@@ -964,25 +1074,16 @@ export function step(s: GameState): void {
   walk(s);
   survive(s);
   turnSeason(s);
-  if (s.time % SPRING_LEAK_MS === 0) leakSprings(s);
-  s.nodes.forEach(runMachine);
-  // Least recently served first, so lines leaving one machine share its output evenly.
+  if (s.time % SPRING_LEAK_MS === 0) leakForce(s);
+  if (s.time % RIVER.regenMs === 0) refillRivers(s);
   const nodes = new Map(s.nodes.map((n) => [n.id, n]));
   const drives = new Map<number, GameNode[]>();
   for (const line of s.lines) {
     if (line.material === POWER) drives.set(line.to, [...(drives.get(line.to) ?? []), nodes.get(line.from)!]);
   }
+  supplyPower(s, drives);
+  s.nodes.forEach((node) => runMachine(s, node));
+  // Least recently served first, so lines leaving one machine share its output evenly.
   [...s.lines].sort((a, b) => a.lastMoved - b.lastMoved).forEach((line) => runLine(s, line, nodes, drives));
 }
 
-export function deliver(s: GameState): boolean {
-  const { item, amount } = MILESTONE.goal;
-  const index = s.inv.findIndex((slot) => slot?.id === item);
-  if (!atBase(s) || index < 0) return false;
-  const stack = s.inv[index]!;
-  stack.n -= 1;
-  if (!stack.n) s.inv[index] = null;
-  s.delivered += 1;
-  if (s.delivered >= amount) s.won = true;
-  return true;
-}

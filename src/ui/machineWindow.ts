@@ -1,7 +1,7 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
-import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole } from "../content";
+import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, canRemove, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, STEAM_MAX, canRemove, lacksPower, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -342,9 +342,12 @@ export class MachineWindow {
     const state = status(node);
     const current = recipeOf(node);
     const hand = machineManual(node.type) === "keys" ? "키를 누르세요" : "그림을 클릭하세요";
-    const stateText = state === "manual" ? hand : STATE_LABEL[state];
+    const stateText = state === "manual" ? hand : lacksPower(node) ? "동력 없음" : STATE_LABEL[state];
     const level = machineManual(node.type) ? `<span class="card-note">난이도 ${machineDifficulty(node.type)}</span>` : "";
-    const line = `${parts(current.in, inputRole)} &gt; ${parts(current.out, (_, i) => outputRole(i)) || "폐기"}${level}<span class="state ${state}">${stateText}</span>`;
+    const river = s.sites[node.siteId ?? -1];
+    const reserve = river ? `<span class="card-note">강가 ${river.left}/${river.total}</span>` : "";
+    const result = parts(current.out, (_, i) => outputRole(i)) || (node.type === ENGINE ? `증기 ${Math.floor(node.energy)}/${STEAM_MAX}` : "폐기");
+    const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}<span class="state ${state}">${stateText}</span>`;
     if (this.recipe.dataset.line !== line) {
       this.recipe.dataset.line = line;
       this.recipe.innerHTML = line;

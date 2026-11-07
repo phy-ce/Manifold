@@ -1,8 +1,8 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
-import { forageSeasons, itemCode, itemColor, itemName } from "../content";
+import { WATER, forageSeasons, itemCode, itemColor, itemName } from "../content";
 import { GameState, SEASON_NAMES, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
-import { BASE, Site, hash, regionId, terrain } from "../engine/world";
+import { BASE, Site, hash, terrain } from "../engine/world";
 
 /** Size of the window onto the endless map, which stays centred on the player. */
 const VIEW_W = 60;
@@ -47,7 +47,7 @@ function buildVein(site: Site): Vein {
 }
 
 const siteName = (s: GameState, site: Site): string =>
-  itemName(site.ore) + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
+  site.ore === WATER ? "강가" : itemName(site.ore) + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
 
 export class MapView {
   readonly root = document.createElement("section");
@@ -137,11 +137,10 @@ export class MapView {
     const s = this.game();
     if (x === BASE.x && y === BASE.y) return "기지";
     if (!isRevealed(s, x, y)) return "";
-    const region = `구역 ${regionId(x, y)}`;
     const site = s.sites.find((v) => v.x === x && v.y === y);
-    if (site) return `${siteName(s, site)} · ${region}`;
+    if (site) return siteName(s, site);
     const [, cls, height] = terrain(x, y, s.seed);
-    return cls === "t-hill" ? `산 고도 ${height} · ${region}` : cls === "t-water" ? `강 · ${region}` : region;
+    return cls === "t-hill" ? `산 고도 ${height}` : cls === "t-water" ? "강" : "";
   }
 
   draw(): void {
@@ -157,7 +156,7 @@ export class MapView {
     this.paint(s);
     // The base may be off screen, so always say how far away it is.
     const steps = Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y));
-    const where = `${steps ? `H ${steps}칸 ${this.direction(s)}` : "H"} · 구역 ${regionId(s.player.x, s.player.y)}`;
+    const where = steps ? `H ${steps}칸 ${this.direction(s)}` : "H";
     if (this.place.textContent !== where) this.place.textContent = where;
     this.drawResults();
   }
@@ -183,7 +182,7 @@ export class MapView {
         if (s.player.x === x && s.player.y === y) [glyph, color] = ["@", COLOR.player];
         else if (x === BASE.x && y === BASE.y) [glyph, color] = ["H", COLOR.base];
         else if (site) {
-          glyph = site.left <= 0 ? "x" : canHarvest(s, site) ? "*" : "'";
+          glyph = site.ore === WATER ? "W" : site.left <= 0 ? "x" : canHarvest(s, site) ? "*" : "'";
           color = itemColor(site.ore);
         } else if (path.has(key)) [glyph, color] = ["-", COLOR.path];
         else {
@@ -214,7 +213,7 @@ export class MapView {
     const steps = (v: Site) => Math.max(Math.abs(v.x - s.player.x), Math.abs(v.y - s.player.y));
     const found = s.sites
       .filter((v) => isRevealed(s, v.x, v.y))
-      .filter((v) => [itemName(v.ore), itemCode(v.ore), String(regionId(v.x, v.y))].some((t) => t.toLowerCase().includes(query)))
+      .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v)].some((t) => t.toLowerCase().includes(query)))
       .sort((a, b) => steps(a) - steps(b))
       .slice(0, MAX_RESULTS);
     this.results.replaceChildren(...found.map((site) => {
@@ -228,7 +227,7 @@ export class MapView {
       name.textContent = siteName(s, site);
       const where = document.createElement("span");
       where.className = "push card-note";
-      where.textContent = `${isVisible(s, site.x, site.y) ? "보임" : "기억"} · #${regionId(site.x, site.y)} · ${steps(site)}칸`;
+      where.textContent = `${isVisible(s, site.x, site.y) ? "보임" : "기억"} · ${steps(site)}칸`;
       b.append(code, name, where);
       b.addEventListener("click", () => {
         walkTo(this.game(), site);
@@ -280,6 +279,7 @@ export class MapView {
     const fill = Math.round((site.left / site.total) * 14);
     this.head.innerHTML = `<span style="color:${color}">${itemCode(site.ore)}</span><span>${siteName(s, site)}</span>` +
       `<span class="push">[${"#".repeat(fill).padEnd(14, ".")}] ${site.left}/${site.total}</span>` +
-      (open ? "" : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}에만 수확</span>`);
+      (site.ore === WATER ? `<span class="short">기지에서 강가 펌프로 끌어옵니다</span>`
+        : open ? "" : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}에만 수확</span>`);
   }
 }

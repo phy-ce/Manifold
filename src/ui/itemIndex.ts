@@ -102,7 +102,7 @@ export class ItemIndex {
 
   private drawGrid(): void {
     const query = this.search.value.trim().toLowerCase();
-    const found = indexItems().filter((id) =>
+    const found = indexItems(this.game().stage).filter((id) =>
       !query || itemName(id).toLowerCase().includes(query) || itemCode(id).toLowerCase().includes(query));
     const pages = Math.max(1, Math.ceil(found.length / GRID_PAGE));
     this.gridPage = Math.min(this.gridPage, pages - 1);
@@ -178,10 +178,11 @@ export class ItemIndex {
     owned.textContent = `보유 ${countOf(this.game(), id)}`;
     head.append(back, title, owned);
 
-    const recipes = recipesFor(id);
+    const stage = this.game().stage;
+    const recipes = recipesFor(id, stage);
     const source = itemSource(id);
-    const uses = usesOf(id);
-    const builds = buildUses(id);
+    const uses = usesOf(id, stage);
+    const builds = buildUses(id, stage);
 
     const tabs = document.createElement("div");
     tabs.className = "modes";

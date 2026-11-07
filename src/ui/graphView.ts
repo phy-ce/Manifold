@@ -1,5 +1,5 @@
 // Base screen: machines as nodes, lines drawn between them.
-import { MACHINE_TYPES, MAX_PORTS, MOTOR, WAREHOUSE, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { MAX_PORTS, machinesAt, MOTOR, WAREHOUSE, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
@@ -47,6 +47,22 @@ export class GraphView {
   private pan = { x: 0, y: 0 };
   private panFrom: { x: number; y: number } | null = null;
 
+  private stage = -1;
+
+  /** Fills the build list with what the current stage has opened. */
+  setStage(stage: number): void {
+    if (stage === this.stage) return;
+    this.stage = stage;
+    this.palette.replaceChildren(...machinesAt(stage).map((type) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = `${machineName(type)} +`;
+      b.addEventListener("click", () => this.build(type));
+      return b;
+    }));
+  }
+
   constructor(
     private readonly game: () => GameState,
     private readonly open: (id: number) => void,
@@ -66,14 +82,6 @@ export class GraphView {
     });
     this.roster.append(this.projectChip);
     this.palette.className = "palette";
-    for (const type of MACHINE_TYPES) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "tech";
-      b.textContent = `${machineName(type)} +`;
-      b.addEventListener("click", () => this.build(type));
-      this.palette.append(b);
-    }
     const scroll = document.createElement("div");
     scroll.className = "box board-scroll";
     this.board.className = "board";
