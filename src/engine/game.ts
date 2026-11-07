@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 14;
@@ -24,6 +24,8 @@ export const OUTPUT_CAP = 16;
 export const NAME_MAX = 12;
 /** What a machine's tank holds, in litres. Two drums' worth. */
 export const TANK_CAP = 200;
+/** What a tar tank stores, in litres. */
+export const TAR_TANK_CAP = 1000;
 export const REVEAL = 4;
 export const BASE_REVEAL = 9;
 
@@ -53,6 +55,8 @@ export interface Stack {
 }
 export type Slots = (Stack | null)[];
 
+export type Overflow = "refuse" | "discard";
+
 export interface GameNode {
   id: number;
   type: string;
@@ -76,6 +80,8 @@ export interface GameNode {
   speed?: number;
   /** The riverbank a pump draws from. */
   siteId?: number;
+  /** What a full tar tank does with more: refuse it, or take it and throw it away. */
+  overflow?: Overflow;
 }
 
 /** A planned machine: shown faded on the board, doing nothing until a real one takes its place. */
@@ -432,8 +438,9 @@ export function placeMachine(s: GameState, type: string, x: number, y: number): 
     s.nodes.push(store);
     return store;
   }
-  if (type === MOTOR || type === MANIFOLD || type === SPLITTER) {
+  if (type === MOTOR || type === MANIFOLD || type === SPLITTER || type === TANK) {
     const node: GameNode = { ...newWarehouse(s, x, y), type, store: emptySlots(type === SPLITTER ? 1 : 0) };
+    if (type === TANK) node.ins = { [TAR]: null };
     s.nodes.push(node);
     return node;
   }
@@ -792,10 +799,12 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
   if (from.type === MOTOR && to.type === MANIFOLD) return [];
   if (isPowerSource(from.type) || from.type === MANIFOLD) return to.type === ENGINE ? [] : [POWER];
   if (to.type === MANIFOLD) return [];
+  // Nothing can use stored tar yet, so a tank has no lines out.
+  if (from.type === TANK) return [];
   // A warehouse has no filter: it can only send what it holds, in turn.
-  if (isStore(from.type)) return [ALL];
+  if (isStore(from.type)) return to.type === TANK ? [] : [ALL];
   // A warehouse takes items only: fluids need a tank or a drum.
-  const usable = (items: string[]) => items.some((item) => (isStore(to.type) ? !isFluid(item) : slotFor(to, item)));
+  const usable = (items: string[]) => items.some((item) => (to.type === TANK ? item === TAR : isStore(to.type) ? !isFluid(item) : slotFor(to, item)));
   const { main, byproducts } = outputChannels(from);
   return [...(usable(main) ? [MAIN] : []), ...(usable(byproducts) ? [BYPRODUCT] : [])];
 }
@@ -872,6 +881,11 @@ export function removeLine(s: GameState, id: number): boolean {
 
 /** How many of an item a node can still accept. */
 function roomFor(node: GameNode, item: string, viaLine = false): number {
+  if (node.type === TANK) {
+    if (item !== TAR) return 0;
+    // A tank set to discard always takes more, and loses what doesn't fit.
+    return node.overflow === "discard" ? TAR_TANK_CAP : TAR_TANK_CAP - (node.ins[TAR]?.n ?? 0);
+  }
   if (isStore(node.type)) {
     if (isFluid(item)) return 0;
     return node.store.reduce((room, slot) => room + (!slot ? STACK : slot.id === item ? STACK - slot.n : 0), 0);
@@ -888,6 +902,10 @@ function roomFor(node: GameNode, item: string, viaLine = false): number {
 function insert(node: GameNode, item: string, n: number, viaLine = false): number {
   const moved = Math.min(n, roomFor(node, item, viaLine));
   if (moved <= 0) return 0;
+  if (node.type === TANK) {
+    node.ins[TAR] = { id: TAR, n: Math.min(TAR_TANK_CAP, (node.ins[TAR]?.n ?? 0) + moved) };
+    return moved;
+  }
   if (isStore(node.type)) return addTo(node.store, item, moved);
   const key = slotFor(node, item)!.key;
   node.ins[key] = { id: item, n: (node.ins[key]?.n ?? 0) + moved };
@@ -903,6 +921,14 @@ export function moveToNode(s: GameState, slot: number, nodeId: number): boolean 
   stack.n -= moved;
   if (!stack.n) s.inv[slot] = null;
   return moved > 0;
+}
+
+/** Chooses what a tar tank does once it is full. */
+export function setOverflow(s: GameState, nodeId: number, overflow: Overflow): boolean {
+  const node = nodeById(s, nodeId);
+  if (!atBase(s) || node?.type !== TANK) return false;
+  node.overflow = overflow;
+  return true;
 }
 
 /** Whether a recipe is one this machine can run as it is set now. */

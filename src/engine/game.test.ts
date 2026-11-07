@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, addTo, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -2141,16 +2141,47 @@ describe("S1-3", () => {
     expect(bench.outs.iron_fan).toBe(1);
   });
 
-  it("disposes of tar in a tank", () => {
+  const tarLine = () => {
     const { s, motor } = stage3();
     const oven = placeMachine(s, "coke_oven", 0, 0)!;
     const tank = placeMachine(s, "tar_tank", 0, 0)!;
     connect(s, motor.id, oven.id, POWER);
     expect(connect(s, oven.id, tank.id, "byproduct")).toBeTruthy();
+    return { s, oven, tank };
+  };
+
+  it("stores tar in a tank instead of destroying it", () => {
+    const { s, oven, tank } = tarLine();
     oven.outs.coal_tar = 3;
     run(s, 6);
     expect(oven.outs.coal_tar).toBe(0);
-    expect(tank.ins.coal_tar).toBeNull();
+    expect(tank.ins.coal_tar).toEqual({ id: "coal_tar", n: 3 });
+  });
+
+  it("refuses more when full, by default, so the oven backs up", () => {
+    const { s, oven, tank } = tarLine();
+    tank.ins.coal_tar = { id: "coal_tar", n: TAR_TANK_CAP };
+    oven.outs.coal_tar = 3;
+    run(s, 6);
+    expect(oven.outs.coal_tar).toBe(3);
+    expect(tank.ins.coal_tar!.n).toBe(TAR_TANK_CAP);
+  });
+
+  it("throws away the excess when told to, so the oven keeps going", () => {
+    const { s, oven, tank } = tarLine();
+    expect(setOverflow(s, tank.id, "discard")).toBe(true);
+    tank.ins.coal_tar = { id: "coal_tar", n: TAR_TANK_CAP };
+    oven.outs.coal_tar = 3;
+    run(s, 6);
+    expect(oven.outs.coal_tar).toBe(0);
+    expect(tank.ins.coal_tar!.n).toBe(TAR_TANK_CAP);
+  });
+
+  it("takes only tar, and can't be emptied by hand", () => {
+    const { s, tank } = tarLine();
+    tank.ins.coal_tar = { id: "coal_tar", n: 5 };
+    expect(takeInput(s, tank.id, "coal_tar")).toBe(false);
+    expect(routeMaterials(s, s.nodes[0].id, tank.id)).toEqual([]);
   });
 
   it("smelts ore, coke and limestone in the blast furnace, on power", () => {

@@ -16,7 +16,7 @@
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
     "brick": 2, "slag": 2, "boiler": 30, "steam_engine_unit": 50, "water": 1, "water_drum": 30
   },
-  "stockpiled": ["slag"],
+  "stockpiled": ["slag", "coal_tar"],
   "food": {
     "Be": { "hunger": 10, "hp": 0 },
     "Mu": { "hunger": 8, "hp": 0 },
@@ -89,7 +89,6 @@
     { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "iron": 4, "slag": 2 } },
     { "id": "steel", "machine": "converter", "time": 10, "in": { "iron": 4 }, "out": { "steel": 3, "slag": 1 } },
     { "id": "steel_scrap", "machine": "converter", "time": 10, "in": { "iron": 3, "scrap": 2 }, "out": { "steel": 3, "slag": 1 }, "alt": true },
-    { "id": "tar_dump", "machine": "tar_tank", "time": 1, "in": { "coal_tar": 1 }, "out": {}, "disposal": true },
 
     { "id": "steel_plate", "machine": "rolling_mill", "time": 3, "in": { "steel": 1 }, "out": { "steel_plate": 1 } },
     { "id": "steel_shaft", "machine": "lathe", "time": 8, "in": { "steel": 2 }, "out": { "steel_shaft": 1, "scrap": 1 } },

@@ -1,8 +1,8 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { tr } from "../i18n";
-import { ENGINE, MANIFOLD, MAX_PORTS, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
-  NAME_MAX, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
+  NAME_MAX, TAR_TANK_CAP, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
@@ -787,6 +787,9 @@ export class GraphView {
     const used = portsUsed(s, node.id);
     const ports = "●".repeat(used) + "○".repeat(MAX_PORTS - used);
     const tag = (id: string, n: number) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span>${n}${unitOf(id)}`;
+    if (node.type === TANK) {
+      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tag(TAR, node.ins[TAR]?.n ?? 0)}/${TAR_TANK_CAP}L</span>`;
+    }
     if (node.type === MANIFOLD) {
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tr("동력을 나눕니다")}</span>`;
     }

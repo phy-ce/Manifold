@@ -68,6 +68,9 @@ export const SURFACE = oreData.layers[0];
 export const WAREHOUSE = "warehouse";
 export const MOTOR = "spring_motor";
 export const ENGINE = "steam_engine";
+/** Stores coal tar. What happens when it fills up is the player's choice. */
+export const TANK = "tar_tank";
+export const TAR = "coal_tar";
 /** Passes power on from one line to many. */
 export const MANIFOLD = "steam_manifold";
 /** Holds a little of anything and passes it on along its lines in turn. */
@@ -119,7 +122,7 @@ export const isPowerSource = (type: string): boolean => type === MOTOR || type =
 /** Nodes that hold items in slots and send them on without a recipe. */
 export const isStore = (type: string): boolean => type === WAREHOUSE || type === SPLITTER;
 /** Nodes with no recipe of their own. */
-export const isPassive = (type: string): boolean => isStore(type) || type === MANIFOLD;
+export const isPassive = (type: string): boolean => isStore(type) || type === MANIFOLD || type === TANK;
 
 /** Parts of later milestones that share a machine with this one. */
 const LATER_ITEMS = new Set(["port_flange"]);

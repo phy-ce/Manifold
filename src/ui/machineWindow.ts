@@ -1,8 +1,8 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, PUMP, isStore, machinePower, unitOf } from "../content";
+import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canRemove, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -188,6 +188,10 @@ export class MachineWindow {
     delete this.art.root.dataset.scene;
     if (isStore(node.type)) this.buildWarehouse(node);
     else if (node.type === MANIFOLD) this.top.className = "machine";
+    else if (node.type === TANK) {
+      this.top.className = "machine";
+      this.top.append(this.art.root);
+    }
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
     this.root.hidden = false;
@@ -217,6 +221,26 @@ export class MachineWindow {
       this.modes.append(b);
     }
     if (node.type === PUMP) this.buildRivers(node);
+    if (node.type === TANK) this.buildOverflow(node);
+  }
+
+  /** What a tar tank does when it is full. */
+  private buildOverflow(node: GameNode): void {
+    this.modes.hidden = false;
+    const choices = [["refuse", tr("입력 안 받기"), tr("가득 차면 더 받지 않습니다. 코크스로가 멈출 수 있습니다")], ["discard", tr("초과 폐기"), tr("가득 차면 넘치는 타르를 버립니다")]] as const;
+    for (const [overflow, label, tip] of choices) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `tech ${(node.overflow ?? "refuse") === overflow ? "selected" : ""}`;
+      b.textContent = label;
+      b.dataset.tip = tip;
+      b.addEventListener("click", () => {
+        setOverflow(this.game(), node.id, overflow);
+        this.open(node.id);
+        this.changed();
+      });
+      this.modes.append(b);
+    }
   }
 
   /** A pump chooses its riverbank here, from the ones the player has found. */
@@ -354,6 +378,19 @@ export class MachineWindow {
     this.demolish.disabled = !canRemove(s, node);
     this.demolish.dataset.tip = this.demolish.disabled ? tr("창고를 비워야 철거할 수 있습니다") : "";
     this.recipe.hidden = isStore(node.type);
+    if (node.type === TANK) {
+      const line = `${tr("콜타르")} ${node.ins[TAR]?.n ?? 0}/${TAR_TANK_CAP}L`;
+      if (this.recipe.dataset.line !== line) {
+        this.recipe.dataset.line = line;
+        this.recipe.textContent = line;
+      }
+      if (this.art.root.dataset.scene !== "tank") {
+        this.art.root.dataset.scene = "tank";
+        this.art.show(node.type, "idle", 0);
+      }
+      this.bar.textContent = "";
+      return;
+    }
     if (node.type === MANIFOLD) {
       const line = tr("들어온 동력을 연결된 곳으로 나눕니다");
       if (this.recipe.dataset.line !== line) {

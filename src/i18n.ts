@@ -123,6 +123,7 @@ export const EN: Record<string, string> = {
   "북": "N", "남": "S", "서": "W", "동": "E", "캐기": "mine", "기지에서 강가 펌프로 선을 이어 끌어옵니다": "Build a riverbank pump at base and link it here", "에만 수확": " only",
   // Routes and saves
   "게임을 시작하지 못했습니다": "The game couldn't start", "세이브를 보관하고 새로 시작": "Set the save aside and start fresh",
+  "입력 안 받기": "Refuse input", "초과 폐기": "Discard excess", "가득 차면 더 받지 않습니다. 코크스로가 멈출 수 있습니다": "Takes no more when full. The coke oven may stop", "가득 차면 넘치는 타르를 버립니다": "Throws away tar that doesn't fit when full",
   "고갈 숨기기": "Hide empty", "연결 설정": "Route", "보내는 쪽에 동력이 없어 멈춰 있습니다": "Stopped: the sending side has no power", "포트": "Ports", "연결 비용:": "Line cost:", "이동 중": "Moving", "대기": "Idle",
   "슬롯": "Slot", "비어 있음": "Empty", "저장 실패": "Save failed", "불러오기": "Load",
   // Slots
