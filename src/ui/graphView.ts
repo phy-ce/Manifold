@@ -13,7 +13,26 @@ const SVG = "http://www.w3.org/2000/svg";
 /** Gap from the centre line for each direction of a two-way route. */
 const LANE = 14;
 type Point2 = [number, number];
-type Curve = [Point2, Point2, Point2, Point2];
+/** A wire's corners. Every run is straight or at 45 degrees. */
+type Wire = Point2[];
+/** How far a wire leaves a node straight before it turns. */
+const WIRE_STUB = 14;
+
+const wirePath = (wire: Wire): string => `M${wire.map((p) => `${p[0]} ${p[1]}`).join(" L")}`;
+
+/** The spot a share of the way along a wire, by distance. */
+function alongWire(wire: Wire, share: number): Point2 {
+  const lengths = wire.slice(1).map((p, i) => Math.hypot(p[0] - wire[i][0], p[1] - wire[i][1]));
+  let left = lengths.reduce((a, b) => a + b, 0) * share;
+  for (let i = 0; i < lengths.length; i += 1) {
+    if (left <= lengths[i] && lengths[i] > 0) {
+      const k = left / lengths[i];
+      return [wire[i][0] + (wire[i + 1][0] - wire[i][0]) * k, wire[i][1] + (wire[i + 1][1] - wire[i][1]) * k];
+    }
+    left -= lengths[i];
+  }
+  return wire[wire.length - 1];
+}
 /** Which state a kind of facility shows when its machines differ: the one needing attention. */
 const STATUS_ORDER = ["blocked", "manual", "run", "idle"] as const;
 const STATUS_LABEL = { blocked: tr("출력 막힘"), manual: tr("작업 대기"), run: tr("가동 중"), idle: tr("재료 부족") };
@@ -507,8 +526,7 @@ export class GraphView {
         this.svg.append(path);
         this.ghostWires.set(key, path);
       }
-      const [p0, c1, c2, p3] = this.curve(a, b, false);
-      path.setAttribute("d", `M${p0[0]} ${p0[1]} C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p3[0]} ${p3[1]}`);
+      path.setAttribute("d", wirePath(this.wire(a, b, false)));
       path.style.stroke = itemColor(line.material);
       path.classList.toggle("muted", this.channel !== "all" && channelOf(line.material) !== this.channel);
     }
@@ -802,10 +820,10 @@ export class GraphView {
   }
 
   /**
-   * The curve of a route. It leaves from the side facing its target, and when traffic
+   * The wire of a route. It leaves from the side facing its target, and when traffic
    * runs both ways each direction keeps to its own lane, like a two-way road.
    */
-  private curve(a: { x: number; y: number }, b: { x: number; y: number }, twoWay: boolean): Curve {
+  private wire(a: { x: number; y: number }, b: { x: number; y: number }, twoWay: boolean): Wire {
     const ax = a.x + NODE_W / 2;
     const ay = a.y + NODE_H / 2;
     const bx = b.x + NODE_W / 2;
@@ -820,9 +838,23 @@ export class GraphView {
     const shift: Point2 = flat ? [0, sx * lane] : [-sy * lane, 0];
     const p0: Point2 = [start[0] + shift[0], start[1] + shift[1]];
     const p3: Point2 = [end[0] + shift[0], end[1] + shift[1]];
-    const bend = Math.max(30, Math.hypot(p3[0] - p0[0], p3[1] - p0[1]) * 0.4);
-    const out: Point2 = flat ? [sx * bend, 0] : [0, sy * bend];
-    return [p0, [p0[0] + out[0], p0[1] + out[1]], [p3[0] - out[0], p3[1] - out[1]], p3];
+    // Worked out along the way the wire leaves ("ahead") and across it ("side").
+    const ahead = Math.abs(flat ? p3[0] - p0[0] : p3[1] - p0[1]);
+    const side = Math.abs(flat ? p3[1] - p0[1] : p3[0] - p0[0]);
+    const signX = Math.sign(p3[0] - p0[0]);
+    const signY = Math.sign(p3[1] - p0[1]);
+    const at = (a: number, c: number): Point2 => (flat
+      ? [p0[0] + signX * a, p0[1] + signY * c]
+      : [p0[0] + signX * c, p0[1] + signY * a]);
+    // Room to go straight: split it around one diagonal.
+    if (side <= ahead) {
+      const straight = (ahead - side) / 2;
+      return [p0, at(straight, 0), at(straight + side, side), p3];
+    }
+    // More sideways than ahead: two diagonals with a run between, so it still enters the node head on.
+    const stub = Math.min(WIRE_STUB, ahead / 4);
+    const run = (ahead - stub * 2) / 2;
+    return [p0, at(stub, 0), at(stub + run, run), at(stub + run, side - run), at(ahead - stub, side), p3];
   }
 
   private makeLine(from: number, to: number): LineView {
@@ -1017,8 +1049,8 @@ export class GraphView {
         view.mover.style.display = "none";
         continue;
       }
-      const [p0, c1, c2, p3] = this.curve(fromCard ?? nodeById(s, group[0].from)!, toCard ?? nodeById(s, group[0].to)!, twoWay);
-      const shape = `M${p0[0]} ${p0[1]} C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p3[0]} ${p3[1]}`;
+      const wire = this.wire(fromCard ?? nodeById(s, group[0].from)!, toCard ?? nodeById(s, group[0].to)!, twoWay);
+      const shape = wirePath(wire);
       view.path.setAttribute("d", shape);
       view.hit.setAttribute("d", shape);
       view.path.style.stroke = group.length === 1 ? itemColor(group[0].material) : "";
@@ -1038,18 +1070,13 @@ export class GraphView {
           return span;
         }));
       }
-      const at = (t: number): Point2 => {
-        const u = 1 - t;
-        const axis = (i: 0 | 1) => u ** 3 * p0[i] + 3 * u * u * t * c1[i] + 3 * u * t * t * c2[i] + t ** 3 * p3[i];
-        return [axis(0), axis(1)];
-      };
-      const [cx, cy] = at(0.5);
+      const [cx, cy] = alongWire(wire, 0.5);
       view.tag.setAttribute("x", String(cx));
       view.tag.setAttribute("y", String(cy + 4));
       const moving = group.find((l) => l.active);
       view.mover.style.display = moving ? "" : "none";
       if (moving) {
-        const [mx, my] = at(moving.timer / LINE_MS);
+        const [mx, my] = alongWire(wire, moving.timer / LINE_MS);
         view.mover.style.fill = itemColor(moving.material);
         if (view.mover.textContent !== itemCode(moving.material)) view.mover.textContent = itemCode(moving.material);
         view.mover.setAttribute("x", String(mx));
