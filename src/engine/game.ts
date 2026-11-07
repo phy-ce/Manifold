@@ -1,8 +1,8 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
-import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
-import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, riverBanks, safePath, terrain } from "./world";
+import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, riverBanks, safePath, terrain } from "./world";
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
 export const SPRING_MAX = 200;
 export const WIND = 5;
@@ -125,7 +125,7 @@ export interface Line {
 }
 
 export interface GameState {
-  version: 13;
+  version: number;
   seed: number;
   time: number;
   player: Point;
@@ -185,7 +185,7 @@ function newWarehouse(s: GameState, x: number, y: number): GameNode {
 
 export function createGame(seed: number): GameState {
   const state: GameState = {
-    version: 13,
+    version: SAVE_VERSION,
     seed,
     time: 0,
     player: { ...BASE },
@@ -221,7 +221,7 @@ export function createGame(seed: number): GameState {
 }
 
 function addChunkSites(state: GameState, x: number, y: number): void {
-  for (const site of chunkSites(state.seed, chunkOf(x), chunkOf(y))) {
+  for (const site of chunkSites(state.seed, chunkOf(x), chunkOf(y), laterOres(state.stage))) {
     const taken = state.sites.some((other) => other.x === site.x && other.y === site.y);
     if (!taken) state.sites.push({ ...site, id: state.sites.length });
   }
@@ -349,6 +349,18 @@ function addRivers(s: GameState): void {
   showRivers(s);
 }
 
+/** New ores appear around the base when their stage opens. */
+function addLaterVeins(s: GameState): void {
+  for (const ore of laterOres(s.stage)) {
+    if (s.sites.some((site) => site.ore === ore)) continue;
+    for (const vein of laterVeins(s.seed, ore)) {
+      if (s.sites.some((site) => site.x === vein.x && site.y === vein.y)) continue;
+      if (vein.x === BASE.x && vein.y === BASE.y) continue;
+      s.sites.push({ ...vein, id: s.sites.length });
+    }
+  }
+}
+
 /** A riverbank joins the base graph, with its own code, once the player has found it. */
 function showRivers(s: GameState): void {
   for (const site of s.sites) {
@@ -425,10 +437,10 @@ export function placeMachine(s: GameState, type: string, x: number, y: number): 
     s.nodes.push(store);
     return store;
   }
-  if (type === MOTOR) {
-    const motor: GameNode = { ...newWarehouse(s, x, y), type: MOTOR, store: [] };
-    s.nodes.push(motor);
-    return motor;
+  if (type === MOTOR || type === MANIFOLD || type === SPLITTER) {
+    const node: GameNode = { ...newWarehouse(s, x, y), type, store: emptySlots(type === SPLITTER ? 1 : 0) };
+    s.nodes.push(node);
+    return node;
   }
   const form = machineForms(type)[0] ?? "";
   const node: GameNode = {
@@ -651,6 +663,48 @@ export function cancelProject(s: GameState): boolean {
   return true;
 }
 
+/**
+ * Turns saved JSON from any older version into a game of this one, filling in whatever it
+ * doesn't have yet. Returns null only for data that isn't a save, or comes from a newer game.
+ */
+export function loadSave(raw: unknown): GameState | null {
+  const old = raw as Partial<GameState> | null;
+  if (!old || typeof old.seed !== "number" || typeof old.version !== "number" || old.version > SAVE_VERSION) return null;
+  if (!Array.isArray(old.nodes) || !Array.isArray(old.sites)) return null;
+  const s = { ...createGame(old.seed), ...old } as GameState;
+  // Machines that no longer exist go, and their lines with them.
+  s.nodes = s.nodes.filter((node) => node.type === "stove" || node.type === RIVERBANK || isMachine(node.type));
+  const live = new Set(s.nodes.map((node) => node.id));
+  s.lines = (s.lines ?? []).filter((line) => live.has(line.from) && live.has(line.to));
+  for (const line of s.lines) {
+    line.timer ??= 0;
+    line.active ??= false;
+    line.lastMoved ??= 0;
+    line.paid ??= [];
+  }
+  for (const node of s.nodes) {
+    node.code ??= nextCode(s);
+    node.form ??= "";
+    node.progress ??= 0;
+    node.fails ??= 0;
+    node.energy ??= 0;
+    node.paid ??= [];
+    node.store ??= [];
+    node.ins ??= {};
+    node.outs ??= {};
+    if (node.type === "stove" || isPassive(node.type) || node.type === MOTOR) continue;
+    const fresh = slotsFor(node.type, node.form);
+    node.ins = { ...fresh.ins, ...node.ins };
+    node.outs = { ...fresh.outs, ...node.outs };
+  }
+  // The bag has shrunk over time. What no longer fits goes to the warehouse.
+  for (const stack of s.inv.splice(INV_SLOTS)) if (stack) bank(s, stack.id, stack.n);
+  while (s.inv.length < INV_SLOTS) s.inv.push(null);
+  upgradeSave(s);
+  s.version = SAVE_VERSION;
+  return s;
+}
+
 /** Brings a save from an older layout up to date. */
 export function upgradeSave(s: GameState): GameState {
   s.ghosts ??= [];
@@ -670,6 +724,7 @@ export function upgradeSave(s: GameState): GameState {
     s.announced = null;
   }
   if (s.stage >= 1) addRivers(s);
+  addLaterVeins(s);
   // Pumps used to draw from the nearest riverbank by themselves.
   for (const pump of s.nodes) {
     if (pump.type !== PUMP || pump.siteId === undefined) continue;
@@ -728,11 +783,12 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
     const taken = s.lines.some((l) => l.to === to.id && l.material === LINK && l.from !== from.id);
     return to.type === PUMP && !taken ? [LINK] : [];
   }
-  if (isPowerSource(from.type)) return to.type === ENGINE ? [] : [POWER];
+  if (isPowerSource(from.type) || from.type === MANIFOLD) return to.type === ENGINE ? [] : [POWER];
+  if (to.type === MANIFOLD) return [];
   // A warehouse has no filter: it can only send what it holds, in turn.
-  if (from.type === WAREHOUSE) return [ALL];
+  if (isStore(from.type)) return [ALL];
   // A warehouse takes items only: fluids need a tank or a drum.
-  const usable = (items: string[]) => items.some((item) => (to.type === WAREHOUSE ? !isFluid(item) : slotFor(to, item)));
+  const usable = (items: string[]) => items.some((item) => (isStore(to.type) ? !isFluid(item) : slotFor(to, item)));
   const { main, byproducts } = outputChannels(from);
   return [...(usable(main) ? [MAIN] : []), ...(usable(byproducts) ? [BYPRODUCT] : [])];
 }
@@ -809,7 +865,7 @@ export function removeLine(s: GameState, id: number): boolean {
 
 /** How many of an item a node can still accept. */
 function roomFor(node: GameNode, item: string, viaLine = false): number {
-  if (node.type === WAREHOUSE) {
+  if (isStore(node.type)) {
     if (isFluid(item)) return 0;
     return node.store.reduce((room, slot) => room + (!slot ? STACK : slot.id === item ? STACK - slot.n : 0), 0);
   }
@@ -825,7 +881,7 @@ function roomFor(node: GameNode, item: string, viaLine = false): number {
 function insert(node: GameNode, item: string, n: number, viaLine = false): number {
   const moved = Math.min(n, roomFor(node, item, viaLine));
   if (moved <= 0) return 0;
-  if (node.type === WAREHOUSE) return addTo(node.store, item, moved);
+  if (isStore(node.type)) return addTo(node.store, item, moved);
   const key = slotFor(node, item)!.key;
   node.ins[key] = { id: item, n: (node.ins[key]?.n ?? 0) + moved };
   return moved;
@@ -909,13 +965,13 @@ function readiness(node: GameNode): "ready" | "idle" | "blocked" {
 
 /** What one batch will give, once the inputs are enough to start. Empty until then. */
 export const expectedOutput = (node: GameNode): string[] =>
-  readiness(node) === "ready" ? Object.keys(recipeOf(node).out) : [];
+  !isPassive(node.type) && readiness(node) === "ready" ? Object.keys(recipeOf(node).out) : [];
 
 /** How much of an output a machine can hold before it stops. */
 export const outputCap = (item: string): number => (isFluid(item) ? TANK_CAP : OUTPUT_CAP);
 
 export function status(node: GameNode): Status {
-  if (node.type === WAREHOUSE || node.type === RIVERBANK) return "idle";
+  if (isPassive(node.type)) return "idle";
   if (node.type === MOTOR) return node.energy > 0 ? "run" : "idle";
   const state = readiness(node);
   if (node.type === ENGINE) return node.energy > 0 || state === "ready" ? "run" : "idle";
@@ -937,7 +993,7 @@ function boil(s: GameState, node: GameNode): void {
 }
 
 function runMachine(s: GameState, node: GameNode): void {
-  if (node.type === WAREHOUSE || node.type === MOTOR || node.type === RIVERBANK) return;
+  if (isPassive(node.type) || node.type === MOTOR) return;
   if (node.type === ENGINE) {
     boil(s, node);
     return;
@@ -949,7 +1005,7 @@ function runMachine(s: GameState, node: GameNode): void {
 
 /** Force per second a source's lines are using to move items right now. */
 function lineLoad(s: GameState, source: GameNode): number {
-  const driven = s.lines.filter((l) => l.from === source.id && l.material === POWER).map((l) => l.to);
+  const driven = drivenBy(s, source.id).map((node) => node.id);
   return (s.lines.filter((l) => l.active && driven.includes(l.from)).length * 1000) / LINE_MS;
 }
 
@@ -986,6 +1042,7 @@ function checkGoal(s: GameState): void {
   s.announced = stage.id;
   s.stage += 1;
   addRivers(s);
+  addLaterVeins(s);
 }
 
 /** One press of work by the player, worth one second of machine time. */
@@ -1043,9 +1100,37 @@ export function windMotor(s: GameState, nodeId: number): boolean {
   return true;
 }
 
-/** Whether a node has a wound motor pushing what it sends out. */
+/** The power sources behind a node, looking through any manifolds on the way. */
+function sourcesOf(direct: Map<number, GameNode[]>, id: number, seen = new Set<number>()): GameNode[] {
+  return (direct.get(id) ?? []).flatMap((from) => {
+    if (seen.has(from.id)) return [];
+    seen.add(from.id);
+    return from.type === MANIFOLD ? sourcesOf(direct, from.id, seen) : [from];
+  });
+}
+
+function powerLines(s: GameState, nodes: Map<number, GameNode>): Map<number, GameNode[]> {
+  const direct = new Map<number, GameNode[]>();
+  for (const line of s.lines) {
+    if (line.material === POWER) direct.set(line.to, [...(direct.get(line.to) ?? []), nodes.get(line.from)!]);
+  }
+  return direct;
+}
+
+/** Whether a node has working power, so it can push out along its lines. */
 export function hasDrive(s: GameState, nodeId: number): boolean {
-  return s.lines.some((l) => l.to === nodeId && l.material === POWER && (nodeById(s, l.from)?.energy ?? 0) > 0);
+  const direct = powerLines(s, new Map(s.nodes.map((n) => [n.id, n])));
+  return sourcesOf(direct, nodeId).some((source) => source.energy > 0);
+}
+
+/** The nodes a source powers, reaching through manifolds. */
+function drivenBy(s: GameState, id: number, seen = new Set<number>()): GameNode[] {
+  return s.lines.filter((l) => l.from === id && l.material === POWER).flatMap((l) => {
+    if (seen.has(l.to)) return [];
+    seen.add(l.to);
+    const node = nodeById(s, l.to)!;
+    return node.type === MANIFOLD ? drivenBy(s, node.id, seen) : [node];
+  });
 }
 
 /** Springs always run down. An engine only loses steam sitting full, never while it is working. */
@@ -1060,7 +1145,7 @@ function leakForce(s: GameState): void {
  * are using this moment, `connected` the most its machines could use if all of them ran at once.
  */
 export function powerLoad(s: GameState, source: GameNode): { now: number; connected: number; limit: number } {
-  const driven = s.lines.filter((l) => l.from === source.id && l.material === POWER).map((l) => nodeById(s, l.to)!);
+  const driven = drivenBy(s, source.id);
   const working = driven.reduce((sum, node) => sum + machinePower(node.type) * (node.speed ?? 0), 0);
   return {
     now: Math.round(working + lineLoad(s, source)),
@@ -1080,7 +1165,7 @@ function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives:
   if (!motor) return;
   const from = nodes.get(line.from)!;
   const to = nodes.get(line.to)!;
-  const moved = from.type === WAREHOUSE ? sendStored(from, to) : sendOutput(from, to, line);
+  const moved = isStore(from.type) ? sendStored(from, to) : sendOutput(from, to, line);
   if (!moved) return;
   motor.energy -= 1;
   line.active = true;
@@ -1364,8 +1449,9 @@ export function createTestGame(seed: number): GameState {
   stock.forEach(([id, n], i) => {
     store.store[i] = { id, n };
   });
-  s.stage = 1;
+  s.stage = PLAYABLE_STAGES - 1;
   addRivers(s);
+  addLaterVeins(s);
   for (const bank of riverBanks(seed)) reveal(s, bank, REVEAL);
   showRivers(s);
   const motor = placeMachine(s, MOTOR, 40, 40)!;
@@ -1401,10 +1487,9 @@ export function step(s: GameState): void {
   if (s.time % SPRING_LEAK_MS === 0) leakForce(s);
   if (s.time % RIVER.regenMs === 0) refillRivers(s);
   const nodes = new Map(s.nodes.map((n) => [n.id, n]));
+  const direct = powerLines(s, nodes);
   const drives = new Map<number, GameNode[]>();
-  for (const line of s.lines) {
-    if (line.material === POWER) drives.set(line.to, [...(drives.get(line.to) ?? []), nodes.get(line.from)!]);
-  }
+  for (const id of direct.keys()) drives.set(id, sourcesOf(direct, id));
   supplyPower(s, drives);
   s.nodes.forEach((node) => runMachine(s, node));
   // Least recently served first, so lines leaving one machine share its output evenly.

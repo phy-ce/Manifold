@@ -1,6 +1,6 @@
 import "./style.css";
 import { PLAYABLE_STAGES, STAGES, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, setSafeWalk, sortSlots, step, trashCursor, upgradeSave, yearAt, walkTo, wheelStack } from "./engine/game";
+import { GameState, MAX_CARRY, MAX_VITAL, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkTo, wheelStack } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -23,8 +23,8 @@ const MAX_CATCH_UP_MS = 2000;
 function load(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    const saved = raw ? (JSON.parse(raw) as GameState) : null;
-    if (saved?.version === SAVE_VERSION) return upgradeSave(saved);
+    const saved = raw ? loadSave(JSON.parse(raw)) : null;
+    if (saved) return saved;
   } catch {
     // A blocked or damaged save just starts a new game.
   }
@@ -94,7 +94,7 @@ const testStart = document.createElement("button");
 testStart.type = "button";
 testStart.className = "tech";
 testStart.textContent = "테스트 시작";
-testStart.dataset.tip = "S1-2가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다";
+testStart.dataset.tip = "지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다";
 testStart.addEventListener("click", () => {
   if (testStart.dataset.armed !== "1") {
     testStart.dataset.armed = "1";

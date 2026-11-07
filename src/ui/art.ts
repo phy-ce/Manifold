@@ -400,6 +400,170 @@ function steamHammer(mode: Status, f: number) {
   blocked(mode);
 }
 
+function cokeOven(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A squat battery of three ovens beneath one continuous brick roof.
+  rect("#635b54", 4, 67, 68, 5);
+  bricks(6, 37, 64, 30, [158, 105, 76]);
+  polygon("#b18b6b", [[4, 37], [11, 31], [63, 31], [72, 37]]);
+  rect("#d0ad89", 8, 36, 60, 2);
+  rect("#725643", 56, 20, 8, 11);
+  rect("#b79778", 54, 18, 12, 3);
+  for (const x of [11, 31, 51]) {
+    rect("#b6a18a", x, 43, 15, 22);
+    rect(mode === "run" ? ["#c66b37", "#e08740", "#f6b25c", "#df8542"][p] : "#3d302b", x + 2, 45, 11, 18);
+    rect("#30343a", x + 3, 46, 9, 15);
+    rect("#78818a", x + 3, 46, 9, 2);
+    rect("#c0a27d", x + 9, 52, 2, 5);
+  }
+  if (mode === "run") {
+    for (let i = 0; i < 3; i++) {
+      const rise = (p + i) % 4;
+      oval("#8d9298", 59 - rise * 3, 14 - rise * 3, 2 + rise, 2);
+    }
+  }
+  blocked(mode);
+}
+
+function blastFurnace(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // The tallest silhouette: narrow charging throat above a broad masonry stack.
+  rect("#565b61", 12, 68, 53, 4);
+  g.save();
+  g.beginPath();
+  g.moveTo(29, 9);
+  g.lineTo(45, 9);
+  g.lineTo(57, 61);
+  g.lineTo(52, 68);
+  g.lineTo(20, 68);
+  g.lineTo(17, 61);
+  g.closePath();
+  g.clip();
+  bricks(17, 9, 40, 59, [163, 111, 85]);
+  rect("#bc9576", 26, 9, 3, 59);
+  for (const y of [23, 39, 55]) rect("#5e6972", 17, y, 40, 3);
+  g.restore();
+  polygon("#a9b6bb", [[24, 2], [50, 2], [44, 10], [30, 10]]);
+  oval("#252e37", 37, 3, 10, 2);
+  line("#697d89", 5, 49, 17, 61, 17);
+  line("#697d89", 5, 61, 17, 61, 49);
+  line("#b1c3cb", 1, 60, 17, 60, 49);
+  rect("#242930", 28, 56, 16, 11);
+  rect(mode === "run" ? ["#da783b", "#f29c48", "#ffd484", "#ed9246"][p] : "#614136", 31, 59, 10, 6);
+  polygon("#737782", [[37, 63], [43, 63], [63, 69], [60, 72]]);
+  if (mode === "run") line("#ffc978", 2, 38, 63, 60, 69 + p % 2);
+  blocked(mode);
+}
+
+function converter(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // An egg-shaped vessel suspended on trunnions, with daylight below its belly.
+  rect("#52616b", 7, 68, 62, 4);
+  for (const x of [13, 57]) {
+    polygon("#71818c", [[x, 34], [x + 5, 34], [x + 9, 68], [x - 5, 68]]);
+    line("#b4c4ca", 2, x + 1, 37, x - 2, 65);
+  }
+  line("#c5b58f", 5, 15, 40, 60, 40);
+  polygon("#768b98", [[29, 19], [45, 19], [49, 27], [54, 37], [53, 48], [47, 58], [37, 62], [27, 58], [21, 48], [20, 37], [25, 27]]);
+  polygon("#adbfca", [[29, 25], [34, 24], [28, 38], [29, 50], [34, 57], [28, 54], [24, 44], [25, 34]]);
+  polygon("#435965", [[46, 27], [51, 38], [50, 48], [44, 57], [37, 59], [43, 50], [46, 39]]);
+  oval("#c8d2d3", 37, 20, 11, 4);
+  oval("#252b31", 37, 19, 8, 2);
+  for (const x of [21, 53]) oval("#c6aa72", x, 40, 4, 4);
+  if (mode === "run") {
+    const height = [10, 14, 17, 12][p];
+    polygon("#e88d43", [[30, 18], [29, 11], [34, 14], [35, 19 - height], [39, 10], [44, 6], [42, 18]]);
+    polygon("#ffe2a1", [[34, 18], [36, 9 + p], [39, 13], [40, 18]]);
+    rect("#ffcc79", 45 + p, 5 + p * 2, 1, 2);
+  }
+  blocked(mode);
+}
+
+function tarTank(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A low open tank with a black reflective surface and an overhead filling pipe.
+  rect("#4d5861", 13, 64, 10, 7);
+  rect("#4d5861", 52, 64, 10, 7);
+  oval("#4e606b", 37, 60, 29, 8);
+  rect("#647b87", 8, 37, 58, 23);
+  rect("#9cafb7", 11, 40, 4, 19);
+  rect("#394b58", 59, 40, 7, 20);
+  oval("#b3c2c8", 37, 37, 29, 9);
+  oval("#171b24", 37, 37, 25, 6);
+  line("#616574", 1, 19, 37, 30, 35);
+  line("#444c5b", 1, 40, 40, 54, 38);
+  for (const x of [20, 53]) rect("#acb9be", x, 45, 2, 16);
+  line("#6d838d", 6, 13, 28, 13, 15);
+  line("#6d838d", 6, 13, 15, 39, 15);
+  line("#6d838d", 6, 39, 15, 39, 25);
+  line("#c1d1d5", 1, 11, 14, 39, 14);
+  if (mode === "run") {
+    rect("#333645", 38, 26, 3, 9);
+    oval("#85838e", 39, 36, 3 + p, 1);
+    oval("#21242e", 39, 36, 2 + p, 0.5);
+  }
+  blocked(mode);
+}
+
+function steamManifold(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A broad horizontal header feeds three upward branches with wheel valves.
+  rect("#52616b", 18, 53, 5, 17);
+  rect("#52616b", 53, 53, 5, 17);
+  rect("#8a9ba5", 13, 69, 15, 3);
+  rect("#8a9ba5", 48, 69, 15, 3);
+  rect("#758b97", 5, 42, 65, 12);
+  rect("#cad9df", 5, 42, 65, 3);
+  rect("#415562", 5, 51, 65, 3);
+  for (const x of [5, 66]) {
+    rect("#a5b5bd", x, 39, 4, 18);
+    for (const y of [41, 53]) rect("#e2e6dc", x + 1, y, 2, 2);
+  }
+  for (const x of [17, 37, 57]) {
+    rect("#738d9b", x - 3, 17, 7, 25);
+    rect("#c8dce2", x - 3, 17, 2, 25);
+    rect("#b8c6cd", x - 5, 16, 11, 3);
+    oval("#bc8a56", x, 30, 6, 6);
+    oval("#29353e", x, 30, 4, 4);
+    line("#e4bd7e", 1, x - 4, 30, x + 4, 30);
+    line("#e4bd7e", 1, x, 26, x, 34);
+    if (mode === "run") {
+      const rise = (p + (x - 17) / 20) % 4;
+      oval("#bad2d9", x + rise - 1, 12 - rise * 2, 2 + rise / 2, 1.5);
+    }
+  }
+  blocked(mode);
+}
+
+function itemSplitter(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A wide receiving hopper narrows into two opposed, open-ended chutes.
+  for (const x of [23, 49]) {
+    rect("#62503c", x, 42, 4, 29);
+    rect("#b28c5e", x, 42, 1, 29);
+  }
+  polygon("#8f6c48", [[12, 16], [62, 16], [47, 40], [27, 40]]);
+  polygon("#c09a68", [[12, 16], [17, 16], [30, 38], [27, 40]]);
+  polygon("#5f4d38", [[55, 17], [62, 16], [47, 40], [43, 39]]);
+  oval("#bec6c5", 37, 16, 26, 5);
+  oval("#272e34", 37, 16, 22, 3);
+  rect("#b5bfc0", 27, 37, 20, 5);
+  polygon("#8295a0", [[28, 41], [38, 46], [15, 63], [4, 58]]);
+  polygon("#8295a0", [[46, 41], [36, 46], [59, 63], [70, 58]]);
+  line("#d0dce0", 2, 28, 41, 4, 58);
+  line("#d0dce0", 2, 46, 41, 70, 58);
+  line("#374a55", 3, 34, 46, 12, 60);
+  line("#374a55", 3, 40, 46, 62, 60);
+  polygon("#dec695", [[37, 38], [42, 46], [32, 46]]);
+  if (mode === "run") {
+    const travel = p * 5;
+    rect("#d3ac72", 31 - travel, 46 + p * 3, 4, 3);
+    rect("#b4bec6", 39 + travel, 46 + p * 3, 4, 3);
+    rect("#c3a27c", 35, 12 + p, 4, 3);
+  }
+  blocked(mode);
+}
+
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
   smelter: (m, f) => furnace(m, f, [172, 92, 62]),
@@ -412,6 +576,12 @@ const SCENES: Record<string, (mode: Status, f: number) => void> = {
   steam_engine: steamEngine,
   drainage_pump: drainagePump,
   steam_hammer: steamHammer,
+  coke_oven: cokeOven,
+  blast_furnace: blastFurnace,
+  converter,
+  tar_tank: tarTank,
+  steam_manifold: steamManifold,
+  item_splitter: itemSplitter,
 };
 
 function drawScene(type: string, mode: Status, frame: number): void {

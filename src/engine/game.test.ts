@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, NAME_MAX, STEAM_MAX, TANK_CAP, addTo, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, addTo, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -2026,6 +2026,198 @@ describe("naming", () => {
     const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
     rename(s, kiln.id, "벽돌");
     expect(JSON.parse(JSON.stringify(s)).nodes.at(-1).name).toBe("벽돌");
+  });
+});
+
+describe("old saves", () => {
+  const old = () => {
+    const s = createGame(1) as unknown as Record<string, unknown> & GameState;
+    placeMachine(s, "brick_kiln", 0, 0);
+    return JSON.parse(JSON.stringify(s));
+  };
+
+  it("loads an older version and fills in what it lacks", () => {
+    const save = old();
+    save.version = 5;
+    delete save.ghosts;
+    delete save.groups;
+    delete save.stage;
+    delete save.made;
+    delete save.safeWalk;
+    delete save.nodes[1].fails;
+    delete save.nodes[1].energy;
+    const s = loadSave(save)!;
+    expect(s.version).toBe(SAVE_VERSION);
+    expect(s.ghosts).toEqual([]);
+    expect(s.stage).toBe(0);
+    expect(s.safeWalk).toBe(true);
+    expect(s.nodes[1].energy).toBe(0);
+    run(s, 2);
+  });
+
+  it("keeps what the player had", () => {
+    const save = old();
+    save.version = 9;
+    save.inv[0] = { id: "Lm", n: 7 };
+    save.nodes[0].store[2] = { id: "iron", n: 3 };
+    const s = loadSave(save)!;
+    expect(s.inv[0]).toEqual({ id: "Lm", n: 7 });
+    expect(s.nodes[0].store[2]).toEqual({ id: "iron", n: 3 });
+    expect(s.seed).toBe(1);
+  });
+
+  it("moves anything past the smaller bag into the warehouse", () => {
+    const save = old();
+    save.version = 3;
+    save.inv = [...save.inv, { id: "Kn", n: 5 }, null];
+    const s = loadSave(save)!;
+    expect(s.inv).toHaveLength(INV_SLOTS);
+    expect(countOf(s, "clay")).toBe(5);
+  });
+
+  it("drops machines that no longer exist, with their lines", () => {
+    const save = old();
+    save.version = 2;
+    save.nodes.push({ ...save.nodes[1], id: 900, type: "slag_yard" });
+    save.lines.push({ id: 901, from: 900, to: save.nodes[1].id, material: "main" });
+    const s = loadSave(save)!;
+    expect(s.nodes.some((n) => n.id === 900)).toBe(false);
+    expect(s.lines).toEqual([]);
+  });
+
+  it("refuses what isn't a save, or a newer one", () => {
+    expect(loadSave(null)).toBeNull();
+    expect(loadSave({ hello: 1 })).toBeNull();
+    const save = old();
+    save.version = SAVE_VERSION + 1;
+    expect(loadSave(save)).toBeNull();
+  });
+});
+
+describe("S1-3", () => {
+  const stage3 = () => {
+    const s = createTestGame(1);
+    s.nodes = s.nodes.slice(0, 1).concat(s.nodes.filter((n) => n.type === "riverbank"));
+    s.lines = [];
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = 100000;
+    return { s, motor };
+  };
+
+  it("adds limestone veins when the stage opens", () => {
+    const s = createGame(1);
+    expect(s.sites.some((v) => v.ore === "Ls")).toBe(false);
+    s.stage = 1;
+    s.made.iron_plate = 119;
+    const hammer = (() => {
+      s.stage = 0;
+      const h = placeMachine(s, "plate_hammer", 0, 0)!;
+      s.stage = 1;
+      return h;
+    })();
+    hammer.ins.iron = { id: "iron", n: 2 };
+    power(s, hammer.id);
+    run(s, 6);
+    expect(s.stage).toBe(2);
+    expect(s.sites.filter((v) => v.ore === "Ls").length).toBeGreaterThan(0);
+  });
+
+  it("turns coal into coke, with tar that needs somewhere to go", () => {
+    const { s } = stage3();
+    const oven = placeMachine(s, "coke_oven", 0, 0)!;
+    oven.ins.coal = { id: "Lg", n: 8 };
+    run(s, 11);
+    expect(oven.outs.coke).toBe(1);
+    expect(oven.outs.coal_tar).toBe(1);
+    expect(takeOutput(s, oven.id, "coal_tar")).toBe(false);
+    expect(routeMaterials(s, oven.id, s.nodes[0].id)).toEqual(["main"]);
+  });
+
+  it("disposes of tar in a tank", () => {
+    const { s, motor } = stage3();
+    const oven = placeMachine(s, "coke_oven", 0, 0)!;
+    const tank = placeMachine(s, "tar_tank", 0, 0)!;
+    connect(s, motor.id, oven.id, POWER);
+    expect(connect(s, oven.id, tank.id, "byproduct")).toBeTruthy();
+    oven.outs.coal_tar = 3;
+    run(s, 6);
+    expect(oven.outs.coal_tar).toBe(0);
+    expect(tank.ins.coal_tar).toBeNull();
+  });
+
+  it("smelts ore, coke and limestone in the blast furnace, on power", () => {
+    const { s, motor } = stage3();
+    const furnace = placeMachine(s, "blast_furnace", 0, 0)!;
+    furnace.ins.iron_ore = { id: "Lm", n: 4 };
+    furnace.ins.coke = { id: "coke", n: 2 };
+    furnace.ins.limestone = { id: "Ls", n: 1 };
+    run(s, 2);
+    expect(lacksPower(furnace)).toBe(true);
+    connect(s, motor.id, furnace.id, POWER);
+    run(s, 7);
+    expect(furnace.outs.iron).toBe(4);
+    expect(furnace.outs.slag).toBe(2);
+  });
+
+  it("finishes the stage with 100 steel, which stays with the player", () => {
+    const { s } = stage3();
+    const engine = placeMachine(s, "steam_engine", 0, 0)!;
+    engine.ins.coal = { id: "Lg", n: 16 };
+    engine.ins.water = { id: "water", n: 40 };
+    const converter = placeMachine(s, "converter", 0, 0)!;
+    connect(s, engine.id, converter.id, POWER);
+    converter.ins.iron = { id: "iron", n: 4 };
+    s.made.steel = 98;
+    run(s, 12);
+    expect(s.announced).toBe("S1-3");
+    expect(converter.outs.steel).toBe(3);
+  });
+
+  it("carries power through a manifold, and counts it in the load", () => {
+    const { s, motor } = stage3();
+    const manifold = placeMachine(s, "steam_manifold", 0, 0)!;
+    const hammer = placeMachine(s, "steam_hammer", 0, 0)!;
+    hammer.ins.iron = { id: "iron", n: 12 };
+    expect(connect(s, motor.id, manifold.id, POWER)).toBeTruthy();
+    expect(connect(s, manifold.id, hammer.id, POWER)).toBeTruthy();
+    run(s, 1);
+    expect(hammer.speed).toBe(1);
+    expect(powerLoad(s, motor).connected).toBe(3);
+    expect(hasDrive(s, hammer.id)).toBe(true);
+  });
+
+  it("won't loop power round a pair of manifolds forever", () => {
+    const { s } = stage3();
+    const a = placeMachine(s, "steam_manifold", 0, 0)!;
+    const b = placeMachine(s, "steam_manifold", 0, 0)!;
+    connect(s, a.id, b.id, POWER);
+    connect(s, b.id, a.id, POWER);
+    run(s, 1);
+    expect(hasDrive(s, a.id)).toBe(false);
+  });
+
+  it("takes no items into a manifold", () => {
+    const { s } = stage3();
+    const manifold = placeMachine(s, "steam_manifold", 0, 0)!;
+    expect(routeMaterials(s, s.nodes[0].id, manifold.id)).toEqual([]);
+  });
+
+  it("splits one line evenly between two machines", () => {
+    const { s, motor } = stage3();
+    const store = s.nodes[0];
+    store.store = store.store.map(() => null);
+    store.store[0] = { id: "Lg", n: 20 };
+    const splitter = placeMachine(s, "item_splitter", 0, 0)!;
+    const a = placeMachine(s, "brick_kiln", 0, 0)!;
+    const b = placeMachine(s, "brick_kiln", 0, 0)!;
+    connect(s, motor.id, store.id, POWER);
+    connect(s, motor.id, splitter.id, POWER);
+    expect(connect(s, store.id, splitter.id, "all")).toBeTruthy();
+    connect(s, splitter.id, a.id, "all");
+    connect(s, splitter.id, b.id, "all");
+    run(s, 6);
+    expect(a.ins.coal?.n).toBe(2);
+    expect(b.ins.coal?.n).toBe(2);
   });
 });
 

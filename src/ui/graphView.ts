@@ -1,5 +1,5 @@
 // Base screen: machines as nodes, lines drawn between them.
-import { ENGINE, LINK, MAX_PORTS, formLabel, machineForms, machinesAt, MOTOR, POWER, RIVERBANK, WAREHOUSE, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, LINK, MANIFOLD, MAX_PORTS, isPassive, isStore, formLabel, machineForms, machinesAt, MOTOR, POWER, RIVERBANK, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   NAME_MAX, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
@@ -507,7 +507,7 @@ export class GraphView {
     const used = s.ghostLines.filter((l) => l.from === ghost.id || l.to === ghost.id).length;
     const form = machineForms(ghost.type).length > 1 ? ` (${formLabel(ghost.form)})` : "";
     const ports = "●".repeat(used) + "○".repeat(Math.max(0, MAX_PORTS - used));
-    const plain = ghost.type === WAREHOUSE || ghost.type === MOTOR || ghost.type === ENGINE;
+    const plain = isPassive(ghost.type) || ghost.type === MOTOR || ghost.type === ENGINE;
     return `<b>${machineName(ghost.type)}${form}</b><span class="ports">${ports}</span><span class="flow">&nbsp;</span>` +
       (plain ? "" : `<span class="progress">[${".".repeat(14)}]</span>`);
   }
@@ -751,7 +751,10 @@ export class GraphView {
     const used = portsUsed(s, node.id);
     const ports = "●".repeat(used) + "○".repeat(MAX_PORTS - used);
     const tag = (id: string, n: number) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span>${n}${unitOf(id)}`;
-    if (node.type === WAREHOUSE) {
+    if (node.type === MANIFOLD) {
+      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">동력을 나눕니다</span>`;
+    }
+    if (isStore(node.type)) {
       const kinds = node.store.filter(Boolean).map((x) => tag(x!.id, x!.n)).slice(0, 4).join(" ");
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${kinds || "·"}</span>`;
     }
@@ -890,7 +893,7 @@ export class GraphView {
         this.rosterList.append(b);
       }
       const state = status(node);
-      const label = node.type === WAREHOUSE || node.type === RIVERBANK ? nodeLabel(s, node)
+      const label = isPassive(node.type) ? nodeLabel(s, node)
         : node.type === MOTOR ? `${nodeLabel(s, node)} · 힘 ${Math.floor(node.energy)}`
         : `${nodeLabel(s, node)} · ${STATUS_LABEL[state]}`;
       if (b.textContent !== label) b.textContent = label;

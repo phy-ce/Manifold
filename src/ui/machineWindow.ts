@@ -1,5 +1,5 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
-import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, PUMP, RIVERBANK, machinePower, unitOf } from "../content";
+import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, PUMP, RIVERBANK, isStore, machinePower, unitOf } from "../content";
 import {
   GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canAffordRoute, canRemove, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -185,8 +185,8 @@ export class MachineWindow {
     this.outputs = [];
     this.stored = [];
     delete this.art.root.dataset.scene;
-    if (node.type === WAREHOUSE) this.buildWarehouse(node);
-    else if (node.type === RIVERBANK) this.top.className = "machine";
+    if (isStore(node.type)) this.buildWarehouse(node);
+    else if (node.type === RIVERBANK || node.type === MANIFOLD) this.top.className = "machine";
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
     this.root.hidden = false;
@@ -200,7 +200,7 @@ export class MachineWindow {
 
   /** The player sets the shape; the metal that goes in decides the rest. */
   private buildForms(node: GameNode): void {
-    const forms = node.type === WAREHOUSE ? [] : machineForms(node.type);
+    const forms = isStore(node.type) ? [] : machineForms(node.type);
     this.modes.replaceChildren();
     this.modes.hidden = forms.length < 2;
     for (const form of forms) {
@@ -353,7 +353,16 @@ export class MachineWindow {
     s.inv.forEach((stack, i) => paintSlot(this.invSlots[i], stack));
     this.demolish.disabled = !canRemove(s, node);
     this.demolish.dataset.tip = this.demolish.disabled ? "창고를 비워야 철거할 수 있습니다" : "";
-    this.recipe.hidden = node.type === WAREHOUSE;
+    this.recipe.hidden = isStore(node.type);
+    if (node.type === MANIFOLD) {
+      const line = "들어온 동력을 연결된 곳으로 나눕니다";
+      if (this.recipe.dataset.line !== line) {
+        this.recipe.dataset.line = line;
+        this.recipe.textContent = line;
+      }
+      this.bar.textContent = "";
+      return;
+    }
     if (node.type === RIVERBANK) {
       const site = s.sites[node.siteId!];
       const line = `비축 ${site.left}/${site.total}L<span class="card-note">강가 펌프로 선을 이어야 쓸 수 있습니다</span>`;
@@ -382,7 +391,7 @@ export class MachineWindow {
       this.bar.textContent = `[${"#".repeat(fill).padEnd(18, ".")}]`;
       return;
     }
-    if (node.type === WAREHOUSE) {
+    if (isStore(node.type)) {
       node.store.forEach((stack, i) => paintSlot(this.stored[i], stack));
       this.bar.textContent = "";
       return;

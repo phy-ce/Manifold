@@ -13,7 +13,8 @@ function read(n: number): Saved | null {
   try {
     const raw = localStorage.getItem(slotKey(n));
     const saved = raw ? (JSON.parse(raw) as Saved) : null;
-    return saved?.state?.version === SAVE_VERSION ? saved : null;
+    // Older saves are converted when they load. Only a newer game's can't be read.
+    return (saved?.state?.version ?? Infinity) <= SAVE_VERSION ? saved : null;
   } catch {
     return null;
   }

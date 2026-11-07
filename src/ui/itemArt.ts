@@ -9,6 +9,8 @@ import { GLYPH, SIZE, charGrid } from "./theme";
 const SHAPE_OF: Record<string, string> = {
   water: "water",
   water_drum: "water_drum",
+  steel: "ingot",
+  coal_tar: "water",
   brick: "brick",
   iron: "ingot", copper: "ingot", boiler: "boiler", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
@@ -26,6 +28,8 @@ interface Lump {
 }
 
 const LUMPS: Record<string, Lump> = {
+  Ls: { seed: 15, grain: 0.35 },
+  coke: { seed: 42, grain: 0.8, holes: 14 },
   Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, grain: 0.7 },
   slag: { seed: 41, holes: 9 },
 };

@@ -103,15 +103,34 @@ export function generateSites(seed: number): Site[] {
   return sites;
 }
 
+/** Veins of an ore that opens later, placed around the base like the first ones. */
+export function laterVeins(seed: number, ore: string): Omit<Site, "id">[] {
+  const rng = rngFrom(Math.imul(seed + 5, 2654435761) ^ Math.imul(ore.charCodeAt(0), 40503));
+  return Array.from({ length: SITES_PER_ORE }, (_, i) => {
+    const [min, max] = i === 0 ? NEAR : FAR;
+    const dist = min + rng() * (max - min);
+    const angle = rng() * Math.PI * 2;
+    const vein = rollVein(rng, ore);
+    return {
+      ore,
+      x: Math.round(BASE.x + Math.cos(angle) * dist) + 0,
+      y: Math.round(BASE.y + Math.sin(angle) * dist * CELL_ASPECT) + 0,
+      ...vein,
+      left: vein.total,
+      seed: seed + i * 7,
+    };
+  });
+}
+
 /** Veins of one chunk. The same seed and coordinates always give the same veins. */
-export function chunkSites(seed: number, cx: number, cy: number): Omit<Site, "id">[] {
+export function chunkSites(seed: number, cx: number, cy: number, later: string[] = []): Omit<Site, "id">[] {
   const rng = rngFrom(Math.imul(cx + 991, 73856093) ^ Math.imul(cy + 577, 19349663) ^ Math.imul(seed + 1, 83492791));
   const count = rng() < 0.5 ? 1 : rng() < 0.4 ? 2 : 0;
   const sites: Omit<Site, "id">[] = [];
   for (let i = 0; i < count; i += 1) {
     const x = cx * CHUNK + Math.floor(rng() * CHUNK);
     const y = cy * CHUNK + Math.floor(rng() * CHUNK);
-    const pool = [...SURFACE_ORES, ...FORAGE];
+    const pool = [...SURFACE_ORES, ...FORAGE, ...later];
     const ore = pool[Math.floor(rng() * pool.length)];
     const vein = rollVein(rng, ore);
     if (Math.hypot(x - BASE.x, (y - BASE.y) / CELL_ASPECT) < STARTER_RADIUS) continue;

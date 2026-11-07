@@ -62,6 +62,10 @@ export const SURFACE = oreData.layers[0];
 export const WAREHOUSE = "warehouse";
 export const MOTOR = "spring_motor";
 export const ENGINE = "steam_engine";
+/** Passes power on from one line to many. */
+export const MANIFOLD = "steam_manifold";
+/** Holds a little of anything and passes it on along its lines in turn. */
+export const SPLITTER = "item_splitter";
 export const PUMP = "drainage_pump";
 export const WATER = "water";
 /** A riverbank in the base graph. It only exists to be linked to a pump. */
@@ -96,7 +100,7 @@ export const outputRole = (index: number): string => (index === 0 ? "결과" : "
 
 export const STAGES = era.milestones;
 /** Stages with their content built so far. */
-export const PLAYABLE_STAGES = 2;
+export const PLAYABLE_STAGES = 3;
 
 /** Machines open at a stage, counting every stage before it. */
 export const machinesAt = (stage: number): string[] =>
@@ -110,6 +114,10 @@ export const machinePower = (type: string): number => machines[type].power ?? 0;
 /** Force a steam engine gives each second. */
 export const machinePowerOut = (type: string): number => machines[type].powerOut ?? 0;
 export const isPowerSource = (type: string): boolean => type === MOTOR || type === ENGINE;
+/** Nodes that hold items in slots and send them on without a recipe. */
+export const isStore = (type: string): boolean => type === WAREHOUSE || type === SPLITTER;
+/** Nodes with no recipe of their own. */
+export const isPassive = (type: string): boolean => isStore(type) || type === RIVERBANK || type === MANIFOLD;
 
 /** Parts of later milestones that share a machine with this one. */
 const LATER_ITEMS = new Set(["port_flange"]);
@@ -164,6 +172,15 @@ function buildProcess(type: string, form: string): Process {
 export const SURFACE_ORES: string[] = Object.keys(ores).filter(
   (id) => ores[id].firstLayer === 0 && MILESTONE.unlockSources.includes(ores[id].family),
 );
+const allSurfaceOres = Object.keys(ores).filter((id) => ores[id].firstLayer === 0);
+
+/** Surface ores open at a stage, counting every stage before it. */
+export function stageOres(stage: number): string[] {
+  const opened = STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockSources);
+  return allSurfaceOres.filter((id) => opened.includes(ores[id].family));
+}
+/** Ores that arrive after the start, so they aren't in the first veins laid out. */
+export const laterOres = (stage: number): string[] => stageOres(stage).filter((id) => !SURFACE_ORES.includes(id));
 
 export const machineCost = (type: string): Record<string, number> => machines[type].cost ?? {};
 /** How an unpowered machine is worked by hand: "click", "keys", or nothing if it runs itself. */
@@ -244,11 +261,11 @@ export function compareItems(a: string, b: string): number {
 const knownRecipes = (stage: number): Recipe[] => machinesAt(stage).flatMap(machineRecipes).filter((r) => !r.disposal);
 
 /** The ores that fill a family such as "coal". */
-export const familyMembers = (id: string): string[] => SURFACE_ORES.filter((ore) => ores[ore].family === id);
+export const familyMembers = (id: string): string[] => allSurfaceOres.filter((ore) => ores[ore].family === id);
 
 /** Every item the player can meet right now, so later tiers stay a surprise. */
 export function indexItems(stage = 0): string[] {
-  const seen = new Set<string>([...SURFACE_ORES, ...FORAGE]);
+  const seen = new Set<string>([...stageOres(stage), ...FORAGE]);
   for (const recipe of knownRecipes(stage)) {
     for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
       if (!familyMembers(id).length) seen.add(id);
@@ -269,7 +286,7 @@ export const buildUses = (id: string, stage = 0): [string, Record<string, number
 
 /** Where a raw item comes from, for items no machine makes. */
 export function itemSource(id: string): string | null {
-  if (SURFACE_ORES.includes(id)) return "지도의 광맥에서 캡니다";
+  if (allSurfaceOres.includes(id)) return "지도의 광맥에서 캡니다";
   if (FORAGE.includes(id)) return "지도에서 채집합니다";
   if (id === WATER) return "강가에서 펌프로 끌어옵니다";
   if (Object.values(DRUM.fills).includes(id)) return "빈 드럼통을 들고 펌프의 출력을 눌러 채웁니다";
