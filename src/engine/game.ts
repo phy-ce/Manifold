@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 14;
@@ -80,6 +80,8 @@ export interface GameNode {
   speed?: number;
   /** The riverbank a pump draws from. */
   siteId?: number;
+  /** A steam module is fitted, so this machine can take steam power. */
+  module?: boolean;
   /** What a full tar tank does with more: refuse it, or take it and throw it away. */
   overflow?: Overflow;
 }
@@ -768,6 +770,12 @@ export function upgradeSave(s: GameState): GameState {
   // Springs could once feed a manifold.
   cutLines(s, (l) => !(nodeById(s, l.from)?.type === MOTOR && nodeById(s, l.to)?.type === MANIFOLD));
   s.groups ??= [];
+  // Machines already on steam from before modules keep working.
+  for (const line of s.lines) {
+    const from = nodeById(s, line.from);
+    const to = nodeById(s, line.to);
+    if (line.material === POWER && to && (from?.type === ENGINE || from?.type === MANIFOLD) && needsModule(to)) to.module = true;
+  }
   s.safeWalk ??= true;
   // Veins found before grades existed were all normal in size.
   for (const site of s.sites) {
@@ -808,6 +816,7 @@ export function removeNode(s: GameState, id: number): boolean {
   for (const stack of Object.values(node.ins)) if (stack && !isFluid(stack.id)) bank(s, stack.id, stack.n);
   for (const [item, n] of Object.entries(node.outs)) if (n && !isFluid(item)) bank(s, item, n);
   s.nodes = s.nodes.filter((n) => n !== node);
+  if (node.module) giveItem(s, MODULE);
   // Older saves built nodes straight from materials, and get those back instead.
   if (node.paid.length) refund(s, node.paid);
   else if (!giveItem(s, node.type)) s.cursor ??= { id: node.type, n: 1 };
@@ -824,6 +833,31 @@ export function removeNode(s: GameState, id: number): boolean {
 export const portsUsed = (s: GameState, id: number): number =>
   s.lines.filter((l) => l.from === id || l.to === id).length;
 
+/** Whether a machine needs a module fitted before it can take steam. */
+export const needsModule = (node: GameNode): boolean =>
+  !isPassive(node.type) && node.type !== MOTOR && node.type !== ENGINE && !isSteamReady(node.type);
+
+/** Stores and manifolds just pass steam on. Machines need to be built for it, or fitted with a module. */
+const takesSteam = (node: GameNode): boolean => !needsModule(node) || !!node.module;
+
+/** Fits a steam module from the bag or a warehouse. */
+export function fitModule(s: GameState, nodeId: number): boolean {
+  const node = nodeById(s, nodeId);
+  if (!atBase(s) || !node || !needsModule(node) || node.module || countOf(s, MODULE) < 1) return false;
+  spend(s, MODULE, 1);
+  node.module = true;
+  return true;
+}
+
+/** Takes a module back out, which also cuts any steam line it was using. */
+export function removeModule(s: GameState, nodeId: number): boolean {
+  const node = nodeById(s, nodeId);
+  if (!atBase(s) || !node?.module || !giveItem(s, MODULE)) return false;
+  delete node.module;
+  cutLines(s, (l) => l.to !== nodeId || l.material !== POWER || nodeById(s, l.from)?.type === MOTOR);
+  return true;
+}
+
 /** What any line between two nodes could carry, before ports or existing lines are counted. */
 export function routeMaterials(s: GameState, fromId: number, toId: number): string[] {
   const from = nodeById(s, fromId);
@@ -831,7 +865,8 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
   if (!from || !to || from === to || to.type === MOTOR) return [];
   // A manifold splits steam, so a spring can't feed one.
   if (from.type === MOTOR && to.type === MANIFOLD) return [];
-  if (isPowerSource(from.type) || from.type === MANIFOLD) return to.type === ENGINE ? [] : [POWER];
+  if (from.type === MOTOR) return to.type === ENGINE ? [] : [POWER];
+  if (from.type === ENGINE || from.type === MANIFOLD) return to.type !== ENGINE && takesSteam(to) ? [POWER] : [];
   if (to.type === MANIFOLD) return [];
   // Nothing can use stored tar yet, so a tank has no lines out.
   if (from.type === TANK) return [];

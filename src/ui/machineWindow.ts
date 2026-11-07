@@ -1,8 +1,8 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
+import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, MODULE, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -24,6 +24,7 @@ export class MachineWindow {
   private readonly modes = document.createElement("div");
   private readonly recipe = document.createElement("div");
   private readonly sort = document.createElement("button");
+  private readonly moduleButton = document.createElement("button");
   private readonly keys = document.createElement("div");
   private readonly keycaps: HTMLButtonElement[] = [];
   private workBox: HTMLButtonElement | null = null;
@@ -61,7 +62,17 @@ export class MachineWindow {
     this.sort.type = "button";
     this.sort.className = "tech push";
     this.sort.textContent = tr("정렬");
-    head.append(this.title, this.sort, this.demolish, close);
+    this.moduleButton.type = "button";
+    this.moduleButton.className = "tech";
+    this.moduleButton.addEventListener("click", () => {
+      const s = this.game();
+      const node = this.nodeId === null ? undefined : nodeById(s, this.nodeId);
+      if (!node) return;
+      if (node.module) removeModule(s, node.id);
+      else fitModule(s, node.id);
+      this.changed();
+    });
+    head.append(this.title, this.moduleButton, this.sort, this.demolish, close);
     this.bar.className = "window-bar";
     this.inv.className = "slot-grid";
     for (let i = 0; i < INV_SLOTS; i += 1) {
@@ -378,6 +389,14 @@ export class MachineWindow {
     this.demolish.disabled = !canRemove(s, node);
     this.demolish.dataset.tip = this.demolish.disabled ? tr("창고를 비워야 철거할 수 있습니다") : "";
     this.recipe.hidden = isStore(node.type);
+    this.moduleButton.hidden = s.stage < 1 || !needsModule(node);
+    if (!this.moduleButton.hidden) {
+      const owned = countOf(s, MODULE);
+      const label = node.module ? tr("증기 모듈 빼기") : `${tr("증기 모듈 장착")} (${owned})`;
+      if (this.moduleButton.textContent !== label) this.moduleButton.textContent = label;
+      this.moduleButton.disabled = !node.module && owned < 1;
+      this.moduleButton.dataset.tip = node.module ? tr("빼면 증기 동력 선이 끊어집니다") : tr("장착해야 증기 동력을 받을 수 있습니다");
+    }
     if (node.type === TANK) {
       const line = `${tr("콜타르")} ${node.ins[TAR]?.n ?? 0}/${TAR_TANK_CAP}L`;
       if (this.recipe.dataset.line !== line) {

@@ -11,7 +11,7 @@ const SHAPE_OF: Record<string, string> = {
   water_drum: "water_drum",
   steel: "ingot",
   coal_tar: "water",
-  brick: "brick",
+  brick: "brick", steam_module: "steam_module",
   iron: "ingot", copper: "ingot", boiler: "boiler", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
 };

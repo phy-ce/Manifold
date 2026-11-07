@@ -35,6 +35,7 @@
   "tar_tank": { "code": "TT", "color": "#7a6a8c" },
   "steam_manifold": { "code": "Mf", "color": "#ffd24a" },
   "item_splitter": { "code": "Sp", "color": "#b09462" },
+  "steam_module": { "code": "Mod", "color": "#ffd24a" },
   "water": { "code": "Wa", "color": "#5aa9e6" },
   "water_drum": { "code": "Wd", "color": "#5aa9e6" },
   "steam": { "code": "St", "color": "#c9d4dc" },

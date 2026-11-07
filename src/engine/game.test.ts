@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, carryLimit, clickGear, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -1448,9 +1448,75 @@ describe("steam power", () => {
     run(s, 1);
     expect(status(hammer)).toBe("manual");
     const engine = engineAt(s);
+    hammer.module = true;
     connect(s, engine.id, hammer.id, POWER);
     run(s, 1);
     expect(status(hammer)).toBe("run");
+  });
+
+  it("won't take steam without a module, unless built for it", () => {
+    const s = steamStage();
+    const engine = engineAt(s);
+    const bench = placeMachine(s, "plate_hammer", 0, 0)!;
+    const steam = placeMachine(s, "steam_hammer", 0, 0)!;
+    const pump = placeMachine(s, "drainage_pump", 0, 0)!;
+    expect(connect(s, engine.id, bench.id, POWER)).toBeNull();
+    expect(connect(s, engine.id, steam.id, POWER)).toBeTruthy();
+    expect(connect(s, engine.id, pump.id, POWER)).toBeTruthy();
+    expect(connect(s, engine.id, s.nodes[0].id, POWER)).toBeTruthy();
+  });
+
+  it("still takes a spring's power without a module", () => {
+    const s = steamStage();
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    const bench = placeMachine(s, "plate_hammer", 0, 0)!;
+    expect(connect(s, motor.id, bench.id, POWER)).toBeTruthy();
+  });
+
+  it("fits a module from storage, and gives it back when removed", () => {
+    const s = steamStage();
+    const engine = engineAt(s);
+    const bench = placeMachine(s, "plate_hammer", 0, 0)!;
+    expect(fitModule(s, bench.id)).toBe(false);
+    s.nodes[0].store = s.nodes[0].store.map(() => null);
+    s.nodes[0].store[0] = { id: "steam_module", n: 1 };
+    expect(needsModule(bench)).toBe(true);
+    expect(fitModule(s, bench.id)).toBe(true);
+    expect(countOf(s, "steam_module")).toBe(0);
+    expect(connect(s, engine.id, bench.id, POWER)).toBeTruthy();
+    expect(removeModule(s, bench.id)).toBe(true);
+    expect(countOf(s, "steam_module")).toBe(1);
+    expect(s.lines.some((l) => l.to === bench.id)).toBe(false);
+  });
+
+  it("returns a fitted module when the machine comes down", () => {
+    const s = steamStage();
+    const bench = placeMachine(s, "plate_hammer", 0, 0)!;
+    bench.module = true;
+    removeNode(s, bench.id);
+    expect(countOf(s, "steam_module")).toBe(1);
+  });
+
+  it("makes modules from a steam engine", () => {
+    const s = steamStage();
+    const bench = placeMachine(s, "engine_bench", 0, 0)!;
+    const slots = nodeProcess(bench).slots.map((slot) => slot.key);
+    bench.ins[slots[0]] = { id: "iron_cylinder", n: 1 };
+    bench.ins[slots[1]] = { id: "iron_plate", n: 2 };
+    bench.ins[slots[2]] = { id: "steam_engine_unit", n: 1 };
+    bench.ins[slots[3]] = { id: "copper_tube", n: 2 };
+    power(s, bench.id);
+    run(s, 21);
+    expect(bench.outs.steam_module).toBe(2);
+  });
+
+  it("keeps old machines on steam working", () => {
+    const s = steamStage();
+    const engine = engineAt(s);
+    const bench = placeMachine(s, "plate_hammer", 0, 0)!;
+    s.lines.push({ id: 900, from: engine.id, to: bench.id, material: POWER, timer: 0, active: false, lastMoved: 0, paid: [] });
+    upgradeSave(s);
+    expect(bench.module).toBe(true);
   });
 
   it("reports what it is carrying against its limit", () => {

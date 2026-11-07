@@ -127,6 +127,7 @@ export const EN: Record<string, string> = {
   "발": "Feet", "등": "Back", "손": "Hand", "장비": "Gear", "장비 칸 클릭": "Click a gear slot", "손에 든 장비 입기, 벗기": "Put on or take off gear",
   "걷는 시간 35% 감소": "35% less time per step", "최대 무게 +40": "Max load +40", "광맥을 한 번에 2개 캠": "Mines 2 at a time",
   " 장화": " boots", "장화": "Boots", " 틀 배낭": " frame pack", "틀 배낭": "Frame pack", " 곡괭이": " pick", "곡괭이": "Pick",
+  "증기 모듈": "Steam module", "증기 모듈 장착": "Fit steam module", "증기 모듈 빼기": "Remove steam module", "빼면 증기 동력 선이 끊어집니다": "Removing it cuts steam lines", "장착해야 증기 동력을 받을 수 있습니다": "Needed to take steam power", "증기 모듈이 있어야 증기 동력을 받습니다": "Needs a steam module to take steam power",
   "고갈 숨기기": "Hide empty", "연결 설정": "Route", "보내는 쪽에 동력이 없어 멈춰 있습니다": "Stopped: the sending side has no power", "포트": "Ports", "연결 비용:": "Line cost:", "이동 중": "Moving", "대기": "Idle",
   "슬롯": "Slot", "비어 있음": "Empty", "저장 실패": "Save failed", "불러오기": "Load",
   // Slots

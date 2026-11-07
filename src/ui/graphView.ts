@@ -2,7 +2,7 @@
 import { tr } from "../i18n";
 import { ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
-  NAME_MAX, TAR_TANK_CAP, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
+  NAME_MAX, TAR_TANK_CAP, needsModule, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
@@ -669,6 +669,8 @@ export class GraphView {
       return;
     }
     this.nodes.get(id)?.root.classList.add("refused");
+    const target = nodeById(s, id);
+    if (target && needsModule(target) && !target.module) this.nodes.get(id)!.root.dataset.tip = tr("증기 모듈이 있어야 증기 동력을 받습니다");
     setTimeout(() => this.nodes.get(id)?.root.classList.remove("refused"), 260);
   }
 

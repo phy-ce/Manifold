@@ -47,7 +47,7 @@ const variants = expanded.variants;
 const forms: Record<string, { label: string }> = materials.forms;
 const ores: Record<string, Ore> = oreData.ores;
 const display: Record<string, { code: string; color: string }> = displayData;
-const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number; power?: number; powerOut?: number }> = era.machines;
+const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean }> = era.machines;
 
 const food: Record<string, { hunger: number; hp: number }> = era.food;
 
@@ -136,6 +136,10 @@ export const machinePower = (type: string): number => machines[type].power ?? 0;
 /** Force a steam engine gives each second. */
 export const machinePowerOut = (type: string): number => machines[type].powerOut ?? 0;
 export const isPowerSource = (type: string): boolean => type === MOTOR || type === ENGINE;
+/** Fitted to a machine so it can take steam power. */
+export const MODULE = "steam_module";
+/** Machines built for steam, with no module to fit. */
+export const isSteamReady = (type: string): boolean => machines[type]?.steamReady ?? false;
 /** Nodes that hold items in slots and send them on without a recipe. */
 export const isStore = (type: string): boolean => type === WAREHOUSE || type === SPLITTER;
 /** Nodes with no recipe of their own. */
