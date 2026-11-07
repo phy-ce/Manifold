@@ -222,44 +222,6 @@ function engineBench(mode: Status, f: number) {
   blocked(mode);
 }
 
-function stove(mode: Status, f: number) {
-  const p = pose(mode, f);
-  // Low stone hearth; its pot and handles replace the tall furnace chimney.
-  rect("#4d4c49", 11, 47, 54, 23);
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 4; col++) {
-      const x = 12 + col * 13;
-      const y = 48 + row * 7;
-      rect(row % 2 ? "#8b8980" : "#a29d8f", x, y, 12, 6);
-      rect("#c0b8a5", x, y, 12, 1);
-    }
-  }
-  rect("#202126", 26, 53, 24, 15);
-  for (let i = 0; i < 4; i++) {
-    const h = mode === "run" ? [7, 11, 8, 5][(p + i) % 4] : 2;
-    rect(mode === "run" ? "#e8833c" : "#6a4940", 29 + i * 5, 66 - h, 3, h);
-    if (mode === "run") rect("#ffd780", 30 + i * 5, 64 - h / 2, 1, h / 2);
-  }
-  rect("#50545a", 8, 45, 60, 4);
-  oval("#9babb3", 18, 31, 7, 5);
-  oval("#171e26", 18, 31, 4, 2);
-  oval("#788890", 57, 31, 7, 5);
-  oval("#171e26", 57, 31, 4, 2);
-  oval("#657984", 38, 39, 18, 7);
-  rect("#657984", 20, 26, 36, 13);
-  rect("#9dafb7", 23, 27, 5, 11);
-  oval("#bdcbd0", 38, 25, 20, 5);
-  oval("#7c909b", 38, 24, 16, 3);
-  rect("#d0d8d6", 35, 18, 6, 5);
-  if (mode === "run") {
-    for (let i = 0; i < 2; i++) {
-      const y = 14 - (p + i * 2) % 4 * 3;
-      rect("#a8b8be", 29 + i * 15 + p % 2, y, 2, 3);
-    }
-  }
-  blocked(mode);
-}
-
 function storageBox(x: number, y: number, w: number, h: number) {
   rect("#967049", x, y, w, h);
   rect("#c79d69", x, y, w, 2);
@@ -327,7 +289,6 @@ function springMotor(mode: Status, f: number) {
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
   smelter: (m, f) => furnace(m, f, [172, 92, 62]),
-  stove,
   plate_hammer: plateHammer,
   forming_bench: formingBench,
   boiler_bench: boilerBench,

@@ -1,6 +1,6 @@
 import "./style.css";
 import { MILESTONE, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, deliver, eat, overloaded, sortSlots, step, trashCursor, walkTo, wheelStack } from "./engine/game";
+import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, deliver, eat, overloaded, sortSlots, step, trashCursor, upgradeSave, walkTo, wheelStack } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -23,7 +23,7 @@ function load(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const saved = raw ? (JSON.parse(raw) as GameState) : null;
-    if (saved?.version === SAVE_VERSION) return saved;
+    if (saved?.version === SAVE_VERSION) return upgradeSave(saved);
   } catch {
     // A blocked or damaged save just starts a new game.
   }

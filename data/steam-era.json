@@ -39,7 +39,6 @@
     "engine_bench": { "name": "기관 조립대", "difficulty": 4, "manual": "keys", "cost": { "iron_plate": 6, "iron": 6 }, "work": 40 },
 
     "spring_motor": { "name": "태엽 동력기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
-    "stove": { "name": "화덕", "cost": { "brick": 4, "clay": 6 }, "work": 15 },
 
     "steam_engine": { "name": "증기기관", "powerOut": 10, "cost": { "steam_engine_unit": 1 } },
     "steam_manifold": { "name": "증기 배분기", "fixedPorts": 6, "cost": { "copper_tube": 6, "iron_plate": 2 } },
@@ -74,8 +73,8 @@
     { "id": "boiler", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 8, "copper_tube": 4 }, "out": { "boiler": 1 } },
     { "id": "steam_engine_unit", "machine": "engine_bench", "time": 30, "in": { "iron_cylinder": 2, "iron_plate": 4, "boiler": 1, "copper_tube": 4 }, "out": { "steam_engine_unit": 1 } },
 
-    { "id": "cook_berry", "machine": "stove", "time": 5, "in": { "Be": 1, "coal": 1 }, "out": { "Bc": 1 } },
-    { "id": "cook_mushroom", "machine": "stove", "time": 5, "in": { "Mu": 1, "coal": 1 }, "out": { "Mc": 1 } },
+    { "id": "cook_berry", "machine": "brick_kiln", "time": 5, "in": { "Be": 1, "coal": 1 }, "out": { "Bc": 1 } },
+    { "id": "cook_mushroom", "machine": "brick_kiln", "time": 5, "in": { "Mu": 1, "coal": 1 }, "out": { "Mc": 1 } },
 
     { "id": "steam", "machine": "steam_engine", "time": 10, "in": { "coal": 1, "water": 4 }, "out": {} },
     { "id": "iron_plate_steam", "machine": "steam_hammer", "time": 2, "in": { "iron": 3 }, "out": { "iron_plate": 2 } },
@@ -101,7 +100,7 @@
     {
       "id": "S1", "name": "증기기관 + 구리 배관",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "Be", "Mu"],
-      "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "stove", "warehouse", "spring_motor"],
+      "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor"],
       "goal": { "item": "steam_engine_unit", "amount": 1, "perMinute": 0.2 }
     },
     {

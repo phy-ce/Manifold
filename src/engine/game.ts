@@ -428,6 +428,20 @@ export function cancelProject(s: GameState): boolean {
   return true;
 }
 
+/** Brings a save from an older layout up to date. The stove merged into the brick kiln. */
+export function upgradeSave(s: GameState): GameState {
+  if (s.project?.type === "stove") s.project.type = "brick_kiln";
+  for (const node of s.nodes) {
+    if (node.type === "stove") {
+      node.type = "brick_kiln";
+      node.ins = { clay: node.ins.Be ?? null, coal: node.ins.coal ?? null };
+    }
+    if (node.type !== "brick_kiln") continue;
+    for (const id of processOf(node.type, node.form).outputs) node.outs[id] ??= 0;
+  }
+  return s;
+}
+
 /** The first warehouse always stays, and a built one must be emptied before demolition. */
 export const isFirstWarehouse = (s: GameState, node: GameNode): boolean => s.nodes.find((n) => n.type === WAREHOUSE) === node;
 export const canRemove = (s: GameState, node: GameNode): boolean =>

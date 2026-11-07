@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, addTo, createTestGame, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, deliver, mine, moveToNode, nodeById,
+  GameState, addTo, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, deliver, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, regionId, terrain } from "./world";
@@ -1189,13 +1189,36 @@ describe("survival", () => {
     expect(eat(s, 0)).toBe(false);
   });
 
-  it("cooks on the stove from whichever food goes in", () => {
+  it("cooks in the brick kiln from whichever food goes in", () => {
     const s = createGame(1);
-    const stove = placeMachine(s, "stove", 0, 0)!;
-    stove.ins.Be = { id: "Mu", n: 1 };
-    stove.ins.coal = { id: "Lg", n: 1 };
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    kiln.ins.clay = { id: "Mu", n: 1 };
+    kiln.ins.coal = { id: "Lg", n: 1 };
     run(s, 6);
-    expect(stove.outs.Mc).toBe(1);
+    expect(kiln.outs.Mc).toBe(1);
+  });
+
+  it("still fires bricks after food shares the kiln", () => {
+    const s = createGame(1);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    kiln.ins.clay = { id: "Kn", n: 2 };
+    kiln.ins.coal = { id: "Lg", n: 1 };
+    run(s, 9);
+    expect(kiln.outs.brick).toBe(2);
+  });
+
+  it("turns a saved stove into a brick kiln and keeps its contents", () => {
+    const s = createGame(1);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    Object.assign(kiln, { type: "stove", ins: { Be: { id: "Mu", n: 3 }, coal: { id: "Lg", n: 2 } }, outs: { Bc: 0, Mc: 1 } });
+    s.project = { type: "stove", done: 2, paid: [] };
+    upgradeSave(s);
+    expect(kiln.type).toBe("brick_kiln");
+    expect(kiln.ins).toEqual({ clay: { id: "Mu", n: 3 }, coal: { id: "Lg", n: 2 } });
+    expect(kiln.outs).toEqual({ brick: 0, Bc: 0, Mc: 1 });
+    expect(s.project.type).toBe("brick_kiln");
+    run(s, 6);
+    expect(kiln.outs.Mc).toBe(2);
   });
 
   it("guarantees food near the base on every seed", () => {
