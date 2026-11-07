@@ -161,10 +161,14 @@ saveButton.addEventListener("click", () => {
 });
 // Only one window at a time: opening one closes the others.
 function closeWindows(): void {
+  closeBaseWindows();
+  saveView.close();
+}
+/** Windows onto the base. Saving works anywhere, so its window isn't one of them. */
+function closeBaseWindows(): void {
   windowView.close();
   buildView.close();
   routeView.close();
-  saveView.close();
 }
 const graph = new GraphView(
   game,
@@ -310,7 +314,7 @@ function redraw(): void {
   const home = atBase(state);
   if (home && !wasHome) screen = "base"; // arriving home opens the base
   wasHome = home;
-  if (!home) closeWindows();
+  if (!home) closeBaseWindows();
   const showBase = home && screen === "base";
   graph.root.hidden = !showBase;
   map.root.hidden = showBase;
