@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, TANK_CAP, addTo, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, TANK_CAP, addTo, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -1745,6 +1745,55 @@ describe("fluids", () => {
     const { s, pump } = pumped();
     expect(removeNode(s, pump.id)).toBe(true);
     expect(countOf(s, "water")).toBe(0);
+  });
+});
+
+describe("groups", () => {
+  const trio = () => {
+    const s = createGame(1);
+    const ids = [1, 2, 3].map(() => placeMachine(s, "brick_kiln", 0, 0)!.id);
+    return { s, ids };
+  };
+
+  it("folds nodes behind one chosen port, which keeps them running", () => {
+    const { s, ids } = trio();
+    const kiln = nodeById(s, ids[0])!;
+    kiln.ins.clay = { id: "Kn", n: 2 };
+    kiln.ins.coal = { id: "Lg", n: 1 };
+    const group = createGroup(s, ids, ids[1])!;
+    expect(group.port).toBe(ids[1]);
+    expect(group.code).toMatch(/^[0-9a-z]{3}$/);
+    run(s, 9);
+    expect(kiln.outs.brick).toBe(2);
+  });
+
+  it("needs two nodes and a port among them", () => {
+    const { s, ids } = trio();
+    expect(createGroup(s, [ids[0]], ids[0])).toBeNull();
+    expect(createGroup(s, [ids[0], ids[1]], ids[2])).toBeNull();
+  });
+
+  it("keeps a node in one group at most", () => {
+    const { s, ids } = trio();
+    createGroup(s, [ids[0], ids[1]], ids[0]);
+    expect(createGroup(s, [ids[1], ids[2]], ids[1])).toBeNull();
+  });
+
+  it("unfolds without touching machines or lines", () => {
+    const { s, ids } = trio();
+    const group = createGroup(s, ids, ids[0])!;
+    removeGroup(s, group.id);
+    expect(s.groups).toEqual([]);
+    expect(ids.every((id) => nodeById(s, id))).toBe(true);
+  });
+
+  it("moves the port on when its node is demolished, and ends with fewer than two", () => {
+    const { s, ids } = trio();
+    const group = createGroup(s, ids, ids[0])!;
+    removeNode(s, ids[0]);
+    expect(group.port).toBe(ids[1]);
+    removeNode(s, ids[1]);
+    expect(s.groups).toEqual([]);
   });
 });
 

@@ -1,8 +1,8 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { ENGINE, LINK, MAX_PORTS, formLabel, machineForms, machinesAt, MOTOR, POWER, RIVERBANK, WAREHOUSE, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
-  powerLoad, buildAllGhosts, buildGhost, copyToGhosts, countOf, installHeld, removeGhost,
-  Ghost, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
+  powerLoad, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
+  Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
 
@@ -60,7 +60,7 @@ export class GraphView {
   private readonly nodes = new Map<number, NodeView>();
   private readonly lines = new Map<string, LineView>();
   private linkFrom: number | null = null;
-  private drag: { id: number; dx: number; dy: number; moved: boolean } | null = null;
+  private drag: { id: number; dx: number; dy: number; moved: boolean; copy: boolean } | null = null;
   private pan = { x: 0, y: 0 };
   private zoom = 1;
   private readonly view = document.createElement("div");
@@ -78,6 +78,10 @@ export class GraphView {
   private readonly ghostViews = new Map<number, GhostView>();
   private readonly ghostWires = new Map<string, SVGPathElement>();
   private readonly marquee = document.createElement("div");
+  private readonly groupButton = document.createElement("button");
+  private readonly groupViews = new Map<number, GhostView>();
+  /** Waiting for the player to click the node that will face the outside. */
+  private pickingPort = false;
   private readonly selected = new Set<number>();
   private clip: number[] = [];
   private channel: Channel = "all";
@@ -139,12 +143,101 @@ export class GraphView {
       this.applyView();
       this.draw();
     });
-    this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.buildAll, this.zoomButton);
+    action(this.groupButton, "묶기", "고른 노드를 하나로 묶습니다. 누른 뒤 외부와 연결할 노드를 클릭하세요", () => {
+      this.pickingPort = !this.pickingPort;
+      this.draw();
+    });
+    this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.groupButton, this.buildAll, this.zoomButton);
   }
 
   private copy(): void {
-    if (this.selected.size) this.clip = [...this.selected];
+    const s = this.game();
+    // A group copies as the nodes inside it.
+    if (this.selected.size) this.clip = [...this.selected].flatMap((id) => s.groups.find((g) => g.id === id)?.nodes ?? [id]);
     this.draw();
+  }
+
+  /** The group card that stands in for a node, while that group is folded. */
+  private cardOf(s: GameState, id: number): Group | undefined {
+    return s.groups.find((group) => !group.open && group.nodes.includes(id));
+  }
+
+  private makeGroup(group: Group): GhostView {
+    const root = document.createElement("div");
+    root.className = "node group";
+    const body = document.createElement("button");
+    body.type = "button";
+    body.className = "node-body";
+    const link = document.createElement("button");
+    link.type = "button";
+    link.className = "link";
+    link.textContent = "+";
+    link.setAttribute("aria-label", "묶음의 외부 연결 노드에서 선 연결");
+    link.addEventListener("click", () => {
+      this.linkFrom = group.port;
+      this.board.classList.add("linking");
+    });
+    const split = document.createElement("button");
+    split.type = "button";
+    split.className = "link split";
+    split.textContent = "x";
+    split.dataset.tip = "묶음을 풉니다. 기계와 선은 그대로입니다";
+    split.setAttribute("aria-label", "묶음 풀기");
+    split.addEventListener("click", () => {
+      removeGroup(this.game(), group.id);
+      this.selected.delete(group.id);
+      this.changed();
+    });
+    root.append(body, link, split);
+    body.addEventListener("pointerdown", (e) => {
+      this.drag = { id: group.id, dx: e.clientX, dy: e.clientY, moved: false, copy: false };
+    });
+    body.addEventListener("click", (e) => {
+      if (this.dragged) {
+        this.dragged = false;
+        return;
+      }
+      if (e.shiftKey) return this.toggleSelected(group.id);
+      if (this.linkFrom !== null) return this.clickNode(group.port);
+      group.open = !group.open;
+      this.changed();
+    });
+    this.board.append(root);
+    return { root, body, key: "" };
+  }
+
+  private drawGroups(s: GameState, query: string): void {
+    for (const [id, view] of this.groupViews) {
+      if (!s.groups.some((g) => g.id === id)) {
+        view.root.remove();
+        this.groupViews.delete(id);
+      }
+    }
+    for (const group of s.groups) {
+      let view = this.groupViews.get(group.id);
+      if (!view) {
+        view = this.makeGroup(group);
+        this.groupViews.set(group.id, view);
+      }
+      const members = group.nodes.flatMap((id) => nodeById(s, id) ?? []);
+      const port = nodeById(s, group.port)!;
+      view.root.style.transform = `translate(${group.x}px, ${group.y}px)`;
+      view.root.classList.toggle("selected", this.selected.has(group.id));
+      view.root.classList.toggle("open", group.open);
+      view.root.dataset.status = STATUS_ORDER.find((state) => members.some((n) => status(n) === state)) ?? "idle";
+      const found = !!query && members.some((n) => this.matches(s, n, query));
+      view.root.classList.toggle("dim", !!query && !found);
+      view.root.classList.toggle("found", found);
+      const used = portsUsed(s, port.id);
+      const running = members.filter((n) => status(n) === "run").length;
+      const html = `<b>묶음 ${group.code}</b><span class="ports">${"●".repeat(used)}${"○".repeat(Math.max(0, MAX_PORTS - used))}</span>` +
+        `<span class="flow">외부: ${nodeLabel(s, port)}</span>` +
+        `<span class="flow">노드 ${members.length} · 가동 ${running}${group.open ? " · 펼침" : ""}</span>`;
+      if (html !== view.key) {
+        view.key = html;
+        view.body.innerHTML = html;
+      }
+    }
   }
 
   /** Lays the copied nodes down as a plan, at the pointer if it is over the board. */
@@ -166,7 +259,7 @@ export class GraphView {
   }
 
   private spotOf(s: GameState, id: number): { x: number; y: number } | undefined {
-    return nodeById(s, id) ?? s.ghosts.find((g) => g.id === id);
+    return nodeById(s, id) ?? s.ghosts.find((g) => g.id === id) ?? s.groups.find((g) => g.id === id);
   }
 
   private boardPoint(e: MouseEvent): { x: number; y: number } {
@@ -235,7 +328,7 @@ export class GraphView {
     });
     root.append(body, drop);
     body.addEventListener("pointerdown", (e) => {
-      this.drag = { id: ghost.id, dx: e.clientX, dy: e.clientY, moved: false };
+      this.drag = { id: ghost.id, dx: e.clientX, dy: e.clientY, moved: false, copy: e.ctrlKey || e.metaKey };
     });
     body.addEventListener("click", (e) => {
       if (this.dragged) {
@@ -402,6 +495,7 @@ export class GraphView {
         this.cancelLink();
         this.closeList();
         this.selected.clear();
+        this.pickingPort = false;
       }
       this.onKey(e);
     });
@@ -454,7 +548,7 @@ export class GraphView {
     });
     root.append(body, link);
     body.addEventListener("pointerdown", (e) => {
-      this.drag = { id: node.id, dx: e.clientX, dy: e.clientY, moved: false };
+      this.drag = { id: node.id, dx: e.clientX, dy: e.clientY, moved: false, copy: e.ctrlKey || e.metaKey };
     });
     body.addEventListener("click", (e) => {
       if (this.dragged) {
@@ -462,6 +556,14 @@ export class GraphView {
         return;
       }
       if (e.shiftKey) return this.toggleSelected(node.id);
+      if (this.pickingPort) {
+        this.pickingPort = false;
+        const s = this.game();
+        const group = createGroup(s, [...this.selected], node.id);
+        if (group) this.selected.clear();
+        this.changed();
+        return;
+      }
       this.clickNode(node.id);
     });
     this.board.append(root);
@@ -491,6 +593,18 @@ export class GraphView {
     const dx = (e.clientX - this.drag.dx) / this.zoom;
     const dy = (e.clientY - this.drag.dy) / this.zoom;
     if (!this.drag.moved && Math.abs(dx) + Math.abs(dy) <= 3) return;
+    // Ctrl-drag leaves the originals alone and carries a blueprint copy instead.
+    if (this.drag.copy && !this.drag.moved) {
+      const ids = this.selected.has(this.drag.id) ? [...this.selected] : [this.drag.id];
+      const copies = copyToGhosts(s, ids, 0, 0);
+      if (!copies.length) {
+        this.drag = null;
+        return;
+      }
+      this.selected.clear();
+      for (const ghost of copies) this.selected.add(ghost.id);
+      this.drag.id = copies[0].id;
+    }
     this.drag.moved = true;
     this.drag.dx = e.clientX;
     this.drag.dy = e.clientY;
@@ -512,7 +626,7 @@ export class GraphView {
     const [left, right] = [Math.min(from.x, at.x), Math.max(from.x, at.x)];
     const [top, bottom] = [Math.min(from.y, at.y), Math.max(from.y, at.y)];
     const s = this.game();
-    for (const item of [...s.nodes, ...s.ghosts]) {
+    for (const item of [...s.nodes.filter((n) => !this.cardOf(s, n.id)), ...s.ghosts, ...s.groups]) {
       if (item.x + NODE_W > left && item.x < right && item.y + NODE_H > top && item.y < bottom) this.selected.add(item.id);
     }
     this.boxFrom = null;
@@ -688,6 +802,13 @@ export class GraphView {
     }
     for (const [channel, b] of this.channels) b.classList.toggle("selected", channel === this.channel);
     this.copyButton.disabled = !this.selected.size;
+    const canGroup = [...this.selected].filter((id) => nodeById(s, id)).length >= 2;
+    if (!canGroup) this.pickingPort = false;
+    this.groupButton.disabled = !canGroup;
+    this.groupButton.classList.toggle("selected", this.pickingPort);
+    const groupLabel = this.pickingPort ? "외부 연결 노드를 클릭" : "묶기";
+    if (this.groupButton.textContent !== groupLabel) this.groupButton.textContent = groupLabel;
+    this.board.classList.toggle("picking", this.pickingPort);
     this.pasteButton.disabled = !this.clip.length;
     this.buildAll.hidden = !s.ghosts.length;
     const allLabel = `청사진 설치 ${s.ghosts.filter((g) => countOf(s, g.type) > 0).length}/${s.ghosts.length}`;
@@ -708,6 +829,7 @@ export class GraphView {
         this.nodes.set(node.id, view);
       }
       view.root.style.transform = `translate(${node.x}px, ${node.y}px)`;
+      view.root.hidden = !!this.cardOf(s, node.id);
       const state = status(node);
       view.root.dataset.status = state;
       view.root.classList.toggle("source", this.linkFrom === node.id);
@@ -727,7 +849,12 @@ export class GraphView {
       width = Math.max(width, ghost.x + NODE_W + 60);
       height = Math.max(height, ghost.y + NODE_H + 60);
     }
+    for (const group of s.groups) {
+      width = Math.max(width, group.x + NODE_W + 60);
+      height = Math.max(height, group.y + NODE_H + 60);
+    }
     this.drawGhosts(s);
+    this.drawGroups(s, query);
     // Zoomed out, the board still has to fill the view so the ground stays draggable.
     this.board.style.width = `${Math.max(width, this.view.clientWidth / this.zoom)}px`;
     this.board.style.height = `${Math.max(height, this.view.clientHeight / this.zoom)}px`;
@@ -754,7 +881,16 @@ export class GraphView {
         this.lines.set(key, view);
       }
       const twoWay = routes.has(`${group[0].to}>${group[0].from}`);
-      const [p0, c1, c2, p3] = this.curve(nodeById(s, group[0].from)!, nodeById(s, group[0].to)!, twoWay);
+      // A folded group's lines run to its card, and lines inside it disappear.
+      const fromCard = this.cardOf(s, group[0].from);
+      const toCard = this.cardOf(s, group[0].to);
+      const inside = !!fromCard && fromCard === toCard;
+      for (const mark of [view.path, view.hit, view.tag]) mark.style.display = inside ? "none" : "";
+      if (inside) {
+        view.mover.style.display = "none";
+        continue;
+      }
+      const [p0, c1, c2, p3] = this.curve(fromCard ?? nodeById(s, group[0].from)!, toCard ?? nodeById(s, group[0].to)!, twoWay);
       const shape = `M${p0[0]} ${p0[1]} C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p3[0]} ${p3[1]}`;
       view.path.setAttribute("d", shape);
       view.hit.setAttribute("d", shape);

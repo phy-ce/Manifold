@@ -82,6 +82,17 @@ export interface Ghost {
   y: number;
 }
 
+/** Nodes folded into one card. They keep running; `port` is the one that faces the outside. */
+export interface Group {
+  id: number;
+  code: string;
+  nodes: number[];
+  port: number;
+  x: number;
+  y: number;
+  open: boolean;
+}
+
 /** A planned line. Either end can be a real node or a ghost. */
 export interface GhostLine {
   from: number;
@@ -125,6 +136,7 @@ export interface GameState {
   lines: Line[];
   ghosts: Ghost[];
   ghostLines: GhostLine[];
+  groups: Group[];
   nextId: number;
   /** How many of each machine have ever been built. Codes are never reused. */
   built: Record<string, number>;
@@ -180,6 +192,7 @@ export function createGame(seed: number): GameState {
     lines: [],
     ghosts: [],
     ghostLines: [],
+    groups: [],
     nextId: 1,
     built: {},
     project: null,
@@ -522,6 +535,22 @@ export function installHeld(s: GameState, x: number, y: number): GameNode | null
   return node;
 }
 
+/** Folds nodes into a group. A node belongs to one group at most, and the port must be one of them. */
+export function createGroup(s: GameState, ids: number[], port: number): Group | null {
+  const nodes = ids.filter((id) => nodeById(s, id));
+  const taken = s.groups.some((group) => group.nodes.some((id) => nodes.includes(id)));
+  if (nodes.length < 2 || taken || !nodes.includes(port)) return null;
+  const at = nodeById(s, port)!;
+  const group: Group = { id: s.nextId++, code: nextCode(s), nodes, port, x: at.x, y: at.y, open: false };
+  s.groups.push(group);
+  return group;
+}
+
+/** Unfolds a group. Its machines and lines stay exactly as they are. */
+export function removeGroup(s: GameState, id: number): void {
+  s.groups = s.groups.filter((group) => group.id !== id);
+}
+
 /** Plans a machine without needing one yet. */
 export function addGhost(s: GameState, type: string, x: number, y: number, form = machineForms(type)[0] ?? ""): Ghost | null {
   if (!machinesAt(s.stage).includes(type)) return null;
@@ -597,6 +626,7 @@ export function cancelProject(s: GameState): boolean {
 export function upgradeSave(s: GameState): GameState {
   s.ghosts ??= [];
   s.ghostLines ??= [];
+  s.groups ??= [];
   // Goals used to be handed in. Count what was handed in or still exists as made.
   const old = s as GameState & { delivered?: number; won?: boolean };
   if (s.stage === undefined) {
@@ -643,6 +673,11 @@ export function removeNode(s: GameState, id: number): boolean {
   else if (!giveItem(s, node.type)) s.cursor ??= { id: node.type, n: 1 };
   cutLines(s, (l) => l.from !== id && l.to !== id);
   s.ghostLines = s.ghostLines.filter((l) => l.from !== id && l.to !== id);
+  for (const group of s.groups) {
+    group.nodes = group.nodes.filter((member) => member !== id);
+    if (group.port === id) group.port = group.nodes[0];
+  }
+  s.groups = s.groups.filter((group) => group.nodes.length >= 2);
   return true;
 }
 
