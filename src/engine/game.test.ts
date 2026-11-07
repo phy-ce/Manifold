@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
+import { LAYERS, kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
   GameState, STEAM_MAX, TANK_CAP, addTo, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
@@ -1913,6 +1913,13 @@ describe("vein grades", () => {
     expect(Math.min(...sizes("normal"))).toBeGreaterThanOrEqual(40);
     expect(Math.max(...sizes("normal"))).toBeLessThanOrEqual(120);
     expect(Math.min(...sizes("rich"))).toBeGreaterThanOrEqual(120);
+  });
+
+  it("makes rich veins likelier the deeper the layer", () => {
+    const rich = LAYERS.map((layer) => layer.richness.rich);
+    expect(rich).toEqual([...rich].sort((a, b) => a - b));
+    expect(rich[0]).toBeLessThan(rich[2]);
+    for (const layer of LAYERS) expect(Object.values(layer.richness).reduce((a, b) => a + b, 0)).toBeCloseTo(1);
   });
 
   it("leaves food ungraded", () => {

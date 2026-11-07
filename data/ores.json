@@ -1,14 +1,14 @@
 {
   "layers": [
-    { "depth": 0, "name": "지표 산화대", "scanLevel": 1, "veinSize": [40, 120], "distance": [5, 13], "access": "click" },
-    { "depth": 1, "name": "얕은 지하", "scanLevel": 2, "veinSize": [1000, 3000], "distance": [13, 23], "access": "rail" },
-    { "depth": 2, "name": "심부", "scanLevel": 3, "veinSize": [10000, 30000], "distance": [23, 33], "access": "auto" }
+    { "depth": 0, "name": "지표 산화대", "scanLevel": 1, "richness": { "scarce": 0.3, "normal": 0.55, "rich": 0.15 }, "distance": [5, 13], "access": "click" },
+    { "depth": 1, "name": "얕은 지하", "scanLevel": 2, "richness": { "scarce": 0.15, "normal": 0.55, "rich": 0.3 }, "distance": [13, 23], "access": "rail" },
+    { "depth": 2, "name": "심부", "scanLevel": 3, "richness": { "scarce": 0.05, "normal": 0.45, "rich": 0.5 }, "distance": [23, 33], "access": "auto" }
   ],
   "forage": { "ids": ["Be", "Mu"], "size": [3, 9], "seasons": { "Be": [1, 2], "Mu": [0, 2] } },
   "richness": [
-    { "id": "scarce", "name": "빈약", "weight": 0.3, "scale": 0.3 },
-    { "id": "normal", "name": "보통", "weight": 0.55, "scale": 1 },
-    { "id": "rich", "name": "풍부", "weight": 0.15, "scale": 3 }
+    { "id": "scarce", "name": "빈약", "size": [12, 36] },
+    { "id": "normal", "name": "보통", "size": [40, 120] },
+    { "id": "rich", "name": "풍부", "size": [120, 360] }
   ],
   "river": { "reserve": 300, "regenMs": 2000 },
   "ores": {

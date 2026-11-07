@@ -56,9 +56,10 @@ function rollVein(rng: () => number, ore: string): { total: number; rich?: strin
     return { total: Math.round(low + rng() * (high - low)) };
   }
   let roll = rng();
-  const grade = RICHNESS.find((r) => (roll -= r.weight) < 0) ?? RICHNESS[RICHNESS.length - 1];
-  const [low, high] = SURFACE.veinSize;
-  return { total: Math.max(1, Math.round((low + rng() * (high - low)) * grade.scale)), rich: grade.id };
+  const odds: Record<string, number> = SURFACE.richness;
+  const grade = RICHNESS.find((r) => (roll -= odds[r.id]) < 0) ?? RICHNESS[RICHNESS.length - 1];
+  const [low, high] = grade.size;
+  return { total: Math.round(low + rng() * (high - low)), rich: grade.id };
 }
 
 const RIVER_SPACING = 70;
