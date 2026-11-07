@@ -49,6 +49,8 @@ let wasHome = atBase(state);
 const app = document.getElementById("app")!;
 const top = document.createElement("header");
 top.className = "top";
+/** Characters in the goal's progress bar. */
+const GOAL_BAR = 12;
 const goal = document.createElement("div");
 goal.className = "goal";
 const travel = document.createElement("button");
@@ -338,7 +340,11 @@ function redraw(): void {
   const target = `${stage.id}|${made}`;
   if (goal.dataset.key !== target) {
     goal.dataset.key = target;
-    goal.innerHTML = `${stage.id} <span style="color:${itemColor(item)}">${itemCode(item)}</span> ${itemName(item)} ${Math.min(made, amount)}/${amount}`;
+    const shown = Math.min(made, amount);
+    const fill = Math.round((shown / amount) * GOAL_BAR);
+    goal.innerHTML = `<span class="goal-tag">목표</span><span class="goal-stage">${stage.id} ${stage.name}</span>` +
+      `<span class="goal-item"><span style="color:${itemColor(item)}">${itemName(item)}</span> ${shown}/${amount}</span>` +
+      `<span class="goal-bar">[${"#".repeat(fill).padEnd(GOAL_BAR, ".")}]</span>`;
   }
   const seasonLeft = Math.ceil((SEASON_MS - (state.time % SEASON_MS)) / 1000);
   const clock = `${Math.floor(seasonLeft / 60)}:${String(seasonLeft % 60).padStart(2, "0")}`;

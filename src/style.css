@@ -38,7 +38,11 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .top, .bar-row, .palette, .roster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 .bar-row { margin-bottom: var(--gap); color: var(--dim); }
 .push { margin-left: auto; }
-.goal { font-weight: 700; }
+.goal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); padding: var(--gap-sm) var(--gap); border: 2px solid var(--fire); font-weight: 700; font-size: var(--text-md); }
+.goal-tag { padding: 0 var(--gap-sm); color: var(--bg); background: var(--fire); }
+.goal-stage { color: var(--dim); font-weight: 400; font-size: var(--text-sm); }
+.goal-item { font-size: var(--text-lg); }
+.goal-bar { color: var(--fire); }
 
 /* Vitals */
 .vitals { display: flex; flex-wrap: wrap; gap: var(--gap-lg); color: var(--dim); font-size: var(--text-sm); }
