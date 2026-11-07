@@ -160,7 +160,8 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .work { display: block; margin: 0 auto; user-select: none; }
 .work:not([disabled]) { outline: 1px dashed var(--line); }
 .work:not([disabled]):hover { outline-color: var(--go); }
-.work:not([disabled]):active pre { transform: translateY(1px); }
+.work:not([disabled]):active .art { transform: translateY(1px); }
+.art canvas { display: block; }
 .work[disabled] { cursor: default; }
 .build .work[disabled] { opacity: .25; }
 .amount { color: var(--fire); text-align: center; white-space: pre; }

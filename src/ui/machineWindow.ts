@@ -3,7 +3,7 @@ import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms,
 import {
   GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, canRemove, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
-import { renderArt } from "./art";
+import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
 
 const KEYS = ["A", "S", "D", "F"];
@@ -36,7 +36,7 @@ export class MachineWindow {
   private inputs: [string, HTMLButtonElement][] = [];
   private outputs: [string[], HTMLButtonElement][] = [];
   private stored: HTMLButtonElement[] = [];
-  private art: HTMLPreElement | null = null;
+  private readonly art = new MachineArt();
   private nodeId: number | null = null;
 
   constructor(private readonly game: () => GameState, private readonly changed: () => void) {
@@ -179,9 +179,7 @@ export class MachineWindow {
     this.inputs = [];
     this.outputs = [];
     this.stored = [];
-    this.art = document.createElement("pre");
-    this.art.className = "art";
-    this.art.setAttribute("aria-hidden", "true");
+    delete this.art.root.dataset.scene;
     if (node.type === WAREHOUSE) this.buildWarehouse(node);
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
@@ -258,7 +256,7 @@ export class MachineWindow {
     this.workBox.type = "button";
     this.workBox.className = "work";
     this.workBox.setAttribute("aria-label", `${machineName(node.type)} 작업`);
-    this.workBox.append(this.art!);
+    this.workBox.append(this.art.root);
     this.workBox.addEventListener("click", () => {
       if (machineManual(node.type) === "click") this.strike();
     });
@@ -271,7 +269,7 @@ export class MachineWindow {
     this.workBox.type = "button";
     this.workBox.className = "work";
     this.workBox.setAttribute("aria-label", "태엽 감기");
-    this.workBox.append(this.art!);
+    this.workBox.append(this.art.root);
     this.workBox.addEventListener("click", () => {
       if (windMotor(this.game(), node.id)) this.hitAt = performance.now();
       this.changed();
@@ -322,9 +320,9 @@ export class MachineWindow {
     if (node.type === MOTOR) {
       const winding = performance.now() - this.hitAt < HIT_MS;
       const scene = `motor|${winding ? frame >> 1 : ""}`;
-      if (this.art!.dataset.scene !== scene) {
-        this.art!.dataset.scene = scene;
-        this.art!.innerHTML = renderArt(node.type, winding ? "run" : "idle", frame);
+      if (this.art.root.dataset.scene !== scene) {
+        this.art.root.dataset.scene = scene;
+        this.art.show(node.type, winding ? "run" : "idle", frame);
       }
       const line = `힘 ${Math.floor(node.energy)}/${SPRING_MAX}<span class="state manual">그림을 클릭해서 감으세요</span>`;
       if (this.recipe.dataset.line !== line) {
@@ -373,9 +371,9 @@ export class MachineWindow {
     const mode = waiting ? (striking ? "run" : "idle") : state;
     // Still machines keep their picture; only moving ones are redrawn.
     const scene = `${node.type}|${mode}|${mode === "run" ? frame >> 1 : ""}`;
-    if (this.art!.dataset.scene !== scene) {
-      this.art!.dataset.scene = scene;
-      this.art!.innerHTML = renderArt(node.type, mode, frame);
+    if (this.art.root.dataset.scene !== scene) {
+      this.art.root.dataset.scene = scene;
+      this.art.show(node.type, mode, frame);
     }
     const fill = Math.round(node.progress * 18);
     const flow = state === "run" ? ">>>".slice(0, 1 + (frame % 3)).padEnd(3) : state === "blocked" ? "xxx" : "   ";

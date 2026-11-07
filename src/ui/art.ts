@@ -3,7 +3,7 @@ import { hash } from "../engine/world";
 import { Status } from "../engine/game";
 
 export const COLS = 76;
-const ROWS = 46;
+export const ROWS = 46;
 const RAMP = " .,:;-~=+*xoX#%@";
 
 const canvas = document.createElement("canvas");
@@ -83,74 +83,288 @@ function furnace(mode: Status, f: number, tint: number[]) {
   if (mode === "run") smoke(54, f);
 }
 
-function bench(mode: Status, f: number, metal: string) {
-  // Work surface, legs and a vice.
-  rect("#7c5a3c", 8, 42, 60, 6);
-  rect("#a07a55", 8, 42, 60, 2);
-  rect("#4f3a28", 12, 48, 5, 24);
-  rect("#4f3a28", 59, 48, 5, 24);
-  rect("#3a2c20", 12, 62, 52, 3);
-  rect("#8b8f98", 14, 34, 12, 8);
-  rect("#b4b8c0", 14, 34, 12, 2);
-  // Workpiece.
-  rect(metal, 34, 36, 20, 6);
-  rect("#ffffff", 34, 36, 20, 1);
-  // Hammer swings while running.
-  const lift = mode === "run" ? Math.abs(Math.sin(f * 0.6)) * 14 : 10;
-  rect("#7c5a3c", 41, 12 + (14 - lift), 3, 20);
-  rect("#c2c5cc", 35, 8 + (14 - lift), 15, 7);
-  if (mode === "run" && lift < 3) {
-    for (let i = 0; i < 5; i += 1) rect("#ffb238", 32 + i * 5, 30 - (i % 2) * 3, 1, 1);
-  }
-  if (mode === "blocked") {
-    rect("#ff5f56", 60, 12, 4, 14);
-    rect("#ff5f56", 60, 28, 4, 4);
-  }
+// Four poses, matching the UI's existing two-tick drawing cadence.
+const pose = (mode: Status, frame: number) => mode === "run" ? (Math.floor(frame / 2) % 4 + 4) % 4 : 0;
+
+function line(color: string, width: number, x1: number, y1: number, x2: number, y2: number) {
+  g.strokeStyle = color;
+  g.lineWidth = width;
+  g.beginPath();
+  g.moveTo(x1, y1);
+  g.lineTo(x2, y2);
+  g.stroke();
 }
 
-function crate() {
-  // Warehouse shelving.
-  rect("#4f3a28", 8, 12, 4, 60);
-  rect("#4f3a28", 64, 12, 4, 60);
-  for (const y of [24, 44, 64]) {
-    rect("#a07a55", 8, y, 60, 3);
-    for (let x = 14; x < 62; x += 12) {
-      const k = 0.7 + hash(x, y, 2) * 0.4;
-      rect(`rgb(${150 * k | 0},${112 * k | 0},${72 * k | 0})`, x, y - 10, 10, 10);
-      rect("#5e452f", x, y - 6, 10, 1);
+function oval(color: string, x: number, y: number, rx: number, ry: number) {
+  g.fillStyle = color;
+  g.beginPath();
+  g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  g.fill();
+}
+
+function polygon(color: string, points: number[][]) {
+  g.fillStyle = color;
+  g.beginPath();
+  points.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+  g.closePath();
+  g.fill();
+}
+
+function blocked(mode: Status) {
+  if (mode !== "blocked") return;
+  rect("#ff5f56", 67, 7, 3, 10);
+  rect("#ff5f56", 67, 20, 3, 3);
+}
+
+function plateHammer(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A tall guide and a broad falling head above a horned anvil.
+  rect("#454d59", 54, 8, 7, 58);
+  rect("#929eac", 54, 8, 2, 58);
+  rect("#737f8c", 29, 7, 32, 5);
+  const headY = [17, 24, 35, 24][p];
+  rect("#9ca8b7", 35, 11, 4, headY - 7);
+  rect("#697582", 24, headY, 25, 10);
+  rect("#dce4e9", 24, headY, 25, 2);
+  rect("#adb9c8", 24, headY + 2, 5, 7);
+  polygon("#8d99a6", [[8, 47], [20, 44], [49, 44], [49, 51], [39, 54], [39, 60], [47, 63], [47, 66], [19, 66], [19, 63], [28, 59], [28, 54], [19, 51]]);
+  line("#dbe3e9", 2, 9, 47, 48, 47);
+  rect("#bccfda", 23, 42, 26, 3);
+  rect("#eef5f5", 23, 42, 26, 1);
+  rect("#594332", 18, 66, 33, 6);
+  rect("#39424c", 52, 66, 12, 6);
+  if (mode === "run" && p === 2) {
+    line("#ffcd72", 1, 18, 39, 14, 35);
+    line("#ffcd72", 1, 50, 40, 54, 36);
+  }
+  blocked(mode);
+}
+
+function formingBench(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // Open press frame, long lever, paired forming rolls and a hollow workpiece.
+  rect("#705039", 9, 48, 57, 6);
+  rect("#b28a5d", 9, 48, 57, 2);
+  rect("#634632", 13, 54, 5, 18);
+  rect("#634632", 57, 54, 5, 18);
+  rect("#886544", 17, 64, 41, 3);
+  rect("#596977", 17, 22, 5, 26);
+  rect("#596977", 47, 22, 5, 26);
+  rect("#a4b6c4", 16, 21, 37, 4);
+  const drop = [0, 2, 4, 2][p];
+  line("#c6d4de", 3, 35, 25, 59, 9 + drop * 3);
+  oval("#a87b4e", 60, 9 + drop * 3, 4, 3);
+  rect("#becad3", 33, 25, 4, 8 + drop);
+  rect("#748b9b", 24, 31 + drop, 21, 5);
+  oval("#c4d4dd", 28, 42, 7, 5);
+  oval("#758d9e", 43, 42, 7, 5);
+  rect("#b6cad4", 28, 37, 16, 4);
+  oval("#dbe8ea", 28, 41, 5, 4);
+  oval("#253440", 28, 41, 3, 2);
+  line("#e3edf0", 1, 41, 40, 44, 40 + drop / 2);
+  blocked(mode);
+}
+
+function boilerBench(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // Long horizontal shell, domed ends, hoop seams and individual rivets.
+  polygon("#66503a", [[13, 55], [25, 55], [29, 71], [10, 71]]);
+  polygon("#66503a", [[49, 55], [60, 55], [65, 71], [46, 71]]);
+  rect("#bc9466", 11, 55, 52, 4);
+  oval("#735235", 57, 39, 10, 17);
+  rect("#b78248", 20, 22, 37, 34);
+  rect("#e7bb79", 20, 25, 37, 5);
+  rect("#ca995b", 20, 30, 37, 9);
+  rect("#8c6038", 20, 48, 37, 8);
+  oval("#edc68b", 20, 39, 11, 17);
+  oval("#aa7948", 20, 40, 8, 13);
+  oval("#d3a268", 19, 37, 6, 10);
+  for (const x of [34, 51]) {
+    rect("#6f563d", x, 22, 3, 34);
+    for (const y of [26, 33, 41, 50]) rect("#f3d49d", x, y, 2, 2);
+  }
+  rect("#8e683f", 41, 15, 8, 7);
+  rect("#d8b079", 39, 13, 12, 3);
+  // A short riveting tool strokes at the upper seam; the heavy shell stays put.
+  const tip = [0, 2, 4, 2][p];
+  rect("#536373", 30, 7 + tip, 10, 5);
+  rect("#c1ced7", 33, 12 + tip, 3, 6);
+  blocked(mode);
+}
+
+function engineBench(mode: Status, f: number) {
+  const a = pose(mode, f) * Math.PI / 4;
+  // Suspended cylinder on the left, open flywheel and crank linkage on the right.
+  rect("#4b5964", 10, 10, 5, 59);
+  rect("#8b9eac", 10, 9, 36, 4);
+  line("#99a5ad", 2, 24, 13, 24, 25);
+  line("#99a5ad", 2, 38, 13, 38, 25);
+  rect("#647e8e", 18, 26, 24, 20);
+  rect("#b4cad4", 18, 26, 24, 4);
+  rect("#405966", 18, 42, 24, 4);
+  rect("#d1dce0", 18, 25, 3, 22);
+  rect("#d1dce0", 39, 25, 3, 22);
+  rect("#62717b", 48, 55, 10, 13);
+  oval("#bdc7cb", 53, 43, 18, 20);
+  oval("#4a5965", 53, 43, 15, 17);
+  oval("#171e26", 53, 43, 12, 14);
+  for (let i = 0; i < 3; i++) {
+    const t = a + i * Math.PI * 2 / 3;
+    line("#a0b5c2", 3, 53, 43, 53 + Math.cos(t) * 14, 43 + Math.sin(t) * 16);
+  }
+  const crankX = 53 + Math.cos(a) * 7;
+  const crankY = 43 + Math.sin(a) * 8;
+  line("#d8b276", 3, 32, 36, crankX, crankY);
+  oval("#e9cf9d", crankX, crankY, 2, 2);
+  oval("#d5dce0", 53, 43, 3, 3);
+  rect("#55616d", 7, 68, 63, 4);
+  rect("#a5b2bd", 7, 68, 63, 1);
+  blocked(mode);
+}
+
+function stove(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // Low stone hearth; its pot and handles replace the tall furnace chimney.
+  rect("#4d4c49", 11, 47, 54, 23);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 4; col++) {
+      const x = 12 + col * 13;
+      const y = 48 + row * 7;
+      rect(row % 2 ? "#8b8980" : "#a29d8f", x, y, 12, 6);
+      rect("#c0b8a5", x, y, 12, 1);
     }
   }
+  rect("#202126", 26, 53, 24, 15);
+  for (let i = 0; i < 4; i++) {
+    const h = mode === "run" ? [7, 11, 8, 5][(p + i) % 4] : 2;
+    rect(mode === "run" ? "#e8833c" : "#6a4940", 29 + i * 5, 66 - h, 3, h);
+    if (mode === "run") rect("#ffd780", 30 + i * 5, 64 - h / 2, 1, h / 2);
+  }
+  rect("#50545a", 8, 45, 60, 4);
+  oval("#9babb3", 18, 31, 7, 5);
+  oval("#171e26", 18, 31, 4, 2);
+  oval("#788890", 57, 31, 7, 5);
+  oval("#171e26", 57, 31, 4, 2);
+  oval("#657984", 38, 39, 18, 7);
+  rect("#657984", 20, 26, 36, 13);
+  rect("#9dafb7", 23, 27, 5, 11);
+  oval("#bdcbd0", 38, 25, 20, 5);
+  oval("#7c909b", 38, 24, 16, 3);
+  rect("#d0d8d6", 35, 18, 6, 5);
+  if (mode === "run") {
+    for (let i = 0; i < 2; i++) {
+      const y = 14 - (p + i * 2) % 4 * 3;
+      rect("#a8b8be", 29 + i * 15 + p % 2, y, 2, 3);
+    }
+  }
+  blocked(mode);
+}
+
+function storageBox(x: number, y: number, w: number, h: number) {
+  rect("#967049", x, y, w, h);
+  rect("#c79d69", x, y, w, 2);
+  rect("#5d442f", x + w - 3, y + 2, 3, h - 2);
+  rect("#d0a775", x + 2, y + 2, 2, h - 2);
+  line("#c49a66", 2, x + 3, y + h - 3, x + w - 4, y + 3);
+  rect("#49382c", x + w / 2 - 2, y + 4, 4, 2);
+}
+
+function warehouse(mode: Status, f: number) {
+  rect("#514132", 8, 11, 4, 61);
+  rect("#514132", 63, 11, 4, 61);
+  rect("#bc9667", 8, 9, 59, 4);
+  line("#514132", 2, 12, 14, 63, 67);
+  for (const y of [31, 52, 70]) {
+    rect("#896747", 8, y, 59, 3);
+    rect("#c9a373", 8, y, 59, 1);
+  }
+  storageBox(15, 16, 18, 15);
+  storageBox(37, 19, 22, 12);
+  storageBox(15, 36, 27, 16);
+  storageBox(46, 39, 13, 13);
+  storageBox(15, 57, 17, 13);
+  // Only the box being handled moves, over four short loading positions.
+  storageBox(39 + [0, 2, 4, 2][pose(mode, f)], 57, 19, 13);
+  blocked(mode);
+}
+
+function springMotor(mode: Status, f: number) {
+  const a = pose(mode, f) * Math.PI / 2;
+  rect("#6a5940", 18, 60, 7, 10);
+  rect("#6a5940", 45, 60, 7, 10);
+  rect("#b09462", 12, 69, 47, 3);
+  oval("#9f8453", 35, 36, 27, 28);
+  oval("#424347", 35, 36, 24, 25);
+  oval("#1d252d", 35, 36, 21, 22);
+  // A broad continuous spiral reads as wound spring steel, not wheel spokes.
+  g.strokeStyle = "#e0bd75";
+  g.lineWidth = 2;
+  g.beginPath();
+  for (let i = 0; i <= 64; i++) {
+    const t = i / 64;
+    const angle = a + t * Math.PI * 5;
+    const r = 3 + t * 17;
+    const x = 35 + Math.cos(angle) * r;
+    const y = 36 + Math.sin(angle) * r;
+    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.stroke();
+  oval("#f0d89c", 35, 36, 4, 4);
+  // External winding crank, visibly separated from the spring housing.
+  line("#a8b2ba", 3, 60, 36, 66, 36);
+  const crankY = 36 + [10, 0, -10, 0][pose(mode, f)];
+  line("#cad2d5", 3, 66, 36, 66, crankY);
+  rect("#b88a54", 64, crankY - 2, 9, 4);
+  blocked(mode);
 }
 
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
   smelter: (m, f) => furnace(m, f, [172, 92, 62]),
-  stove: (m, f) => furnace(m, f, [130, 118, 104]),
-  plate_hammer: (m, f) => bench(m, f, "#b9c6d2"),
-  forming_bench: (m, f) => bench(m, f, "#8fa6bb"),
-  boiler_bench: (m, f) => bench(m, f, "#d0a060"),
-  engine_bench: (m, f) => bench(m, f, "#ffd24a"),
-  warehouse: () => crate(),
-  spring_motor: (m, f) => bench(m, f, "#ffd24a"),
+  stove,
+  plate_hammer: plateHammer,
+  forming_bench: formingBench,
+  boiler_bench: boilerBench,
+  engine_bench: engineBench,
+  warehouse,
+  spring_motor: springMotor,
 };
 
-export function renderArt(type: string, mode: Status, frame: number): string {
+function drawScene(type: string, mode: Status, frame: number): void {
   g.clearRect(0, 0, COLS, ROWS);
   g.save();
   g.scale(1, 0.62); // characters are taller than wide
   SCENES[type](mode, frame);
   g.restore();
+}
+
+export function renderArt(type: string, mode: Status, frame: number): string {
+  drawScene(type, mode, frame);
   return printCanvas(g, COLS, ROWS);
 }
 
+/** The same scene as character runs, for drawing on a canvas. */
+export function artRuns(type: string, mode: Status, frame: number): ArtRun[] {
+  drawScene(type, mode, frame);
+  return scanCanvas(g, COLS, ROWS, false);
+}
+
+/** A stretch of same-coloured characters on one row. */
+export interface ArtRun {
+  row: number;
+  col: number;
+  color: string;
+  text: string;
+}
+
 /**
- * Prints a canvas as coloured characters. Textured art gets denser where it is
+ * Reads a canvas as coloured characters. Textured art gets denser where it is
  * brighter; solid art uses full blocks for a clean, manufactured look.
  */
-export function printCanvas(ctx: CanvasRenderingContext2D, cols: number, rows: number, solid = false): string {
+function scanCanvas(ctx: CanvasRenderingContext2D, cols: number, rows: number, solid: boolean): ArtRun[] {
   const gain = solid ? 1 : 1.3;
   const px = ctx.getImageData(0, 0, cols, rows).data;
-  let html = "";
+  const runs: ArtRun[] = [];
   for (let y = 0; y < rows; y += 1) {
     let run = "";
     let color = "";
@@ -163,13 +377,22 @@ export function printCanvas(ctx: CanvasRenderingContext2D, cols: number, rows: n
       const hex = `#${[r, gr, b].map((v) => Math.min(255, Math.round(v / 24) * 24).toString(16).padStart(2, "0")).join("")}`;
       const next = ch === " " ? color : hex;
       if (next !== color) {
-        if (run) html += `<span style="color:${color || "#000"}">${run}</span>`;
+        if (run) runs.push({ row: y, col: x - run.length, color: color || "#000", text: run });
         run = "";
         color = next;
       }
       run += ch;
     }
-    html += `<span style="color:${color || "#000"}">${run}</span>\n`;
+    runs.push({ row: y, col: cols - run.length, color: color || "#000", text: run });
   }
-  return html;
+  return runs;
+}
+
+/** Prints a canvas as coloured characters in HTML. */
+export function printCanvas(ctx: CanvasRenderingContext2D, cols: number, rows: number, solid = false): string {
+  const runs = scanCanvas(ctx, cols, rows, solid);
+  return runs.map((run, i) => {
+    const span = `<span style="color:${run.color}">${run.text}</span>`;
+    return run.row !== runs[i + 1]?.row ? `${span}\n` : span;
+  }).join("");
 }
