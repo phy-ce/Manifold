@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MACHINE_TYPES, MAX_PORTS, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
+import { MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
   GameState, addTo, createTestGame, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, deliver, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
@@ -548,6 +548,14 @@ describe("warehouses", () => {
     power(s, yard.id);
     run(s, 2);
     expect(extra.store[0]).toEqual({ id: "iron", n: 2 });
+  });
+});
+
+describe("slot roles", () => {
+  it("names slots by what they are for, not by the material", () => {
+    expect(processOf("brick_kiln", "").slots.map((slot) => inputRole(slot.key))).toEqual(["재료", "연료"]);
+    expect(processOf("smelter", "").slots.map((slot) => inputRole(slot.key))).toEqual(["재료", "연료"]);
+    expect([0, 1, 2].map(outputRole)).toEqual(["결과", "부산물", "부산물"]);
   });
 });
 

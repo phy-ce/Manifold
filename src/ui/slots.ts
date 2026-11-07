@@ -36,16 +36,25 @@ const face = (id: string, count: string) =>
   `<pre class="icon" aria-hidden="true">${itemIcon(id)}</pre>` +
   `<span class="code" style="color:${itemColor(id)}">${itemCode(id)}</span>${count}`;
 
-export function paintSlot(b: HTMLButtonElement, stack: Stack | null, extra = "", ghost?: string): void {
-  const key = `${stack?.id}|${stack?.n}|${extra}|${ghost}`;
+/** What a machine slot is for, and the items that fit it. */
+export interface SlotRole {
+  name: string;
+  fits: string[];
+}
+
+/** An empty slot can show a faded item (ghost), or the word for its role with what fits in the tooltip. */
+export function paintSlot(b: HTMLButtonElement, stack: Stack | null, extra = "", ghost?: string, role?: SlotRole): void {
+  const key = `${stack?.id}|${stack?.n}|${extra}|${ghost}|${role?.name}|${role?.fits}`;
   if (b.dataset.key === key) return;
   b.dataset.key = key;
   const shown = stack?.id ?? ghost;
+  const names = role?.fits.map(itemName).join(", ");
+  const roleTip = names ? `${role!.name}: ${names}` : role?.name ?? "";
   b.className = `slot ${stack ? "" : "empty"} ${!stack && ghost ? "ghost" : ""} ${extra}`;
-  b.innerHTML = shown ? face(shown, stack ? `<span class="n">${stack.n}</span>` : "") : "·";
+  b.innerHTML = shown ? face(shown, stack ? `<span class="n">${stack.n}</span>` : "") : role ? `<span class="role">${role.name}</span>` : "·";
   const eatHint = stack && b.dataset.inv !== undefined && foodEffect(stack.id) ? " (E: 먹기)" : "";
-  b.dataset.tip = shown ? itemName(shown) + eatHint : "";
+  b.dataset.tip = shown ? itemName(shown) + eatHint : roleTip;
   b.dataset.item = shown ?? "";
-  const label = stack ? `${itemName(stack.id)} ${stack.n}개` : ghost ? `${itemName(ghost)} 칸, 비어 있음` : "빈 칸";
+  const label = stack ? `${itemName(stack.id)} ${stack.n}개` : ghost ? `${itemName(ghost)} 칸, 비어 있음` : role ? `${roleTip} 칸, 비어 있음` : "빈 칸";
   b.setAttribute("aria-label", label);
 }

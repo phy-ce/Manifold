@@ -68,6 +68,11 @@ export const ALL = "all";
 export const MAIN = "main";
 export const BYPRODUCT = "byproduct";
 
+/** What an input slot is for, whatever fills it. */
+export const inputRole = (key: string): string => (era.fuels.includes(key) ? "연료" : "재료");
+/** What an output slot is for: the first holds the product, the rest by-products. */
+export const outputRole = (index: number): string => (index === 0 ? "결과" : "부산물");
+
 /** Machines available in the current milestone. */
 export const MACHINE_TYPES: string[] = MILESTONE.unlockMachines;
 

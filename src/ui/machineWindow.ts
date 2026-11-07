@@ -1,5 +1,5 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
-import { MOTOR, WAREHOUSE, formLabel, itemCode, itemColor, itemName, machineDifficulty, machineForms, machineManual, machineName } from "../content";
+import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole } from "../content";
 import {
   GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, canRemove, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -9,9 +9,10 @@ import { makeSlot, paintSlot } from "./slots";
 const KEYS = ["A", "S", "D", "F"];
 const STATE_LABEL: Record<string, string> = { run: "가동 중", idle: "재료 부족", blocked: "출력 막힘" };
 
-const parts = (list: Record<string, number>): string =>
+/** A recipe side in role words. The tooltip names the real item. */
+const parts = (list: Record<string, number>, role: (id: string, index: number) => string): string =>
   Object.entries(list)
-    .map(([id, n]) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span> ${n}`)
+    .map(([id, n], i) => `<span data-tip="${itemName(id)}">${role(id, i)}</span> ${n}`)
     .join(" + ");
 const HIT_MS = 140;
 
@@ -345,23 +346,20 @@ export class MachineWindow {
     const hand = machineManual(node.type) === "keys" ? "키를 누르세요" : "그림을 클릭하세요";
     const stateText = state === "manual" ? hand : STATE_LABEL[state];
     const level = machineManual(node.type) ? `<span class="card-note">난이도 ${machineDifficulty(node.type)}</span>` : "";
-    const line = `${parts(current.in)} &gt; ${parts(current.out) || "폐기"}${level}<span class="state ${state}">${stateText}</span>`;
+    const line = `${parts(current.in, inputRole)} &gt; ${parts(current.out, (_, i) => outputRole(i)) || "폐기"}${level}<span class="state ${state}">${stateText}</span>`;
     if (this.recipe.dataset.line !== line) {
       this.recipe.dataset.line = line;
       this.recipe.innerHTML = line;
     }
-    // A slot that takes several materials shows no hint, so it never suggests just one.
     const slots = nodeProcess(node).slots;
     for (const [key, b] of this.inputs) {
-      const open = slots.find((slot) => slot.key === key)!.accepts.length > 1;
-      paintSlot(b, node.ins[key], "", open ? undefined : key);
+      paintSlot(b, node.ins[key], "", undefined, { name: inputRole(key), fits: slots.find((slot) => slot.key === key)!.accepts });
     }
     this.outputs.forEach(([held, b], i) => {
       const item = held.find((id) => node.outs[id] > 0);
       const n = item ? node.outs[item] : 0;
       const role = i > 0 ? "byproduct" : "";
-      // Only a slot with a single possible item shows a hint.
-      paintSlot(b, item ? { id: item, n } : null, `${role} ${n >= OUTPUT_CAP ? "full" : ""}`, held.length === 1 ? held[0] : undefined);
+      paintSlot(b, item ? { id: item, n } : null, `${role} ${n >= OUTPUT_CAP ? "full" : ""}`, undefined, { name: outputRole(i), fits: held });
     });
     const waiting = state === "manual";
     const manual = machineManual(node.type);

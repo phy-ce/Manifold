@@ -28,6 +28,7 @@
     "iron_ore": { "rate": 1 }, "coal": { "rate": 1, "drainedRate": 2 }, "clay": { "rate": 1 },
     "copper_ore": { "rate": 1 }, "water": { "rate": 4 }, "limestone": { "rate": 1 }
   },
+  "fuels": ["coal", "coke"],
   "machines": {
     "warehouse": { "name": "창고", "cost": { "iron": 10 }, "work": 25 },
     "brick_kiln": { "name": "벽돌 가마", "cost": { "clay": 10 }, "work": 20 },

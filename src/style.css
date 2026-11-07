@@ -69,6 +69,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .slot:hover { border-color: var(--dim); }
 .slot.empty { color: var(--faint); }
 .slot.ghost .icon { opacity: .3; }
+.slot .role { color: var(--dim); font-size: var(--text-xs); }
 .slot.byproduct { border-style: dashed; }
 .slot.full { border-color: var(--alert); animation: pulse .7s steps(2) infinite; }
 .icon { font-size: var(--glyph-icon); line-height: var(--glyph-icon); font-weight: 700; }
