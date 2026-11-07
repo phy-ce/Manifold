@@ -1,5 +1,5 @@
 /* Sizes come from src/ui/theme.ts as CSS variables. Rules: docs/design/style.md */
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap");
 
 :root {
   color-scheme: dark;
@@ -9,7 +9,7 @@
   --fire: #ffb238; --alert: #ff5f56; --water: #4d8fc4; --go: #8fd16f;
 
   /* Type scale */
-  --mono: "JetBrains Mono", Consolas, "D2Coding", monospace;
+  --mono: "JetBrains Mono", "Noto Sans KR", Consolas, monospace;
   --text-xs: 11px; --text-sm: 13px; --text-md: 15px; --text-lg: 18px;
 
   /* Spacing, derived from the unit */
