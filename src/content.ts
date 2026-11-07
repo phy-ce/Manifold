@@ -76,6 +76,9 @@ export const isFluid = (id: string): boolean => id in kinds;
 export const kindOf = (id: string): string => kinds[id] ?? "item";
 /** The unit shown after an amount. */
 export const unitOf = (id: string): string => (kinds[id] === "liquid" ? "L" : "");
+/** Vein grades. A grade scales its layer's size, so deeper layers usually hold more. */
+export const RICHNESS: { id: string; name: string; weight: number; scale: number }[] = oreData.richness;
+export const richnessName = (id: string | undefined): string => RICHNESS.find((r) => r.id === id)?.name ?? "";
 /** How much a riverbank holds, and how often it gains 1 back. */
 export const RIVER: { reserve: number; regenMs: number } = oreData.river;
 /** What a power line carries. Not an item: it drives other lines. */

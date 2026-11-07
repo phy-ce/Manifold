@@ -1,5 +1,5 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
-import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, riverBanks, terrain } from "./world";
 
 export const SAVE_VERSION = 13;
@@ -630,6 +630,10 @@ export function upgradeSave(s: GameState): GameState {
   s.ghosts ??= [];
   s.ghostLines ??= [];
   s.groups ??= [];
+  // Veins found before grades existed were all normal in size.
+  for (const site of s.sites) {
+    if (SURFACE_ORES.includes(site.ore)) site.rich ??= "normal";
+  }
   // Goals used to be handed in. Count what was handed in or still exists as made.
   const old = s as GameState & { delivered?: number; won?: boolean };
   if (s.stage === undefined) {

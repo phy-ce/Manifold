@@ -114,8 +114,8 @@ describe("endless map", () => {
       return list;
     };
     for (const total of [...sizes(5), ...sizes(5000)]) {
-      expect(total).toBeGreaterThanOrEqual(40);
-      expect(total).toBeLessThanOrEqual(120);
+      expect(total).toBeGreaterThanOrEqual(12);
+      expect(total).toBeLessThanOrEqual(360);
     }
   });
 
@@ -1893,6 +1893,37 @@ describe("blueprints", () => {
     const [ghost] = copyToGhosts(s, [pump.id, bank.id], 0, 0);
     expect(ghost.type).toBe("drainage_pump");
     expect(s.ghostLines).toEqual([{ from: bank.id, to: ghost.id, material: "link" }]);
+  });
+});
+
+describe("vein grades", () => {
+  const veins = () => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap((seed) => generateSites(seed).filter((v) => v.rich));
+
+  it("rolls all three grades, even for the first vein near the base", () => {
+    const all = veins();
+    for (const grade of ["scarce", "normal", "rich"]) expect(all.some((v) => v.rich === grade)).toBe(true);
+    const first = [...Array(60).keys()].map((seed) => generateSites(seed + 1)[0].rich);
+    expect(new Set(first).size).toBe(3);
+  });
+
+  it("scales size by grade", () => {
+    const all = veins();
+    const sizes = (grade: string) => all.filter((v) => v.rich === grade).map((v) => v.total);
+    expect(Math.max(...sizes("scarce"))).toBeLessThanOrEqual(36);
+    expect(Math.min(...sizes("normal"))).toBeGreaterThanOrEqual(40);
+    expect(Math.max(...sizes("normal"))).toBeLessThanOrEqual(120);
+    expect(Math.min(...sizes("rich"))).toBeGreaterThanOrEqual(120);
+  });
+
+  it("leaves food ungraded", () => {
+    expect(generateSites(1).filter((v) => v.ore === "Be").every((v) => !v.rich)).toBe(true);
+  });
+
+  it("grades old veins as normal", () => {
+    const s = createGame(1);
+    delete s.sites[0].rich;
+    upgradeSave(s);
+    expect(s.sites[0].rich).toBe("normal");
   });
 });
 

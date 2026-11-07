@@ -1,6 +1,6 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
-import { WATER, forageSeasons, itemCode, itemColor, itemName } from "../content";
+import { WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
 import { GameState, SEASON_NAMES, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
 import { BASE, Site, hash, terrain } from "../engine/world";
 
@@ -47,7 +47,7 @@ function buildVein(site: Site): Vein {
 }
 
 const siteName = (s: GameState, site: Site): string =>
-  site.ore === WATER ? `강가 ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
+  site.ore === WATER ? `강가 ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.rich ? ` ${richnessName(site.rich)}` : "") + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
 
 export class MapView {
   readonly root = document.createElement("section");
@@ -182,7 +182,7 @@ export class MapView {
         if (s.player.x === x && s.player.y === y) [glyph, color] = ["@", COLOR.player];
         else if (x === BASE.x && y === BASE.y) [glyph, color] = ["H", COLOR.base];
         else if (site) {
-          glyph = site.ore === WATER ? "W" : site.left <= 0 ? "x" : canHarvest(s, site) ? "*" : "'";
+          glyph = site.ore === WATER ? "W" : site.left <= 0 ? "x" : !canHarvest(s, site) ? "'" : site.rich === "rich" ? "#" : site.rich === "scarce" ? "+" : "*";
           color = itemColor(site.ore);
         } else if (path.has(key)) [glyph, color] = ["-", COLOR.path];
         else {

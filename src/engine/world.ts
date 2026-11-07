@@ -1,6 +1,6 @@
 // Deterministic world generation. The map has no edges: chunks are rolled from the
 // seed and their coordinates the first time they come into view.
-import { FORAGE, FORAGE_SIZE, SURFACE, SURFACE_ORES } from "../content";
+import { FORAGE, FORAGE_SIZE, RICHNESS, SURFACE, SURFACE_ORES } from "../content";
 
 export const CHUNK = 16;
 export const BASE = { x: 0, y: 0 };
@@ -19,6 +19,8 @@ export interface Site extends Point {
   total: number;
   left: number;
   seed: number;
+  /** The vein's grade. Food and riverbanks have none. */
+  rich?: string;
   /** Three letters and digits, for a riverbank once it is found. */
   code?: string;
 }
@@ -47,11 +49,17 @@ const FAR = [13, 42];
 /** Chunk veins stay out of the starter area, which is laid out on its own. */
 const STARTER_RADIUS = 20;
 
-/** Vein size is pure luck: distance from the base plays no part. */
-const veinSize = (rng: () => number, ore: string): number => {
-  const [low, high] = FORAGE.includes(ore) ? FORAGE_SIZE : SURFACE.veinSize;
-  return Math.round(low + rng() * (high - low));
-};
+/** A vein's grade and size are pure luck: distance from the base plays no part. */
+function rollVein(rng: () => number, ore: string): { total: number; rich?: string } {
+  if (FORAGE.includes(ore)) {
+    const [low, high] = FORAGE_SIZE;
+    return { total: Math.round(low + rng() * (high - low)) };
+  }
+  let roll = rng();
+  const grade = RICHNESS.find((r) => (roll -= r.weight) < 0) ?? RICHNESS[RICHNESS.length - 1];
+  const [low, high] = SURFACE.veinSize;
+  return { total: Math.max(1, Math.round((low + rng() * (high - low)) * grade.scale)), rich: grade.id };
+}
 
 const RIVER_SPACING = 70;
 
@@ -87,8 +95,8 @@ export function generateSites(seed: number): Site[] {
         y = Math.round(BASE.y + Math.sin(angle) * dist * CELL_ASPECT);
       } while (taken.has(`${x},${y}`));
       taken.add(`${x},${y}`);
-      const total = veinSize(rng, ore);
-      sites.push({ id: sites.length, ore, x, y, total, left: total, seed: seed + sites.length * 5 });
+      const vein = rollVein(rng, ore);
+      sites.push({ id: sites.length, ore, x, y, ...vein, left: vein.total, seed: seed + sites.length * 5 });
     }
   }
   return sites;
@@ -104,9 +112,9 @@ export function chunkSites(seed: number, cx: number, cy: number): Omit<Site, "id
     const y = cy * CHUNK + Math.floor(rng() * CHUNK);
     const pool = [...SURFACE_ORES, ...FORAGE];
     const ore = pool[Math.floor(rng() * pool.length)];
-    const total = veinSize(rng, ore);
+    const vein = rollVein(rng, ore);
     if (Math.hypot(x - BASE.x, (y - BASE.y) / CELL_ASPECT) < STARTER_RADIUS) continue;
-    sites.push({ ore, x, y, total, left: total, seed: seed + Math.abs(cx * 131 + cy * 17 + i) });
+    sites.push({ ore, x, y, ...vein, left: vein.total, seed: seed + Math.abs(cx * 131 + cy * 17 + i) });
   }
   return sites;
 }
