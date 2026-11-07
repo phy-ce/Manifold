@@ -124,6 +124,9 @@ export const EN: Record<string, string> = {
   // Routes and saves
   "게임을 시작하지 못했습니다": "The game couldn't start", "세이브를 보관하고 새로 시작": "Set the save aside and start fresh",
   "입력 안 받기": "Refuse input", "초과 폐기": "Discard excess", "가득 차면 더 받지 않습니다. 코크스로가 멈출 수 있습니다": "Takes no more when full. The coke oven may stop", "가득 차면 넘치는 타르를 버립니다": "Throws away tar that doesn't fit when full",
+  "발": "Feet", "등": "Back", "손": "Hand", "장비": "Gear", "장비 칸 클릭": "Click a gear slot", "손에 든 장비 입기, 벗기": "Put on or take off gear",
+  "걷는 시간 35% 감소": "35% less time per step", "최대 무게 +40": "Max load +40", "광맥을 한 번에 2개 캠": "Mines 2 at a time",
+  " 장화": " boots", "장화": "Boots", " 틀 배낭": " frame pack", "틀 배낭": "Frame pack", " 곡괭이": " pick", "곡괭이": "Pick",
   "고갈 숨기기": "Hide empty", "연결 설정": "Route", "보내는 쪽에 동력이 없어 멈춰 있습니다": "Stopped: the sending side has no power", "포트": "Ports", "연결 비용:": "Line cost:", "이동 중": "Moving", "대기": "Idle",
   "슬롯": "Slot", "비어 있음": "Empty", "저장 실패": "Save failed", "불러오기": "Load",
   // Slots

@@ -111,6 +111,23 @@ export const PLAYABLE_STAGES = 3;
 export const machinesAt = (stage: number): string[] =>
   STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockMachines);
 
+export interface Gear {
+  slot: string;
+  note: string;
+  /** Multiplies the time a step takes. */
+  walk?: number;
+  /** Adds to how much the player can carry. */
+  carry?: number;
+  /** How much one strike takes from a vein. */
+  mine?: number;
+}
+const gear: Record<string, Gear> = era.gear;
+export const gearOf = (id: string): Gear | undefined => gear[id];
+/** Equipment slots and what each is called. */
+export const GEAR_SLOTS: [string, string][] = [["feet", tr("발")], ["back", tr("등")], ["hand", tr("손")]];
+/** The items that fit a slot. */
+export const gearFor = (slot: string): string[] => Object.keys(gear).filter((id) => gear[id].slot === slot);
+
 /** Machines of the first stage. */
 export const MACHINE_TYPES: string[] = machinesAt(0);
 

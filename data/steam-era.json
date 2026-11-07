@@ -29,6 +29,11 @@
     "copper_ore": { "rate": 1 }, "water": { "rate": 4 }, "limestone": { "rate": 1 }
   },
   "fuels": ["coal", "coke"],
+  "gear": {
+    "iron_boots": { "slot": "feet", "walk": 0.65, "note": "걷는 시간 35% 감소" },
+    "iron_pack": { "slot": "back", "carry": 40, "note": "최대 무게 +40" },
+    "iron_pick": { "slot": "hand", "mine": 2, "note": "광맥을 한 번에 2개 캠" }
+  },
   "ruleItems": ["steam", "water_drum"],
   "kinds": { "water": "liquid", "coal_tar": "liquid", "steam": "gas" },
   "drum": { "empty": "iron_drum", "liters": 100, "fills": { "water": "water_drum" } },
@@ -69,7 +74,10 @@
     { "form": "tube", "machine": "forming_bench", "time": 4, "in": 1, "out": 2, "metals": ["iron", "copper"] },
     { "form": "cylinder", "machine": "forming_bench", "time": 12, "in": 4, "out": 1, "metals": ["iron", "copper"] },
     { "form": "drum", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] },
-    { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] }
+    { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] },
+    { "form": "boots", "machine": "forming_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "pack", "machine": "forming_bench", "time": 10, "in": 4, "out": 1, "metals": ["iron"] },
+    { "form": "pick", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
     { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2, "coal": 1 }, "out": { "brick": 2 } },

@@ -141,6 +141,10 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .language-pick pre { max-width: 80vw; margin: 0; color: var(--alert); white-space: pre-wrap; }
 .language-pick button { min-width: 140px; padding: 12px 16px; color: var(--go); background: var(--panel); border: 1px solid var(--line); font: inherit; cursor: pointer; }
 .language-pick button:hover { border-color: var(--go); }
+.inv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap-lg); }
+.inv-row > .slot-grid { flex: 1 1 0; min-width: 0; }
+.gear-grid { display: flex; gap: var(--gap); padding-left: var(--gap-lg); border-left: 1px solid var(--line); }
+.slot.gear .n { display: none; }
 .context-menu { position: fixed; z-index: 40; display: grid; min-width: calc(var(--slot) * 2.5); background: var(--panel); border: 1px solid var(--line); }
 .context-menu button { padding: var(--gap-sm) var(--gap); text-align: left; font-size: var(--text-sm); border-bottom: 1px solid var(--line); }
 .context-menu input { width: 100%; min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 0; font: inherit; font-size: var(--text-sm); }

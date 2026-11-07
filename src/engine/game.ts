@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 14;
@@ -145,6 +145,8 @@ export interface GameState {
   inv: Slots;
   /** The stack the player has picked up and is moving with the pointer. */
   cursor: Stack | null;
+  /** What is equipped, by slot. */
+  gear: Record<string, string | null>;
   sites: Site[];
   /** Explored cells by chunk. A chunk's veins are generated when it first appears here. */
   revealed: Record<string, number[]>;
@@ -203,6 +205,7 @@ export function createGame(seed: number): GameState {
     safeWalk: true,
     inv: emptySlots(INV_SLOTS),
     cursor: null,
+    gear: {},
     sites: generateSites(seed),
     revealed: {},
     nodes: [],
@@ -275,11 +278,21 @@ export function carried(s: GameState): number {
   return Math.round(load * 10) / 10;
 }
 
-export const overloaded = (s: GameState): boolean => carried(s) > MAX_CARRY;
+/** The equipment on the player. */
+const worn = (s: GameState) => Object.values(s.gear).flatMap((id) => {
+  const gear = id ? gearOf(id) : undefined;
+  return gear ? [gear] : [];
+});
+
+/** The most the player can carry and still walk, with what they are wearing. */
+export const carryLimit = (s: GameState): number => MAX_CARRY + worn(s).reduce((sum, gear) => sum + (gear.carry ?? 0), 0);
+
+export const overloaded = (s: GameState): boolean => carried(s) > carryLimit(s);
 
 /** A full load takes twice as long to carry as an empty bag. */
 export const walkTime = (s: GameState): number =>
-  WALK_MS * (1 + Math.min(carried(s), MAX_CARRY) / MAX_CARRY) * (isWeak(s) ? WEAK_WALK : 1);
+  WALK_MS * (1 + Math.min(carried(s), carryLimit(s)) / carryLimit(s)) * (isWeak(s) ? WEAK_WALK : 1) *
+  worn(s).reduce((pace, gear) => pace * (gear.walk ?? 1), 1);
 
 /** What stepping on a cell would cost, as far as the player knows. Unseen ground looks safe. */
 function knownDamage(s: GameState, x: number, y: number): number {
@@ -402,9 +415,30 @@ function refillRivers(s: GameState): void {
 export function mine(s: GameState): boolean {
   const site = siteHere(s);
   if (!site || site.left <= 0 || !canHarvest(s, site)) return false;
-  if (carried(s) + itemWeight(site.ore) > MAX_CARRY || !addTo(s.inv, site.ore, 1)) return false;
-  site.left -= 1;
+  const strike = Math.max(1, ...worn(s).map((gear) => gear.mine ?? 1));
+  const room = Math.floor((carryLimit(s) - carried(s)) / itemWeight(site.ore));
+  const taken = addTo(s.inv, site.ore, Math.min(strike, site.left, room));
+  if (!taken) return false;
+  site.left -= taken;
   return true;
+}
+
+/** Equips what is in hand, swapping out what was there. With empty hands, takes the item off. */
+export function clickGear(s: GameState, slot: string): void {
+  const current = s.gear[slot] ?? null;
+  if (!s.cursor) {
+    if (!current) return;
+    s.gear[slot] = null;
+    s.cursor = { id: current, n: 1 };
+    return;
+  }
+  if (gearOf(s.cursor.id)?.slot !== slot) return;
+  s.gear[slot] = s.cursor.id;
+  s.cursor.n -= 1;
+  if (s.cursor.n <= 0) s.cursor = null;
+  if (!current) return;
+  if (!s.cursor) s.cursor = { id: current, n: 1 };
+  else if (!addTo(s.inv, current, 1)) bank(s, current, 1);
 }
 
 export const nodeProcess = (node: GameNode) => processOf(node.type, node.form);

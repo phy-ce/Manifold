@@ -1,7 +1,7 @@
 import { tr, restart } from "./i18n";
 import "./style.css";
-import { PLAYABLE_STAGES, STAGES, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_CARRY, MAX_VITAL, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkTo, wheelStack } from "./engine/game";
+import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
+import { GameState, MAX_VITAL, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkTo, wheelStack } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -293,7 +293,21 @@ invGrid.append(...invSlots);
 const invTools = document.createElement("div");
 invTools.className = "bar-row";
 invTools.append(sortButton, trashButton);
-invBox.append(invTools, invGrid);
+const gearSlots = GEAR_SLOTS.map(([slot, name]) => {
+  const b = makeSlot(() => {
+    clickGear(state, slot);
+    redraw();
+  });
+  return { slot, name, b };
+});
+const gearGrid = document.createElement("div");
+gearGrid.className = "gear-grid";
+gearGrid.setAttribute("aria-label", tr("장비"));
+gearGrid.append(...gearSlots.map((g) => g.b));
+const invRow = document.createElement("div");
+invRow.className = "inv-row";
+invRow.append(invGrid, gearGrid);
+invBox.append(invTools, invRow);
 
 const win = document.createElement("div");
 win.className = "win";
@@ -363,7 +377,7 @@ function redraw(): void {
   const seasonLeft = Math.ceil((SEASON_MS - (state.time % SEASON_MS)) / 1000);
   const clock = `${Math.floor(seasonLeft / 60)}:${String(seasonLeft % 60).padStart(2, "0")}`;
   const shown = `<span class="meter">${yearAt(state.time)}${tr("년차")} ${SEASON_NAMES[state.season]} ${clock}</span>${isWeak(state) ? `<span class="meter low">${tr("쇠약")} ${Math.ceil((state.weakUntil - state.time) / 1000)}${tr("초")}</span>` : ""}` + meter(tr("체력"), state.hp) + meter(tr("허기"), state.hunger) +
-    `<span class="meter${overloaded(state) ? " low" : ""}">${tr("무게")} ${carried(state)}/${MAX_CARRY}${overloaded(state) ? tr(" 초과, 이동 불가") : ""}</span>`;
+    `<span class="meter${overloaded(state) ? " low" : ""}">${tr("무게")} ${carried(state)}/${carryLimit(state)}${overloaded(state) ? tr(" 초과, 이동 불가") : ""}</span>`;
   if (vitals.innerHTML !== shown) vitals.innerHTML = shown;
   // A collapse jumps health back up, so it counts as a hit even though the number rises.
   if (state.hp < lastHp) showHurt(lastHp - state.hp);
@@ -379,6 +393,10 @@ function redraw(): void {
     notice.hidden = true;
   }
   state.inv.forEach((stack, i) => paintSlot(invSlots[i], stack));
+  for (const { slot, name, b } of gearSlots) {
+    const id = state.gear[slot];
+    paintSlot(b, id ? { id, n: 1 } : null, "gear", undefined, { name, fits: gearFor(slot) });
+  }
   const wasHidden = held.hidden;
   held.hidden = !state.cursor;
   if (state.cursor) paintSlot(heldSlot, state.cursor);

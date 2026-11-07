@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, carryLimit, clickGear, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -282,7 +282,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "fan"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "fan", "boots", "pack", "pick"]);
   });
 
   it("makes the chosen form from whichever metal goes in", () => {
@@ -2302,6 +2302,92 @@ describe("site search order", () => {
 
   it("leaves empty sites out when hidden", () => {
     expect(orderSites([site(1, 0), site(2, 5)], steps, true).map((v) => v.id)).toEqual([2]);
+  });
+});
+
+describe("gear", () => {
+  const holding = (id: string, n = 1) => {
+    const s = createGame(1);
+    s.cursor = { id, n };
+    return s;
+  };
+
+  it("fits only the slot it belongs to", () => {
+    const s = holding("iron_boots");
+    clickGear(s, "back");
+    expect(s.gear.back).toBeUndefined();
+    expect(s.cursor).toEqual({ id: "iron_boots", n: 1 });
+    clickGear(s, "feet");
+    expect(s.gear.feet).toBe("iron_boots");
+    expect(s.cursor).toBeNull();
+  });
+
+  it("won't take an ordinary item", () => {
+    const s = holding("iron");
+    clickGear(s, "hand");
+    expect(s.gear.hand).toBeUndefined();
+  });
+
+  it("comes back off into the hand", () => {
+    const s = holding("iron_pick");
+    clickGear(s, "hand");
+    clickGear(s, "hand");
+    expect(s.gear.hand).toBeNull();
+    expect(s.cursor).toEqual({ id: "iron_pick", n: 1 });
+  });
+
+  it("uses one from a stack and swaps nothing away", () => {
+    const s = holding("iron_boots", 3);
+    clickGear(s, "feet");
+    expect(s.cursor).toEqual({ id: "iron_boots", n: 2 });
+    clickGear(s, "feet");
+    expect(s.cursor).toEqual({ id: "iron_boots", n: 1 });
+    expect(s.inv.some((slot) => slot?.id === "iron_boots")).toBe(true);
+  });
+
+  it("boots shorten every step", () => {
+    const s = createGame(1);
+    const plain = walkTime(s);
+    s.gear.feet = "iron_boots";
+    expect(walkTime(s)).toBeCloseTo(plain * 0.65);
+  });
+
+  it("a pack raises the load limit", () => {
+    const s = createGame(1);
+    s.inv[0] = { id: "iron", n: 25 };
+    expect(overloaded(s)).toBe(true);
+    s.gear.back = "iron_pack";
+    expect(carryLimit(s)).toBe(MAX_CARRY + 40);
+    expect(overloaded(s)).toBe(false);
+  });
+
+  it("a pick takes two per strike, never more than the vein or the load allows", () => {
+    const s = createGame(1);
+    s.gear.hand = "iron_pick";
+    const site = s.sites.find((v) => v.ore === "Lm")!;
+    s.player = { x: site.x, y: site.y };
+    site.left = 3;
+    expect(mine(s)).toBe(true);
+    expect(site.left).toBe(1);
+    expect(mine(s)).toBe(true);
+    expect(site.left).toBe(0);
+    expect(s.inv[0]).toEqual({ id: "Lm", n: 3 });
+  });
+
+  it("is made on the forming bench", () => {
+    const s = createGame(1);
+    const bench = placeMachine(s, "forming_bench", 0, 0)!;
+    setForm(s, bench.id, "boots");
+    bench.ins.iron = { id: "iron", n: 2 };
+    power(s, bench.id);
+    run(s, 9);
+    expect(bench.outs.iron_boots).toBe(1);
+  });
+
+  it("is kept through old saves", () => {
+    const save = JSON.parse(JSON.stringify(createGame(1)));
+    delete save.gear;
+    expect(loadSave(save)!.gear).toEqual({});
   });
 });
 

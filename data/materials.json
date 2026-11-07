@@ -8,6 +8,9 @@
     "tube": { "name": "관", "label": "관", "code": "t", "weight": 0.5 },
     "cylinder": { "name": " 실린더", "label": "실린더", "code": "c", "weight": 4 },
     "drum": { "name": " 드럼통", "label": "드럼통", "code": "d", "weight": 1.5 },
-    "fan": { "name": " 송풍기", "label": "송풍기", "code": "f", "weight": 1 }
+    "fan": { "name": " 송풍기", "label": "송풍기", "code": "f", "weight": 1 },
+    "boots": { "name": " 장화", "label": "장화", "code": "b", "weight": 0.5 },
+    "pack": { "name": " 틀 배낭", "label": "틀 배낭", "code": "k", "weight": 1 },
+    "pick": { "name": " 곡괭이", "label": "곡괭이", "code": "x", "weight": 0.5 }
   }
 }
