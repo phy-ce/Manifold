@@ -3,7 +3,7 @@
 import {
   Recipe, buildUses, familyMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
 } from "../content";
-import { GameState, countOf } from "../engine/game";
+import { GameState, bagHolds, countOf, fillFromBag, nodeById, runsRecipe } from "../engine/game";
 import { makeSlot, paintSlot } from "./slots";
 
 type Tab = "recipes" | "uses";
@@ -42,8 +42,13 @@ export class ItemIndex {
   private readonly history: string[] = [];
   private item: string | null = null;
   private tab: Tab = "recipes";
+  private synced = "";
 
-  constructor(private readonly game: () => GameState) {
+  constructor(
+    private readonly game: () => GameState,
+    private readonly openNode: () => number | null,
+    private readonly changed: () => void,
+  ) {
     this.root.className = "dock";
     this.root.hidden = true;
     this.root.setAttribute("aria-label", "아이템 도감");
@@ -130,8 +135,42 @@ export class ItemIndex {
     const note = document.createElement("div");
     note.className = "card-note";
     note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}초${hand}`;
+    const fill = this.fillButton(recipe);
+    if (fill) row.append(fill);
     card.append(row, note);
     return card;
+  }
+
+  /** Shown on recipes the open machine can run. Takes from the bag only, never the warehouse. */
+  private fillButton(recipe: Recipe): HTMLButtonElement | null {
+    const s = this.game();
+    const id = this.openNode();
+    const node = id === null ? undefined : nodeById(s, id);
+    if (!node || !runsRecipe(node, recipe) || !Object.keys(recipe.in).length) return null;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tech push";
+    b.textContent = "+";
+    b.disabled = !bagHolds(s, recipe);
+    b.dataset.tip = b.disabled ? "인벤토리에 재료가 없습니다" : "인벤토리에서 넣기 (Shift: 가득)";
+    b.setAttribute("aria-label", "인벤토리에서 재료 넣기");
+    b.addEventListener("click", (e) => {
+      fillFromBag(s, node.id, recipe, e.shiftKey ? Infinity : 1);
+      this.changed();
+    });
+    return b;
+  }
+
+  /** Redraws when the open machine or the bag changes, so the fill buttons stay true. */
+  sync(): void {
+    if (this.root.hidden || !this.item) return;
+    const s = this.game();
+    const id = this.openNode();
+    const node = id === null ? undefined : nodeById(s, id);
+    const key = `${id}|${node?.form}|${s.inv.map((slot) => slot?.id ?? "").join()}`;
+    if (key === this.synced) return;
+    this.synced = key;
+    this.drawDetail();
   }
 
   private textCard(text: string): HTMLElement {

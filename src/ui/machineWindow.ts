@@ -164,6 +164,11 @@ export class MachineWindow {
     return this.nodeId !== null;
   }
 
+  /** The machine open right now, if any. */
+  get openNode(): number | null {
+    return this.nodeId;
+  }
+
   open(id: number): void {
     const node = nodeById(this.game(), id);
     if (!node) return;

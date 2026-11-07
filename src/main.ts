@@ -195,7 +195,7 @@ const map = new MapView(game, () => {
   redraw();
 });
 
-const itemIndex = new ItemIndex(game);
+const itemIndex = new ItemIndex(game, () => windowView.openNode, redraw);
 indexButton.addEventListener("click", () => itemIndex.toggle());
 
 const invBox = document.createElement("section");
@@ -361,6 +361,7 @@ function redraw(): void {
     win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `다음 단계: ${next.id} ${next.name}` : `${next.id}은 아직 준비 중입니다.`;
   }
   graph.setStage(state.stage);
+  itemIndex.sync();
   if (showBase) graph.draw();
   else map.draw();
 }

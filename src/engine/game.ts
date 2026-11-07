@@ -611,6 +611,33 @@ export function moveToNode(s: GameState, slot: number, nodeId: number): boolean 
   return moved > 0;
 }
 
+/** Whether a recipe is one this machine can run as it is set now. */
+export const runsRecipe = (node: GameNode, recipe: Recipe): boolean =>
+  recipe.machine === node.type && (!recipe.form || recipe.form === node.form);
+
+/** Whether the bag holds anything a recipe could use. The warehouse doesn't count. */
+export const bagHolds = (s: GameState, recipe: Recipe): boolean =>
+  Object.keys(recipe.in).some((key) => s.inv.some((slot) => slot && matches(slot.id, key)));
+
+/** Loads a recipe's ingredients from the bag only, as much as is there and fits. */
+export function fillFromBag(s: GameState, nodeId: number, recipe: Recipe, batches: number): boolean {
+  const node = nodeById(s, nodeId);
+  if (!atBase(s) || !node || !runsRecipe(node, recipe)) return false;
+  let any = false;
+  for (const [key, need] of Object.entries(recipe.in)) {
+    let left = need * batches;
+    s.inv.forEach((stack, i) => {
+      if (!stack || left <= 0 || !matches(stack.id, key)) return;
+      const moved = insert(node, stack.id, Math.min(left, stack.n));
+      stack.n -= moved;
+      left -= moved;
+      any ||= moved > 0;
+      if (!stack.n) s.inv[i] = null;
+    });
+  }
+  return any;
+}
+
 export function takeInput(s: GameState, nodeId: number, key: string): boolean {
   const node = nodeById(s, nodeId);
   const stack = node?.ins[key];

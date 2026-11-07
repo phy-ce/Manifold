@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, addTo, lacksPower, canStart, createTestGame, nearestRiver, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, addTo, bagHolds, fillFromBag, lacksPower, runsRecipe, canStart, createTestGame, nearestRiver, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -1465,6 +1465,62 @@ describe("riverbanks", () => {
     run(s, 15);
     expect(engine.energy).toBeGreaterThan(0);
     expect(nodeById(s, engine.id)!.ins.water?.n).toBeGreaterThan(0);
+  });
+});
+
+describe("filling a machine from the index", () => {
+  const kilnRecipe = () => recipesFor("brick")[0];
+  const setup = () => {
+    const s = createGame(1);
+    return { s, kiln: placeMachine(s, "brick_kiln", 0, 0)! };
+  };
+
+  it("moves one batch from the bag", () => {
+    const { s, kiln } = setup();
+    s.inv[0] = { id: "Kn", n: 10 };
+    s.inv[1] = { id: "Lg", n: 10 };
+    expect(fillFromBag(s, kiln.id, kilnRecipe(), 1)).toBe(true);
+    expect(kiln.ins.clay).toEqual({ id: "Kn", n: 2 });
+    expect(kiln.ins.coal).toEqual({ id: "Lg", n: 1 });
+    expect(s.inv[0]!.n).toBe(8);
+  });
+
+  it("never reaches into the warehouse", () => {
+    const { s, kiln } = setup();
+    s.nodes[0].store[0] = { id: "Kn", n: 10 };
+    expect(bagHolds(s, kilnRecipe())).toBe(false);
+    expect(fillFromBag(s, kiln.id, kilnRecipe(), 1)).toBe(false);
+    expect(s.nodes[0].store[0]).toEqual({ id: "Kn", n: 10 });
+    expect(kiln.ins.clay).toBeNull();
+  });
+
+  it("fills as far as the slot allows, and keeps the rest in the bag", () => {
+    const { s, kiln } = setup();
+    s.inv[0] = { id: "Kn", n: 64 };
+    fillFromBag(s, kiln.id, kilnRecipe(), Infinity);
+    expect(kiln.ins.clay!.n).toBe(16);
+    expect(s.inv[0]!.n).toBe(48);
+  });
+
+  it("gives what it can when the bag runs short, across stacks", () => {
+    const { s, kiln } = setup();
+    s.inv[0] = { id: "Kn", n: 1 };
+    s.inv[3] = { id: "Kn", n: 2 };
+    fillFromBag(s, kiln.id, kilnRecipe(), 2);
+    expect(kiln.ins.clay!.n).toBe(3);
+    expect(s.inv[0]).toBeNull();
+    expect(s.inv[3]).toBeNull();
+  });
+
+  it("only offers recipes the machine is set to", () => {
+    const s = createGame(1);
+    const bench = placeMachine(s, "forming_bench", 0, 0)!;
+    const tube = recipesFor("iron_tube")[0];
+    const cylinder = recipesFor("iron_cylinder")[0];
+    setForm(s, bench.id, "tube");
+    expect(runsRecipe(bench, tube)).toBe(true);
+    expect(runsRecipe(bench, cylinder)).toBe(false);
+    expect(fillFromBag(s, bench.id, cylinder, 1)).toBe(false);
   });
 });
 
