@@ -742,9 +742,16 @@ function runMachine(s: GameState, node: GameNode): void {
   advance(s, node, (pace * STEP_MS) / (recipeOf(node).time * 1000));
 }
 
+/** Force per second a source's lines are using to move items right now. */
+function lineLoad(s: GameState, source: GameNode): number {
+  const driven = s.lines.filter((l) => l.from === source.id && l.material === POWER).map((l) => l.to);
+  return (s.lines.filter((l) => l.active && driven.includes(l.from)).length * 1000) / LINE_MS;
+}
+
 /**
- * Shares each power source among the machines drawing on it. A source can only give what
- * it has, so past its limit every machine on it slows down together.
+ * Shares each power source among the machines drawing on it. A source gives at most its
+ * output, less what its lines are using, and never more than it holds. Past that limit
+ * every machine on it slows down together.
  */
 function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
   const users = new Map<GameNode, GameNode[]>();
@@ -757,8 +764,10 @@ function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
     if (source) users.set(source, [...(users.get(source) ?? []), node]);
   }
   for (const [source, machines] of users) {
-    const demand = machines.reduce((sum, node) => sum + machinePower(node.type), 0) * (STEP_MS / 1000);
-    const share = Math.min(1, source.energy / demand);
+    const perSecond = machines.reduce((sum, node) => sum + machinePower(node.type), 0);
+    const demand = perSecond * (STEP_MS / 1000);
+    const output = Math.max(0, machinePowerOut(source.type) - lineLoad(s, source));
+    const share = Math.min(1, output / perSecond, source.energy / demand);
     source.energy -= demand * share;
     for (const node of machines) node.speed = share;
   }
@@ -842,17 +851,16 @@ function leakForce(s: GameState): void {
 }
 
 /**
- * What an engine is carrying, in force per second: `now` is what its machines and lines are
- * using this moment, `connected` the most its machines could use if all of them ran at once.
+ * What a power source is carrying, in force per second: `now` is what its machines and lines
+ * are using this moment, `connected` the most its machines could use if all of them ran at once.
  */
-export function engineLoad(s: GameState, engine: GameNode): { now: number; connected: number; limit: number } {
-  const driven = s.lines.filter((l) => l.from === engine.id && l.material === POWER).map((l) => nodeById(s, l.to)!);
-  const moving = s.lines.filter((l) => l.active && driven.some((node) => node.id === l.from)).length;
+export function powerLoad(s: GameState, source: GameNode): { now: number; connected: number; limit: number } {
+  const driven = s.lines.filter((l) => l.from === source.id && l.material === POWER).map((l) => nodeById(s, l.to)!);
   const working = driven.reduce((sum, node) => sum + machinePower(node.type) * (node.speed ?? 0), 0);
   return {
-    now: Math.round(working + (moving * 1000) / LINE_MS),
+    now: Math.round(working + lineLoad(s, source)),
     connected: driven.reduce((sum, node) => sum + machinePower(node.type), 0),
-    limit: machinePowerOut(engine.type),
+    limit: machinePowerOut(source.type),
   };
 }
 

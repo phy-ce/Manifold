@@ -1,7 +1,7 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { ENGINE, MAX_PORTS, machinesAt, MOTOR, RIVERBANK, WAREHOUSE, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
-  engineLoad,
+  powerLoad,
   GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
@@ -215,16 +215,16 @@ export class GraphView {
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tag(site.ore, site.left)}/${site.total}L</span>`;
     }
     if (node.type === ENGINE) {
-      const load = engineLoad(s, node);
+      const load = powerLoad(s, node);
       const fuel = nodeProcess(node).slots.map(({ key }) => tag(node.ins[key]?.id ?? key, node.ins[key]?.n ?? 0)).join(" ");
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${fuel}</span>` +
         `<span class="flow">동력 ${load.now}/${load.limit} · 연결 ${load.connected}</span>`;
     }
     if (node.type === MOTOR) {
-      const wound = Math.round((node.energy / SPRING_MAX) * 14);
+      const load = powerLoad(s, node);
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span>` +
         `<span class="flow">힘 ${Math.floor(node.energy)}/${SPRING_MAX}</span>` +
-        `<span class="progress">[${"#".repeat(wound).padEnd(14, ".")}]</span>`;
+        `<span class="flow">동력 ${load.now}/${load.limit} · 연결 ${load.connected}</span>`;
     }
     const recipe = recipeOf(node);
     const ins = nodeProcess(node).slots.map(({ key }, i) => tag(node.ins[key]?.id ?? Object.keys(recipe.in)[i], node.ins[key]?.n ?? 0)).join(" ");

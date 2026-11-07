@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, TANK_CAP, addTo, engineLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, TANK_CAP, addTo, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -877,6 +877,41 @@ describe("spring power", () => {
     expect(motor.energy).toBe(0);
   });
 
+  it("has an output limit like an engine, however wound it is", () => {
+    const s = createGame(1);
+    s.stage = 1;
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = SPRING_MAX;
+    const hammers = [1, 2].map(() => placeMachine(s, "steam_hammer", 0, 0)!);
+    for (const hammer of hammers) {
+      connect(s, motor.id, hammer.id, POWER);
+      hammer.ins.iron = { id: "iron", n: 12 };
+    }
+    run(s, 1);
+    expect(hammers[0].speed).toBeCloseTo(5 / 6);
+    expect(hammers[1].speed).toBeCloseTo(5 / 6);
+    expect(powerLoad(s, motor)).toEqual({ now: 5, connected: 6, limit: 5 });
+  });
+
+  it("gives its lines first, leaving less for machines", () => {
+    const { s, furnace, store } = setup();
+    s.stage = 1;
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = SPRING_MAX;
+    const hammers = [1, 2].map(() => placeMachine(s, "steam_hammer", 0, 0)!);
+    connect(s, motor.id, store.id, POWER);
+    for (const hammer of hammers) {
+      connect(s, motor.id, hammer.id, POWER);
+      hammer.ins.iron = { id: "iron", n: 12 };
+    }
+    run(s, 0.3);
+    expect(hammers[0].speed).toBeCloseTo(5 / 6);
+    run(s, 0.4);
+    expect(s.lines.some((l) => l.active)).toBe(true);
+    expect(furnace.ins.coal).toBeTruthy();
+    expect(hammers[0].speed).toBeCloseTo(3 / 6);
+  });
+
   it("winds by hand up to a limit", () => {
     const s = createGame(1);
     const motor = placeMachine(s, MOTOR, 0, 0)!;
@@ -1380,10 +1415,10 @@ describe("steam power", () => {
     const hammers = [1, 2].map(() => placeMachine(s, "steam_hammer", 0, 0)!);
     for (const hammer of hammers) connect(s, engine.id, hammer.id, POWER);
     run(s, 2);
-    expect(engineLoad(s, engine)).toEqual({ now: 0, connected: 6, limit: 10 });
+    expect(powerLoad(s, engine)).toEqual({ now: 0, connected: 6, limit: 10 });
     hammers[0].ins.iron = { id: "iron", n: 12 };
     run(s, 1);
-    expect(engineLoad(s, engine)).toEqual({ now: 3, connected: 6, limit: 10 });
+    expect(powerLoad(s, engine)).toEqual({ now: 3, connected: 6, limit: 10 });
   });
 
   it("carries items along lines on steam", () => {

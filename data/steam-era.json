@@ -41,7 +41,7 @@
     "boiler_bench": { "name": "보일러 제작대", "power": 3, "difficulty": 3, "manual": "keys", "cost": { "iron_plate": 4, "brick": 4 }, "work": 30 },
     "engine_bench": { "name": "기관 조립대", "power": 3, "difficulty": 4, "manual": "keys", "cost": { "iron_plate": 6, "iron": 6 }, "work": 40 },
 
-    "spring_motor": { "name": "태엽 동력기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
+    "spring_motor": { "name": "태엽 동력기", "powerOut": 5, "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
 
     "riverbank": { "name": "강가" },
     "steam_engine": { "name": "증기기관", "powerOut": 10, "cost": { "steam_engine_unit": 1 }, "work": 30 },
