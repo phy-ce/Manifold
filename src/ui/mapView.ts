@@ -1,7 +1,7 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
-import { GameState, SEASON_NAMES, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
+import { GameState, SEASON_NAMES, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
 import { BASE, Site, hash, terrain } from "../engine/world";
 
 /** Size of the window onto the endless map, which stays centred on the player. */
@@ -60,6 +60,8 @@ export class MapView {
   private readonly search = document.createElement("input");
   private readonly results = document.createElement("div");
   private readonly place = document.createElement("div");
+  private readonly safe = document.createElement("button");
+  private readonly straight = document.createElement("button");
   private veins = new Map<number, Vein>();
   private hit = 0;
   private drawnVein = "";
@@ -107,7 +109,22 @@ export class MapView {
     const legend = document.createElement("div");
     legend.className = "card-note map-legend";
     legend.textContent = "밝은 칸: 보이는 곳 · 어두운 칸: 기억 · 빈 칸: 미탐색";
-    mapBox.append(this.place, this.canvas, legend);
+    const walkMode = document.createElement("div");
+    walkMode.className = "modes";
+    const mode = (b: HTMLButtonElement, label: string, tip: string, on: boolean) => {
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = label;
+      b.dataset.tip = tip;
+      b.addEventListener("click", () => {
+        setSafeWalk(this.game(), on);
+        this.changed();
+      });
+      walkMode.append(b);
+    };
+    mode(this.safe, "위험 피하기", "아는 위험 지역을 돌아갑니다 (T)", true);
+    mode(this.straight, "직진", "위험을 무시하고 곧장 갑니다 (T)", false);
+    mapBox.append(this.place, walkMode, this.canvas, legend);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -145,6 +162,8 @@ export class MapView {
 
   draw(): void {
     const s = this.game();
+    this.safe.classList.toggle("selected", s.safeWalk);
+    this.straight.classList.toggle("selected", !s.safeWalk);
     this.drawVein(s);
     // The map only changes when the player moves or a vein empties.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1), 0);

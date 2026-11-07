@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, TANK_CAP, addTo, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, TANK_CAP, addTo, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -1934,6 +1934,71 @@ describe("vein grades", () => {
     delete s.sites[0].rich;
     upgradeSave(s);
     expect(s.sites[0].rich).toBe("normal");
+  });
+});
+
+describe("safe walking", () => {
+  const hazards = (s: GameState) => s.path.filter((cell) => {
+    const kind = terrain(cell.x, cell.y, s.seed)[1];
+    return kind === "t-water" || kind === "t-hill";
+  }).length;
+  /** A seed and spot with known hills between the base and the target. */
+  const hilly = () => {
+    for (let seed = 1; seed < 200; seed += 1) {
+      const s = createGame(seed);
+      s.sites = [];
+      const target = { x: 8, y: 0 };
+      setSafeWalk(s, false);
+      walkTo(s, target);
+      if (hazards(s) >= 1) return { s, target };
+    }
+    throw new Error("no hilly start");
+  };
+
+  it("goes around known hazards, and ignores them when told to", () => {
+    const { s, target } = hilly();
+    const straight = hazards(s);
+    setSafeWalk(s, true);
+    walkTo(s, target);
+    expect(hazards(s)).toBeLessThan(straight);
+    expect(s.path.at(-1)).toEqual(target);
+    setSafeWalk(s, false);
+    walkTo(s, target);
+    expect(hazards(s)).toBe(straight);
+  });
+
+  it("re-routes a walk already under way when the mode changes", () => {
+    const { s, target } = hilly();
+    setSafeWalk(s, true);
+    expect(s.path.at(-1)).toEqual(target);
+    expect(hazards(s)).toBe(0);
+  });
+
+  it("still crosses a river when there is no way around", () => {
+    const s = createTestGame(1);
+    const bank = s.sites.find((v) => v.ore === "water")!;
+    const far = { x: bank.x + (bank.x > 0 ? 6 : -6), y: 0 };
+    walkTo(s, far);
+    expect(s.path.at(-1)).toEqual(far);
+  });
+
+  it("walks only one cell at a time along a safe route", () => {
+    const { s, target } = hilly();
+    setSafeWalk(s, true);
+    walkTo(s, target);
+    let at = s.player;
+    for (const cell of s.path) {
+      expect(Math.max(Math.abs(cell.x - at.x), Math.abs(cell.y - at.y))).toBe(1);
+      at = cell;
+    }
+  });
+
+  it("keeps a very long walk fast", () => {
+    const s = createGame(1);
+    const start = performance.now();
+    walkTo(s, { x: 2000, y: 1500 });
+    expect(performance.now() - start).toBeLessThan(500);
+    expect(s.path.at(-1)).toEqual({ x: 2000, y: 1500 });
   });
 });
 

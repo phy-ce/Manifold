@@ -129,6 +129,83 @@ export function riverBanks(seed: number): Point[] {
   });
 }
 
+/** How many extra steps one point of damage is worth when picking a safe route. */
+const DAMAGE_WEIGHT = 20;
+/** How far a safe route may stray from the straight box between its ends. */
+const SAFE_MARGIN = 30;
+/** Give up and walk straight past this many cells, so a far click can't stall the game. */
+const SAFE_SEARCH_LIMIT = 40000;
+
+/**
+ * The route that takes the least damage, by A*. Hazards cost extra rather than blocking,
+ * because a river runs forever and sometimes has to be crossed.
+ */
+export function safePath(a: Point, b: Point, damageAt: (x: number, y: number) => number): Point[] {
+  const left = Math.min(a.x, b.x) - SAFE_MARGIN;
+  const right = Math.max(a.x, b.x) + SAFE_MARGIN;
+  const top = Math.min(a.y, b.y) - SAFE_MARGIN;
+  const bottom = Math.max(a.y, b.y) + SAFE_MARGIN;
+  const width = right - left + 1;
+  const key = (x: number, y: number) => (y - top) * width + (x - left);
+  // A touch over 1 prefers cells nearer the goal, so open ground isn't searched in full.
+  const guess = (x: number, y: number) => Math.max(Math.abs(x - b.x), Math.abs(y - b.y)) * 1.001;
+  const cost = new Map<number, number>([[key(a.x, a.y), 0]]);
+  const came = new Map<number, number>();
+  const heap: [number, number, number][] = [[guess(a.x, a.y), a.x, a.y]];
+  const push = (item: [number, number, number]) => {
+    let i = heap.push(item) - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heap[parent][0] <= heap[i][0]) break;
+      [heap[parent], heap[i]] = [heap[i], heap[parent]];
+      i = parent;
+    }
+  };
+  const pop = () => {
+    const top0 = heap[0];
+    const last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let i = 0; ;) {
+        const l = i * 2 + 1;
+        const r = l + 1;
+        let low = i;
+        if (l < heap.length && heap[l][0] < heap[low][0]) low = l;
+        if (r < heap.length && heap[r][0] < heap[low][0]) low = r;
+        if (low === i) break;
+        [heap[low], heap[i]] = [heap[i], heap[low]];
+        i = low;
+      }
+    }
+    return top0;
+  };
+  for (let seen = 0; heap.length && seen < SAFE_SEARCH_LIMIT; seen += 1) {
+    const [, x, y] = pop();
+    if (x === b.x && y === b.y) {
+      const path: Point[] = [];
+      for (let at = key(x, y); at !== key(a.x, a.y); at = came.get(at)!) {
+        path.unshift({ x: left + (at % width), y: top + Math.floor(at / width) });
+      }
+      return path;
+    }
+    const here = cost.get(key(x, y))!;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if ((!dx && !dy) || nx < left || nx > right || ny < top || ny > bottom) continue;
+        const next = here + 1 + damageAt(nx, ny) * DAMAGE_WEIGHT;
+        const id = key(nx, ny);
+        if (next >= (cost.get(id) ?? Infinity)) continue;
+        cost.set(id, next);
+        came.set(id, key(x, y));
+        push([next + guess(nx, ny), nx, ny]);
+      }
+    }
+  }
+  return linePath(a, b);
+}
+
 export function linePath(a: Point, b: Point): Point[] {
   const steps = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y));
   const path: Point[] = [];

@@ -1,6 +1,6 @@
 import "./style.css";
 import { PLAYABLE_STAGES, STAGES, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, sortSlots, step, trashCursor, upgradeSave, yearAt, walkTo, wheelStack } from "./engine/game";
+import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, setSafeWalk, sortSlots, step, trashCursor, upgradeSave, yearAt, walkTo, wheelStack } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -214,6 +214,10 @@ travel.dataset.tip = "단축키 M";
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
   if (e.code === "KeyG") itemIndex.toggle();
+  if (e.code === "KeyT") {
+    setSafeWalk(state, !state.safeWalk);
+    redraw();
+  }
   if (e.code === "KeyM") {
     closeWindows();
     travel.click();

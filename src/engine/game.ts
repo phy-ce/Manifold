@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
-import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, riverBanks, terrain } from "./world";
+import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 13;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
@@ -126,6 +126,8 @@ export interface GameState {
   player: Point;
   path: Point[];
   walkTimer: number;
+  /** Route around known hazards instead of walking straight. */
+  safeWalk: boolean;
   inv: Slots;
   /** The stack the player has picked up and is moving with the pointer. */
   cursor: Stack | null;
@@ -184,6 +186,7 @@ export function createGame(seed: number): GameState {
     player: { ...BASE },
     path: [],
     walkTimer: 0,
+    safeWalk: true,
     inv: emptySlots(INV_SLOTS),
     cursor: null,
     sites: generateSites(seed),
@@ -264,12 +267,30 @@ export const overloaded = (s: GameState): boolean => carried(s) > MAX_CARRY;
 export const walkTime = (s: GameState): number =>
   WALK_MS * (1 + Math.min(carried(s), MAX_CARRY) / MAX_CARRY) * (isWeak(s) ? WEAK_WALK : 1);
 
+/** What stepping on a cell would cost, as far as the player knows. Unseen ground looks safe. */
+function knownDamage(s: GameState, x: number, y: number): number {
+  if (!isRevealed(s, x, y) || (x === BASE.x && y === BASE.y)) return 0;
+  if (s.sites.some((site) => site.x === x && site.y === y)) return 0;
+  const [, kind, height] = terrain(x, y, s.seed);
+  return kind === "t-water" ? WATER_DAMAGE : kind === "t-hill" ? 1 + height : 0;
+}
+
+const routeTo = (s: GameState, target: Point): Point[] =>
+  s.safeWalk ? safePath(s.player, target, (x, y) => knownDamage(s, x, y)) : linePath(s.player, target);
+
 /** Starts walking. Too heavy a load keeps the player where they are. */
 export function walkTo(s: GameState, target: Point): boolean {
   if (overloaded(s)) return false;
-  s.path = linePath(s.player, target);
+  s.path = routeTo(s, target);
   s.walkTimer = 0;
   return true;
+}
+
+/** Switches between going around hazards and walking straight, for the rest of the walk too. */
+export function setSafeWalk(s: GameState, on: boolean): void {
+  s.safeWalk = on;
+  const target = s.path.at(-1);
+  if (target) s.path = routeTo(s, target);
 }
 
 /** Adds up to n of an item and returns how many fit. */
@@ -630,6 +651,7 @@ export function upgradeSave(s: GameState): GameState {
   s.ghosts ??= [];
   s.ghostLines ??= [];
   s.groups ??= [];
+  s.safeWalk ??= true;
   // Veins found before grades existed were all normal in size.
   for (const site of s.sites) {
     if (SURFACE_ORES.includes(site.ore)) site.rich ??= "normal";
@@ -1079,6 +1101,9 @@ function walk(s: GameState): void {
   s.player = s.path.shift()!;
   reveal(s, s.player, visionAt(s, s.player));
   if (s.stage >= 1) showRivers(s);
+  // New ground can show a hazard on the way, so the safe route is worked out again.
+  const target = s.path.at(-1);
+  if (s.safeWalk && target && s.path.some((cell) => knownDamage(s, cell.x, cell.y) > 0)) s.path = routeTo(s, target);
   const onSite = s.sites.some((site) => site.x === s.player.x && site.y === s.player.y);
   const atHome = s.player.x === BASE.x && s.player.y === BASE.y;
   if (onSite || atHome) return;
