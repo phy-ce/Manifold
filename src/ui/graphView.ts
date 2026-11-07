@@ -1,7 +1,7 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { ENGINE, LINK, MAX_PORTS, formLabel, machineForms, machinesAt, MOTOR, POWER, RIVERBANK, WAREHOUSE, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
-  powerLoad, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
+  NAME_MAX, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
@@ -232,7 +232,7 @@ export class GraphView {
       view.root.classList.toggle("found", found);
       const used = portsUsed(s, port.id);
       const running = members.filter((n) => status(n) === "run").length;
-      const html = `<b>묶음 ${group.code}</b><span class="ports">${"●".repeat(used)}${"○".repeat(Math.max(0, MAX_PORTS - used))}</span>` +
+      const html = `<b>${group.name ?? "묶음"} ${group.code}</b><span class="ports">${"●".repeat(used)}${"○".repeat(Math.max(0, MAX_PORTS - used))}</span>` +
         `<span class="flow">외부: ${nodeLabel(s, port)}</span>` +
         `<span class="flow">노드 ${members.length} · 가동 ${running}${group.open ? " · 펼침" : ""}</span>`;
       if (html !== view.key) {
@@ -258,6 +258,7 @@ export class GraphView {
     const group = s.groups.find((g) => g.id === id);
     const items: [string, boolean, () => void][] = [];
     if (id !== null && nodeById(s, id)) items.push(["열기", true, () => this.open(id)]);
+    if (id !== null && (nodeById(s, id) || group)) items.push(["이름 바꾸기", true, () => this.askName(id)]);
     if (ghost) {
       items.push(["설치", countOf(s, ghost.type) > 0, () => {
         buildGhost(s, ghost.id);
@@ -291,7 +292,10 @@ export class GraphView {
       b.type = "button";
       b.textContent = label;
       b.disabled = !enabled;
-      b.addEventListener("click", () => {
+      b.addEventListener("click", (e) => {
+        // The menu may turn into a name box, which an outside click would close.
+        e.stopPropagation();
+        this.menu.hidden = true;
         run();
         this.changed();
       });
@@ -303,6 +307,35 @@ export class GraphView {
     this.menu.style.left = `${Math.min(e.clientX, window.innerWidth - box.width)}px`;
     this.menu.style.top = `${Math.min(e.clientY, window.innerHeight - box.height)}px`;
     this.draw();
+  }
+
+  /** Turns the menu into a name box, in the same spot. */
+  private askName(id: number): void {
+    const s = this.game();
+    const target = nodeById(s, id) ?? s.groups.find((g) => g.id === id);
+    const input = document.createElement("input");
+    input.id = "node-name";
+    input.type = "text";
+    input.maxLength = NAME_MAX;
+    input.value = target?.name ?? "";
+    input.placeholder = "비우면 기본 이름";
+    input.setAttribute("aria-label", "노드 이름");
+    const finish = (save: boolean) => {
+      if (this.menu.hidden) return;
+      this.menu.hidden = true;
+      if (save) rename(this.game(), id, input.value);
+      this.changed();
+    };
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") finish(true);
+      if (e.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+    this.menu.replaceChildren(input);
+    this.menu.hidden = false;
+    input.focus();
+    input.select();
   }
 
   /** Lays the copied nodes down as a plan, at the given spot or the pointer if it is over the board. */
@@ -572,8 +605,8 @@ export class GraphView {
     });
     // A click anywhere else closes the dropdown.
     document.addEventListener("click", (e) => {
-      this.menu.hidden = true;
       const target = e.target as Node;
+      if (!this.menu.contains(target)) this.menu.hidden = true;
       if (!this.roster.contains(target) && !this.rosterList.contains(target)) this.closeList();
     });
   }

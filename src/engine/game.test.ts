@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, TANK_CAP, addTo, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, NAME_MAX, STEAM_MAX, TANK_CAP, addTo, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -1999,6 +1999,33 @@ describe("safe walking", () => {
     walkTo(s, { x: 2000, y: 1500 });
     expect(performance.now() - start).toBeLessThan(500);
     expect(s.path.at(-1)).toEqual({ x: 2000, y: 1500 });
+  });
+});
+
+describe("naming", () => {
+  it("shows the player's name with the code, and falls back when blank", () => {
+    const s = createGame(1);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    const plain = nodeLabel(s, kiln);
+    expect(rename(s, kiln.id, "  1번 가마 ")).toBe(true);
+    expect(nodeLabel(s, kiln)).toBe(`1번 가마 ${kiln.code}`);
+    rename(s, kiln.id, "   ");
+    expect(nodeLabel(s, kiln)).toBe(plain);
+  });
+
+  it("names groups too, and cuts a long name", () => {
+    const s = createGame(1);
+    const ids = [1, 2].map(() => placeMachine(s, "brick_kiln", 0, 0)!.id);
+    const group = createGroup(s, ids, ids[0])!;
+    rename(s, group.id, "가".repeat(40));
+    expect(group.name).toHaveLength(NAME_MAX);
+  });
+
+  it("survives a save", () => {
+    const s = createGame(1);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    rename(s, kiln.id, "벽돌");
+    expect(JSON.parse(JSON.stringify(s)).nodes.at(-1).name).toBe("벽돌");
   });
 });
 

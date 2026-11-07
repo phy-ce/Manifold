@@ -19,6 +19,8 @@ export const STEP_MS = 100;
 export const WALK_MS = 150;
 export const LINE_MS = 500;
 export const OUTPUT_CAP = 16;
+/** Longest name that still fits on a node. */
+export const NAME_MAX = 12;
 /** What a machine's tank holds, in litres. Two drums' worth. */
 export const TANK_CAP = 200;
 export const REVEAL = 4;
@@ -55,6 +57,8 @@ export interface GameNode {
   type: string;
   /** Three characters that name this one machine, like K01. */
   code: string;
+  /** The player's own name for it, shown instead of the machine's. */
+  name?: string;
   form: string;
   x: number;
   y: number;
@@ -86,6 +90,7 @@ export interface Ghost {
 export interface Group {
   id: number;
   code: string;
+  name?: string;
   nodes: number[];
   port: number;
   x: number;
@@ -764,11 +769,22 @@ export function toggleRoute(s: GameState, fromId: number, toId: number, material
   return true;
 }
 
-/** Display name: the machine, its form if it has one, and its own code. */
+/** Display name: the player's name if it has one, else the machine and its form, then its own code. */
 export function nodeLabel(_s: GameState, node: GameNode): string {
+  if (node.name) return `${node.name} ${node.code}`;
   const forms = machineForms(node.type);
   const form = forms.length > 1 ? ` (${formLabel(node.form)})` : "";
   return `${machineName(node.type)}${form} ${node.code}`;
+}
+
+/** Names a node or group. A blank name goes back to the default. */
+export function rename(s: GameState, id: number, name: string): boolean {
+  const target = nodeById(s, id) ?? s.groups.find((g) => g.id === id);
+  if (!target) return false;
+  const clean = name.trim().slice(0, NAME_MAX);
+  if (clean) target.name = clean;
+  else delete target.name;
+  return true;
 }
 
 export function connect(s: GameState, fromId: number, toId: number, material: string): Line | null {
