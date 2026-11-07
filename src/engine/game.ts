@@ -673,6 +673,8 @@ export function loadSave(raw: unknown): GameState | null {
   if (!old || typeof old.seed !== "number" || typeof old.version !== "number" || old.version > SAVE_VERSION) return null;
   if (!Array.isArray(old.nodes) || !Array.isArray(old.sites)) return null;
   const s = { ...createGame(old.seed), ...old } as GameState;
+  // A save from before stages has to work its stage out from what it did have.
+  if (old.stage === undefined) delete (s as Partial<GameState>).stage;
   // Machines that no longer exist go, and their lines with them.
   s.nodes = s.nodes.filter((node) => node.type === "stove" || node.type === RIVERBANK || isMachine(node.type));
   const live = new Set(s.nodes.map((node) => node.id));

@@ -2055,6 +2055,18 @@ describe("old saves", () => {
     run(s, 2);
   });
 
+  it("keeps a finished stage from before stages existed", () => {
+    const save = old();
+    save.version = 8;
+    save.won = true;
+    save.delivered = 1;
+    delete save.stage;
+    delete save.made;
+    const s = loadSave(save)!;
+    expect(s.stage).toBe(1);
+    expect(s.made.steam_engine_unit).toBe(1);
+  });
+
   it("keeps what the player had", () => {
     const save = old();
     save.version = 9;

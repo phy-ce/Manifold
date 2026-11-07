@@ -138,6 +138,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .tier:hover .tier-list, .tier:focus-within .tier-list { display: flex; }
 .language-pick { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 24px; }
 .language-pick h1 { margin: 0; font-size: 22px; }
+.language-pick pre { max-width: 80vw; margin: 0; color: var(--alert); white-space: pre-wrap; }
 .language-pick button { min-width: 140px; padding: 12px 16px; color: var(--go); background: var(--panel); border: 1px solid var(--line); font: inherit; cursor: pointer; }
 .language-pick button:hover { border-color: var(--go); }
 .context-menu { position: fixed; z-index: 40; display: grid; min-width: calc(var(--slot) * 2.5); background: var(--panel); border: 1px solid var(--line); }
