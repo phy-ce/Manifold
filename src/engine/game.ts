@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 14;
@@ -74,7 +74,7 @@ export interface GameNode {
   energy: number;
   /** Share of full speed from power, last step. Zero means no power reached it. */
   speed?: number;
-  /** The riverbank this node stands for. */
+  /** The riverbank a pump draws from. */
   siteId?: number;
 }
 
@@ -83,6 +83,8 @@ export interface Ghost {
   id: number;
   type: string;
   form: string;
+  /** The riverbank a planned pump will draw from. */
+  siteId?: number;
   x: number;
   y: number;
 }
@@ -347,7 +349,7 @@ function addRivers(s: GameState): void {
     if (s.sites.some((site) => site.x === bank.x && site.y === bank.y)) continue;
     s.sites.push({ ...bank, id: s.sites.length, ore: WATER, total: RIVER.reserve, left: RIVER.reserve, seed: s.seed });
   }
-  showRivers(s);
+  nameRivers(s);
 }
 
 /** New ores appear around the base when their stage opens. */
@@ -362,35 +364,27 @@ function addLaterVeins(s: GameState): void {
   }
 }
 
-/** A riverbank joins the base graph, with its own code, once the player has found it. */
-function showRivers(s: GameState): void {
-  for (const site of s.sites) {
-    if (site.ore !== WATER || !isRevealed(s, site.x, site.y)) continue;
-    if (s.nodes.some((node) => node.siteId === site.id)) continue;
-    const count = s.nodes.filter((node) => node.type === RIVERBANK).length;
-    const node: GameNode = { ...newWarehouse(s, 40, 340 + count * 124), type: RIVERBANK, store: [], siteId: site.id };
-    site.code = node.code;
-    s.nodes.push(node);
-  }
+/** A riverbank gets its code once the player has found it. It stays on the map, not on the board. */
+function nameRivers(s: GameState): void {
+  for (const site of foundRivers(s)) site.code ??= nextCode(s);
 }
 
-/** Riverbanks the player has found, as base nodes. */
-export const foundRivers = (s: GameState): GameNode[] => s.nodes.filter((node) => node.type === RIVERBANK);
+/** Riverbanks the player has found. */
+export const foundRivers = (s: GameState): Site[] =>
+  s.sites.filter((site) => site.ore === WATER && isRevealed(s, site.x, site.y));
 
-/** Points a pump at a riverbank, moving it off any other. Choosing its own riverbank again unlinks it. */
-export function linkRiver(s: GameState, pumpId: number, bankId: number): boolean {
-  const current = s.lines.find((l) => l.to === pumpId && l.material === LINK);
-  if (current?.from === bankId) return removeLine(s, current.id);
-  if (!canAffordRoute(s, bankId, pumpId) && !current) return false;
-  if (current) removeLine(s, current.id);
-  return toggleRoute(s, bankId, pumpId, LINK);
+/** Points a pump at a riverbank. Choosing the one it already uses unlinks it. */
+export function linkRiver(s: GameState, pumpId: number, siteId: number): boolean {
+  const pump = nodeById(s, pumpId);
+  if (!atBase(s) || pump?.type !== PUMP || !foundRivers(s).some((site) => site.id === siteId)) return false;
+  if (pump.siteId === siteId) delete pump.siteId;
+  else pump.siteId = siteId;
+  return true;
 }
 
 /** The riverbank a pump is linked to, if any. */
 export function riverOf(s: GameState, pump: GameNode): Site | undefined {
-  const line = s.lines.find((l) => l.to === pump.id && l.material === LINK);
-  const bank = line && nodeById(s, line.from);
-  return bank?.siteId === undefined ? undefined : s.sites[bank.siteId];
+  return pump.siteId === undefined ? undefined : s.sites[pump.siteId];
 }
 
 function refillRivers(s: GameState): void {
@@ -606,16 +600,16 @@ export function copyToGhosts(s: GameState, ids: number[], dx: number, dy: number
   const copies = new Map<number, Ghost>();
   for (const id of ids) {
     const source = nodeById(s, id) ?? s.ghosts.find((g) => g.id === id);
-    if (!source || source.type === RIVERBANK) continue;
-    copies.set(id, { id: s.nextId++, type: source.type, form: source.form, x: source.x + dx, y: source.y + dy });
+    if (!source) continue;
+    const ghost: Ghost = { id: s.nextId++, type: source.type, form: source.form, x: source.x + dx, y: source.y + dy };
+    if (source.siteId !== undefined) ghost.siteId = source.siteId;
+    copies.set(id, ghost);
   }
   s.ghosts.push(...copies.values());
   for (const line of [...s.lines, ...s.ghostLines]) {
     const from = copies.get(line.from);
     const to = copies.get(line.to);
     if (from && to) s.ghostLines.push({ from: from.id, to: to.id, material: line.material });
-    // A pump's riverbank stays where it is, so the copy points at the same one.
-    else if (to && line.material === LINK) s.ghostLines.push({ from: line.from, to: to.id, material: LINK });
   }
   return [...copies.values()];
 }
@@ -641,6 +635,7 @@ export function buildGhost(s: GameState, id: number): GameNode | null {
   const node = installMachine(s, ghost.type, ghost.x, ghost.y);
   if (!node) return null;
   if (ghost.form) setForm(s, node.id, ghost.form);
+  if (ghost.siteId !== undefined) node.siteId = ghost.siteId;
   s.ghosts = s.ghosts.filter((g) => g !== ghost);
   for (const line of s.ghostLines) {
     if (line.from === id) line.from = node.id;
@@ -664,6 +659,22 @@ export function cancelProject(s: GameState): boolean {
   return true;
 }
 
+/** Riverbanks used to be nodes linked to pumps by a line. A pump now just remembers its riverbank. */
+function dropRiverNodes(s: GameState): void {
+  const banks = new Map(s.nodes.filter((node) => node.type === "riverbank").map((node) => [node.id, node]));
+  if (!banks.size) return;
+  for (const line of s.lines ?? []) {
+    const bank = banks.get(line.from);
+    const pump = bank && nodeById(s, line.to);
+    if (!pump) continue;
+    pump.siteId = bank!.siteId;
+    refund(s, line.paid ?? []);
+  }
+  s.lines = (s.lines ?? []).filter((line) => !banks.has(line.from) && !banks.has(line.to));
+  s.nodes = s.nodes.filter((node) => !banks.has(node.id));
+  s.groups = (s.groups ?? []).map((group) => ({ ...group, nodes: group.nodes.filter((id) => !banks.has(id)) })).filter((group) => group.nodes.length >= 2);
+}
+
 /**
  * Turns saved JSON from any older version into a game of this one, filling in whatever it
  * doesn't have yet. Returns null only for data that isn't a save, or comes from a newer game.
@@ -675,8 +686,9 @@ export function loadSave(raw: unknown): GameState | null {
   const s = { ...createGame(old.seed), ...old } as GameState;
   // A save from before stages has to work its stage out from what it did have.
   if (old.stage === undefined) delete (s as Partial<GameState>).stage;
+  dropRiverNodes(s);
   // Machines that no longer exist go, and their lines with them.
-  s.nodes = s.nodes.filter((node) => node.type === "stove" || node.type === RIVERBANK || isMachine(node.type));
+  s.nodes = s.nodes.filter((node) => node.type === "stove" || isMachine(node.type));
   const live = new Set(s.nodes.map((node) => node.id));
   s.lines = (s.lines ?? []).filter((line) => live.has(line.from) && live.has(line.to));
   for (const line of s.lines) {
@@ -730,13 +742,6 @@ export function upgradeSave(s: GameState): GameState {
   }
   if (s.stage >= 1) addRivers(s);
   addLaterVeins(s);
-  // Pumps used to draw from the nearest riverbank by themselves.
-  for (const pump of s.nodes) {
-    if (pump.type !== PUMP || pump.siteId === undefined) continue;
-    const bank = s.nodes.find((node) => node.type === RIVERBANK && node.siteId === pump.siteId);
-    if (bank) s.lines.push({ id: s.nextId++, from: bank.id, to: pump.id, material: LINK, timer: 0, active: false, lastMoved: 0, paid: [] });
-    delete pump.siteId;
-  }
   // The stove merged into the brick kiln.
   if (s.project?.type === "stove") s.project.type = "brick_kiln";
   for (const node of s.nodes) {
@@ -753,7 +758,7 @@ export function upgradeSave(s: GameState): GameState {
 /** The first warehouse always stays, and a built one must be emptied before demolition. */
 export const isFirstWarehouse = (s: GameState, node: GameNode): boolean => s.nodes.find((n) => n.type === WAREHOUSE) === node;
 export const canRemove = (s: GameState, node: GameNode): boolean =>
-  node.type !== RIVERBANK && !isFirstWarehouse(s, node) && node.store.every((slot) => !slot);
+  !isFirstWarehouse(s, node) && node.store.every((slot) => !slot);
 
 export function removeNode(s: GameState, id: number): boolean {
   const node = nodeById(s, id);
@@ -782,12 +787,7 @@ export const portsUsed = (s: GameState, id: number): number =>
 export function routeMaterials(s: GameState, fromId: number, toId: number): string[] {
   const from = nodeById(s, fromId);
   const to = nodeById(s, toId);
-  if (!from || !to || from === to || to.type === MOTOR || to.type === RIVERBANK) return [];
-  // A pump draws from one riverbank at a time.
-  if (from.type === RIVERBANK) {
-    const taken = s.lines.some((l) => l.to === to.id && l.material === LINK && l.from !== from.id);
-    return to.type === PUMP && !taken ? [LINK] : [];
-  }
+  if (!from || !to || from === to || to.type === MOTOR) return [];
   // A manifold splits steam, so a spring can't feed one.
   if (from.type === MOTOR && to.type === MANIFOLD) return [];
   if (isPowerSource(from.type) || from.type === MANIFOLD) return to.type === ENGINE ? [] : [POWER];
@@ -1163,7 +1163,7 @@ export function powerLoad(s: GameState, source: GameNode): { now: number; connec
 
 /** Lines are only passages: something at the sending end has to push. */
 function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives: Map<number, GameNode[]>): void {
-  if (line.material === POWER || line.material === LINK) return;
+  if (line.material === POWER) return;
   line.timer += STEP_MS;
   if (line.timer < LINE_MS) return;
   line.timer = 0;
@@ -1210,7 +1210,7 @@ function walk(s: GameState): void {
   s.walkTimer = 0;
   s.player = s.path.shift()!;
   reveal(s, s.player, visionAt(s, s.player));
-  if (s.stage >= 1) showRivers(s);
+  if (s.stage >= 1) nameRivers(s);
   // New ground can show a hazard on the way, so the safe route is worked out again.
   const target = s.path.at(-1);
   if (s.safeWalk && target && s.path.some((cell) => knownDamage(s, cell.x, cell.y) > 0)) s.path = routeTo(s, target);
@@ -1462,7 +1462,7 @@ export function createTestGame(seed: number): GameState {
   addRivers(s);
   addLaterVeins(s);
   for (const bank of riverBanks(seed)) reveal(s, bank, REVEAL);
-  showRivers(s);
+  nameRivers(s);
   const motor = placeMachine(s, MOTOR, 40, 40)!;
   motor.energy = SPRING_MAX;
   const smelter = placeMachine(s, "smelter", 300, 200)!;

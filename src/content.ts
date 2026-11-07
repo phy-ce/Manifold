@@ -74,10 +74,6 @@ export const MANIFOLD = "steam_manifold";
 export const SPLITTER = "item_splitter";
 export const PUMP = "drainage_pump";
 export const WATER = "water";
-/** A riverbank in the base graph. It only exists to be linked to a pump. */
-export const RIVERBANK = "riverbank";
-/** What a line from a riverbank to a pump carries. Not an item: it says where the pump draws. */
-export const LINK = "link";
 /** The empty drum, what it holds, and the full item for each fluid. */
 export const DRUM: { empty: string; liters: number; fills: Record<string, string> } = era.drum;
 const kinds: Record<string, string> = era.kinds;
@@ -123,7 +119,7 @@ export const isPowerSource = (type: string): boolean => type === MOTOR || type =
 /** Nodes that hold items in slots and send them on without a recipe. */
 export const isStore = (type: string): boolean => type === WAREHOUSE || type === SPLITTER;
 /** Nodes with no recipe of their own. */
-export const isPassive = (type: string): boolean => isStore(type) || type === RIVERBANK || type === MANIFOLD;
+export const isPassive = (type: string): boolean => isStore(type) || type === MANIFOLD;
 
 /** Parts of later milestones that share a machine with this one. */
 const LATER_ITEMS = new Set(["port_flange"]);

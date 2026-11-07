@@ -1,8 +1,8 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, PUMP, RIVERBANK, isStore, machinePower, unitOf } from "../content";
+import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, PUMP, isStore, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canAffordRoute, canRemove, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canRemove, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -176,7 +176,7 @@ export class MachineWindow {
     this.nodeId = id;
     this.title.textContent = machineName(node.type);
     this.resetDemolish();
-    this.demolish.hidden = isFirstWarehouse(this.game(), node) || node.type === RIVERBANK;
+    this.demolish.hidden = isFirstWarehouse(this.game(), node);
     this.sort.hidden = true;
     this.buildForms(node);
     this.top.replaceChildren();
@@ -187,7 +187,7 @@ export class MachineWindow {
     this.stored = [];
     delete this.art.root.dataset.scene;
     if (isStore(node.type)) this.buildWarehouse(node);
-    else if (node.type === RIVERBANK || node.type === MANIFOLD) this.top.className = "machine";
+    else if (node.type === MANIFOLD) this.top.className = "machine";
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
     this.root.hidden = false;
@@ -233,13 +233,12 @@ export class MachineWindow {
       return;
     }
     for (const bank of banks) {
-      const on = linked?.id === bank.siteId;
+      const on = linked?.id === bank.id;
       const b = document.createElement("button");
       b.type = "button";
       b.className = `tech ${on ? "selected" : ""}`;
-      b.textContent = nodeLabel(s, bank);
-      b.disabled = !on && !linked && !canAffordRoute(s, bank.id, node.id);
-      b.dataset.tip = on ? tr("다시 누르면 연결을 끊습니다") : b.disabled ? tr("철판 1, 구리관 1이 필요합니다") : tr("이 강가에서 물을 끌어옵니다");
+      b.textContent = `${tr("강가")} ${bank.code}`;
+      b.dataset.tip = on ? tr("다시 누르면 연결을 끊습니다") : tr("이 강가에서 물을 끌어옵니다");
       b.addEventListener("click", () => {
         linkRiver(s, node.id, bank.id);
         this.open(node.id);
@@ -360,16 +359,6 @@ export class MachineWindow {
       if (this.recipe.dataset.line !== line) {
         this.recipe.dataset.line = line;
         this.recipe.textContent = line;
-      }
-      this.bar.textContent = "";
-      return;
-    }
-    if (node.type === RIVERBANK) {
-      const site = s.sites[node.siteId!];
-      const line = `${tr("비축")} ${site.left}/${site.total}L<span class="card-note">${tr("강가 펌프로 선을 이어야 쓸 수 있습니다")}</span>`;
-      if (this.recipe.dataset.line !== line) {
-        this.recipe.dataset.line = line;
-        this.recipe.innerHTML = line;
       }
       this.bar.textContent = "";
       return;

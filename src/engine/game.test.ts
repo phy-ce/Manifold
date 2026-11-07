@@ -1482,71 +1482,39 @@ describe("steam power", () => {
 describe("riverbanks", () => {
   const atRiver = () => {
     const s = createTestGame(1);
-    s.nodes = s.nodes.filter((n) => n.type === "warehouse" || n.type === "riverbank");
+    s.nodes = s.nodes.slice(0, 1);
     s.lines = [];
-    const bank = s.nodes.find((n) => n.type === "riverbank")!;
     const motor = placeMachine(s, MOTOR, 0, 0)!;
     motor.energy = SPRING_MAX;
     const pump = placeMachine(s, "drainage_pump", 0, 0)!;
-    expect(connect(s, bank.id, pump.id, "link")).toBeTruthy();
-    return { s, bank, motor, pump, river: riverOf(s, pump)! };
+    expect(linkRiver(s, pump.id, foundRivers(s)[0].id)).toBe(true);
+    return { s, motor, pump, river: riverOf(s, pump)! };
   };
 
-  it("joins the base with a code once found", () => {
-    const s = createGame(1);
-    s.revealed = {};
-    s.stage = 1;
-    upgradeSave(s);
-    expect(s.nodes.some((n) => n.type === "riverbank")).toBe(false);
-    const { bank, river } = atRiver();
-    expect(bank.code).toMatch(/^[0-9a-z]{3}$/);
-    expect(river.code).toBe(bank.code);
+  it("gets a code once found, and stays off the board", () => {
+    const { s, river } = atRiver();
+    expect(river.code).toMatch(/^[0-9a-z]{3}$/);
+    expect(s.nodes.some((n) => n.siteId === river.id && n.type !== "drainage_pump")).toBe(false);
   });
 
   it("does nothing for a pump until linked, even with power", () => {
     const { s, motor, pump } = atRiver();
-    s.lines = [];
+    delete pump.siteId;
     connect(s, motor.id, pump.id, POWER);
     run(s, 3);
     expect(pump.outs.water).toBe(0);
     expect(riverOf(s, pump)).toBeUndefined();
   });
 
-  it("links to pumps only, one riverbank per pump", () => {
-    const { s, bank, pump } = atRiver();
-    const other = s.nodes.find((n) => n.type === "riverbank" && n !== bank)!;
-    expect(connect(s, other.id, pump.id, "link")).toBeNull();
-    expect(routeMaterials(s, bank.id, s.nodes[0].id)).toEqual([]);
-    expect(routeMaterials(s, pump.id, bank.id)).toEqual([]);
-  });
-
   it("lets the pump pick any found riverbank, and move between them", () => {
-    const { s, bank, pump } = atRiver();
-    s.lines = [];
-    addTo(s.nodes[0].store, "iron_plate", 4);
-    addTo(s.nodes[0].store, "copper_tube", 4);
-    const [first, second] = foundRivers(s);
-    expect(linkRiver(s, pump.id, first.id)).toBe(true);
-    expect(riverOf(s, pump)?.id).toBe(first.siteId);
-    expect(linkRiver(s, pump.id, second.id)).toBe(true);
-    expect(riverOf(s, pump)?.id).toBe(second.siteId);
-    expect(s.lines.filter((l) => l.to === pump.id && l.material === "link")).toHaveLength(1);
-    expect(linkRiver(s, pump.id, second.id)).toBe(true);
-    expect(riverOf(s, pump)).toBeUndefined();
-    expect(bank).toBeTruthy();
-  });
-
-  it("won't link without the parts for a line", () => {
     const { s, pump } = atRiver();
-    s.lines = [];
-    s.nodes[0].store = s.nodes[0].store.map(() => null);
-    expect(linkRiver(s, pump.id, foundRivers(s)[0].id)).toBe(false);
+    const [first, second] = foundRivers(s);
+    expect(riverOf(s, pump)?.id).toBe(first.id);
+    expect(linkRiver(s, pump.id, second.id)).toBe(true);
+    expect(riverOf(s, pump)?.id).toBe(second.id);
+    expect(portsUsed(s, pump.id)).toBe(0);
+    expect(linkRiver(s, pump.id, second.id)).toBe(true);
     expect(riverOf(s, pump)).toBeUndefined();
-  });
-
-  it("can't be demolished", () => {
-    const { s, bank } = atRiver();
-    expect(removeNode(s, bank.id)).toBe(false);
   });
 
   it("can't be mined by hand", () => {
@@ -1580,13 +1548,16 @@ describe("riverbanks", () => {
     expect(lacksPower(pump)).toBe(true);
   });
 
-  it("moves an old pump onto a link with its riverbank", () => {
-    const { s, bank, pump } = atRiver();
-    s.lines = [];
-    pump.siteId = bank.siteId;
-    upgradeSave(s);
-    expect(riverOf(s, pump)?.id).toBe(bank.siteId);
-    expect(pump.siteId).toBeUndefined();
+  it("turns an old riverbank node and its line into the pump's own choice", () => {
+    const { s, pump, river } = atRiver();
+    delete pump.siteId;
+    const save = JSON.parse(JSON.stringify(s));
+    save.nodes.push({ ...save.nodes[0], id: 700, type: "riverbank", store: [], siteId: river.id });
+    save.lines.push({ id: 701, from: 700, to: pump.id, material: "link", timer: 0, active: false, lastMoved: 0, paid: [{ id: "iron_plate", n: 1 }] });
+    const loaded = loadSave(save)!;
+    expect(loaded.nodes.some((n) => n.type === "riverbank")).toBe(false);
+    expect(loaded.lines).toEqual([]);
+    expect(nodeById(loaded, pump.id)!.siteId).toBe(river.id);
   });
 
   it("stops pumping when dry", () => {
@@ -1881,14 +1852,14 @@ describe("blueprints", () => {
     expect(s.ghostLines).toEqual([]);
   });
 
-  it("copies a pump's link to the same riverbank", () => {
+  it("copies a pump's riverbank", () => {
     const s = createTestGame(1);
-    const bank = s.nodes.find((n) => n.type === "riverbank")!;
     const pump = placeMachine(s, "drainage_pump", 0, 0)!;
-    connect(s, bank.id, pump.id, "link");
-    const [ghost] = copyToGhosts(s, [pump.id, bank.id], 0, 0);
-    expect(ghost.type).toBe("drainage_pump");
-    expect(s.ghostLines).toEqual([{ from: bank.id, to: ghost.id, material: "link" }]);
+    const [bank] = foundRivers(s);
+    linkRiver(s, pump.id, bank.id);
+    const [ghost] = copyToGhosts(s, [pump.id], 0, 0);
+    s.inv[0] = { id: "drainage_pump", n: 1 };
+    expect(buildGhost(s, ghost.id)?.siteId).toBe(bank.id);
   });
 });
 
@@ -2119,7 +2090,7 @@ describe("old saves", () => {
 describe("S1-3", () => {
   const stage3 = () => {
     const s = createTestGame(1);
-    s.nodes = s.nodes.slice(0, 1).concat(s.nodes.filter((n) => n.type === "riverbank"));
+    s.nodes = s.nodes.slice(0, 1);
     s.lines = [];
     const motor = placeMachine(s, MOTOR, 0, 0)!;
     motor.energy = 100000;

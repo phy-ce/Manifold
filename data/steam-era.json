@@ -5,7 +5,7 @@
   },
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
-    "steam": "증기", "water_drum": "물 드럼통", "link": "강가 연결", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "water": "물", "limestone": "석회석",
+    "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "water": "물", "limestone": "석회석",
     "brick": "벽돌", "iron": "철 주괴", "copper": "구리 주괴", "slag": "슬래그",
     "boiler": "보일러", "steam_engine_unit": "증기기관",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
@@ -29,7 +29,7 @@
     "copper_ore": { "rate": 1 }, "water": { "rate": 4 }, "limestone": { "rate": 1 }
   },
   "fuels": ["coal", "coke"],
-  "ruleItems": ["steam", "water_drum", "link"],
+  "ruleItems": ["steam", "water_drum"],
   "kinds": { "water": "liquid", "coal_tar": "liquid", "steam": "gas" },
   "drum": { "empty": "iron_drum", "liters": 100, "fills": { "water": "water_drum" } },
   "machines": {
@@ -43,7 +43,6 @@
 
     "spring_motor": { "name": "태엽 동력기", "powerOut": 5, "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
 
-    "riverbank": { "name": "강가" },
     "steam_engine": { "name": "증기기관", "powerOut": 10, "cost": { "steam_engine_unit": 1 }, "work": 30 },
     "steam_manifold": { "name": "증기 배분기", "cost": { "copper_tube": 6, "iron_plate": 2 }, "work": 15 },
     "item_splitter": { "name": "재료 분배기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 15 },

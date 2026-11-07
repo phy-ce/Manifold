@@ -1,6 +1,6 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { tr } from "../i18n";
-import { ENGINE, LINK, MANIFOLD, MAX_PORTS, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, RIVERBANK, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, MANIFOLD, MAX_PORTS, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   NAME_MAX, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
@@ -49,9 +49,9 @@ interface GhostView {
   key: string;
 }
 /** Which lines stand out. Everything else fades back. */
-type Channel = "all" | "power" | "item" | "link";
-const CHANNELS: [Channel, string][] = [["all", tr("모든 선")], ["power", tr("동력")], ["item", tr("재료")], ["link", tr("강가")]];
-const channelOf = (material: string): Channel => (material === POWER ? "power" : material === LINK ? "link" : "item");
+type Channel = "all" | "power" | "item";
+const CHANNELS: [Channel, string][] = [["all", tr("모든 선")], ["power", tr("동력")], ["item", tr("재료")]];
+const channelOf = (material: string): Channel => (material === POWER ? "power" : "item");
 /** Board zoom limits, and how much one wheel notch changes it. */
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 1.6;
@@ -793,10 +793,6 @@ export class GraphView {
     if (isStore(node.type)) {
       const kinds = node.store.filter(Boolean).map((x) => tag(x!.id, x!.n)).slice(0, 4).join(" ");
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${kinds || "·"}</span>`;
-    }
-    if (node.type === RIVERBANK) {
-      const site = s.sites[node.siteId!];
-      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tag(site.ore, site.left)}/${site.total}L</span>`;
     }
     if (node.type === ENGINE) {
       const load = powerLoad(s, node);
