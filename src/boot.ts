@@ -7,7 +7,7 @@ function askLanguage(): Promise<Language> {
     const panel = document.createElement("div");
     panel.className = "language-pick";
     const title = document.createElement("h1");
-    title.textContent = "Modpack Simulator";
+    title.textContent = "Manifold";
     const choices = document.createElement("div");
     choices.className = "bar-row";
     for (const [language, label] of [["ko", "한국어"], ["en", "English"]] as const) {

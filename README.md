@@ -1,10 +1,10 @@
-# Modpack Simulator
+# Manifold
 
 기술모드팩의 공정 설계 재미만 남긴 글자 기반 공장 게임입니다. 광맥을 찾아 캐고, 노드 그래프로 공정을 연결해 첫 증기기관을 납품하는 S1-1까지 플레이할 수 있습니다.
 
 ## 플레이
 
-https://phy-ce.github.io/Modpacksimulator/
+https://phy-ce.github.io/Manifold/
 
 `main`에 push하면 GitHub Actions가 데이터 검사, 테스트, 빌드를 거쳐 위 주소에 배포합니다.
 
