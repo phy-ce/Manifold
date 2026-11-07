@@ -5,7 +5,7 @@
   },
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
-    "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "water": "물", "limestone": "석회석",
+    "steam": "증기", "water_drum": "물 드럼통", "link": "강가 연결", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "water": "물", "limestone": "석회석",
     "brick": "벽돌", "iron": "철 주괴", "copper": "구리 주괴", "slag": "슬래그",
     "boiler": "보일러", "steam_engine_unit": "증기기관",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
@@ -14,7 +14,7 @@
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "brick": 2, "slag": 2, "boiler": 30, "steam_engine_unit": 50, "water": 1
+    "brick": 2, "slag": 2, "boiler": 30, "steam_engine_unit": 50, "water": 1, "water_drum": 30
   },
   "stockpiled": ["slag"],
   "food": {
@@ -29,6 +29,9 @@
     "copper_ore": { "rate": 1 }, "water": { "rate": 4 }, "limestone": { "rate": 1 }
   },
   "fuels": ["coal", "coke"],
+  "ruleItems": ["steam", "water_drum", "link"],
+  "kinds": { "water": "liquid", "steam": "gas" },
+  "drum": { "empty": "iron_drum", "liters": 100, "fills": { "water": "water_drum" } },
   "machines": {
     "warehouse": { "name": "창고", "cost": { "iron": 10 }, "work": 25 },
     "brick_kiln": { "name": "벽돌 가마", "cost": { "clay": 10 }, "work": 20 },
@@ -40,6 +43,7 @@
 
     "spring_motor": { "name": "태엽 동력기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
 
+    "riverbank": { "name": "강가" },
     "steam_engine": { "name": "증기기관", "powerOut": 10, "cost": { "steam_engine_unit": 1 }, "work": 30 },
     "steam_manifold": { "name": "증기 배분기", "fixedPorts": 6, "cost": { "copper_tube": 6, "iron_plate": 2 } },
     "item_splitter": { "name": "재료 분배기", "fixedPorts": 6, "cost": { "iron_plate": 4, "copper_tube": 2 } },
@@ -64,7 +68,8 @@
   "recipeTemplates": [
     { "form": "plate", "machine": "plate_hammer", "time": 4, "in": 2, "out": 1, "metals": ["iron", "copper"] },
     { "form": "tube", "machine": "forming_bench", "time": 4, "in": 1, "out": 2, "metals": ["iron", "copper"] },
-    { "form": "cylinder", "machine": "forming_bench", "time": 12, "in": 4, "out": 1, "metals": ["iron", "copper"] }
+    { "form": "cylinder", "machine": "forming_bench", "time": 12, "in": 4, "out": 1, "metals": ["iron", "copper"] },
+    { "form": "drum", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
     { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2, "coal": 1 }, "out": { "brick": 2 } },

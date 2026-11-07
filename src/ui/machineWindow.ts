@@ -1,7 +1,7 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
-import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE } from "../content";
+import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, PUMP, RIVERBANK, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, STEAM_MAX, canRemove, expectedOutput, lacksPower, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canRemove, engineLoad, expectedOutput, lacksPower, outputCap, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -12,7 +12,7 @@ const STATE_LABEL: Record<string, string> = { run: "가동 중", idle: "재료 �
 /** A recipe side in role words. The tooltip names the real item. */
 const parts = (list: Record<string, number>, role: (id: string, index: number) => string): string =>
   Object.entries(list)
-    .map(([id, n], i) => `<span data-tip="${itemName(id)}">${role(id, i)}</span> ${n}`)
+    .map(([id, n], i) => `<span data-tip="${itemName(id)}">${role(id, i)}</span> ${n}${unitOf(id)}`)
     .join(" + ");
 const HIT_MS = 140;
 
@@ -175,7 +175,7 @@ export class MachineWindow {
     this.nodeId = id;
     this.title.textContent = machineName(node.type);
     this.resetDemolish();
-    this.demolish.hidden = isFirstWarehouse(this.game(), node);
+    this.demolish.hidden = isFirstWarehouse(this.game(), node) || node.type === RIVERBANK;
     this.sort.hidden = true;
     this.buildForms(node);
     this.top.replaceChildren();
@@ -186,6 +186,7 @@ export class MachineWindow {
     this.stored = [];
     delete this.art.root.dataset.scene;
     if (node.type === WAREHOUSE) this.buildWarehouse(node);
+    else if (node.type === RIVERBANK) this.top.className = "machine";
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
     this.root.hidden = false;
@@ -322,6 +323,16 @@ export class MachineWindow {
     this.demolish.disabled = !canRemove(s, node);
     this.demolish.dataset.tip = this.demolish.disabled ? "창고를 비워야 철거할 수 있습니다" : "";
     this.recipe.hidden = node.type === WAREHOUSE;
+    if (node.type === RIVERBANK) {
+      const site = s.sites[node.siteId!];
+      const line = `비축 ${site.left}/${site.total}L<span class="card-note">강가 펌프로 선을 이어야 쓸 수 있습니다</span>`;
+      if (this.recipe.dataset.line !== line) {
+        this.recipe.dataset.line = line;
+        this.recipe.innerHTML = line;
+      }
+      this.bar.textContent = "";
+      return;
+    }
     if (node.type === MOTOR) {
       const winding = performance.now() - this.hitAt < HIT_MS;
       const scene = `motor|${winding ? frame >> 1 : ""}`;
@@ -347,12 +358,16 @@ export class MachineWindow {
     const state = status(node);
     const current = recipeOf(node);
     const hand = machineManual(node.type) === "keys" ? "키를 누르세요" : "그림을 클릭하세요";
-    const stateText = state === "manual" ? hand : lacksPower(node) ? "동력 없음" : STATE_LABEL[state];
+    const unlinked = node.type === PUMP && !riverOf(s, node);
+    const stateText = unlinked ? "강가 미연결" : state === "manual" ? hand : lacksPower(node) ? "동력 없음" : STATE_LABEL[state];
     const level = machineManual(node.type) ? `<span class="card-note">난이도 ${machineDifficulty(node.type)}</span>` : "";
-    const river = s.sites[node.siteId ?? -1];
-    const reserve = river ? `<span class="card-note">강가 ${river.left}/${river.total}</span>` : "";
-    const result = parts(current.out, (_, i) => outputRole(i)) || (node.type === ENGINE ? `증기 ${Math.floor(node.energy)}/${STEAM_MAX}` : "폐기");
-    const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}<span class="state ${state}">${stateText}</span>`;
+    const river = node.type === PUMP ? riverOf(s, node) : undefined;
+    const reserve = river ? `<span class="card-note">강가 ${river.code} ${river.left}/${river.total}L</span>` : "";
+    const result = parts(current.out, (_, i) => outputRole(i)) || (node.type === ENGINE ? `St 증기 ${Math.floor(node.energy)}/${STEAM_MAX}` : "폐기");
+    const load = node.type === ENGINE ? engineLoad(s, node) : null;
+    const use = load ? `<span class="card-note">동력 ${load.now}/${load.limit} · 연결 ${load.connected}</span>`
+      : machinePower(node.type) ? `<span class="card-note">동력 ${machinePower(node.type)}</span>` : "";
+    const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}${use}<span class="state ${state}">${stateText}</span>`;
     if (this.recipe.dataset.line !== line) {
       this.recipe.dataset.line = line;
       this.recipe.innerHTML = line;
@@ -366,7 +381,7 @@ export class MachineWindow {
       const item = held.find((id) => node.outs[id] > 0);
       const n = item ? node.outs[item] : 0;
       const role = i > 0 ? "byproduct" : "";
-      paintSlot(b, item ? { id: item, n } : null, `${role} ${n >= OUTPUT_CAP ? "full" : ""}`, item ? undefined : expected[i], { name: outputRole(i), fits: held });
+      paintSlot(b, item ? { id: item, n } : null, `${role} ${item && n >= outputCap(item) ? "full" : ""}`, item ? undefined : expected[i], { name: outputRole(i), fits: held });
     });
     const waiting = state === "manual";
     const manual = machineManual(node.type);

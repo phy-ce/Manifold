@@ -47,7 +47,7 @@ function buildVein(site: Site): Vein {
 }
 
 const siteName = (s: GameState, site: Site): string =>
-  site.ore === WATER ? "강가" : itemName(site.ore) + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
+  site.ore === WATER ? `강가 ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
 
 export class MapView {
   readonly root = document.createElement("section");
@@ -279,7 +279,7 @@ export class MapView {
     const fill = Math.round((site.left / site.total) * 14);
     this.head.innerHTML = `<span style="color:${color}">${itemCode(site.ore)}</span><span>${siteName(s, site)}</span>` +
       `<span class="push">[${"#".repeat(fill).padEnd(14, ".")}] ${site.left}/${site.total}</span>` +
-      (site.ore === WATER ? `<span class="short">기지에서 강가 펌프로 끌어옵니다</span>`
+      (site.ore === WATER ? `<span class="short">기지에서 강가 펌프로 선을 이어 끌어옵니다</span>`
         : open ? "" : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}에만 수확</span>`);
   }
 }

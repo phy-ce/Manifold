@@ -1,7 +1,7 @@
 // Item index: search every known item and see how it is made and what it is used for.
 // It docks beside the game so it can stay open next to a machine window.
 import {
-  Recipe, buildUses, familyMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
+  Recipe, machinePower, buildUses, familyMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
 } from "../content";
 import { GameState, bagHolds, countOf, fillFromBag, nodeById, runsRecipe } from "../engine/game";
 import { makeSlot, paintSlot } from "./slots";
@@ -134,7 +134,8 @@ export class ItemIndex {
     const hand = manual === "keys" ? " · 키 입력" : manual === "click" ? " · 클릭" : "";
     const note = document.createElement("div");
     note.className = "card-note";
-    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}초${hand}`;
+    const power = machinePower(recipe.machine) ? ` · 동력 ${machinePower(recipe.machine)}` : "";
+    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}초${hand}${power}`;
     const fill = this.fillButton(recipe);
     if (fill) row.append(fill);
     card.append(row, note);

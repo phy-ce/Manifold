@@ -19,6 +19,8 @@ export interface Site extends Point {
   total: number;
   left: number;
   seed: number;
+  /** Three letters and digits, for a riverbank once it is found. */
+  code?: string;
 }
 
 export function rngFrom(seed: number): () => number {

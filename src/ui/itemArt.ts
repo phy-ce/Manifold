@@ -8,12 +8,13 @@ import { GLYPH, SIZE, charGrid } from "./theme";
 
 const SHAPE_OF: Record<string, string> = {
   water: "water",
+  water_drum: "water_drum",
   brick: "brick",
   iron: "ingot", copper: "ingot", boiler: "boiler", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
 };
 
-const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder"]);
+const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "drum"]);
 
 interface Lump {
   /** Gives each lump its own outline. */

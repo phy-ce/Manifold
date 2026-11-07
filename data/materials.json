@@ -6,6 +6,7 @@
   "forms": {
     "plate": { "name": "판", "label": "판", "code": "p", "weight": 2 },
     "tube": { "name": "관", "label": "관", "code": "t", "weight": 0.5 },
-    "cylinder": { "name": " 실린더", "label": "실린더", "code": "c", "weight": 4 }
+    "cylinder": { "name": " 실린더", "label": "실린더", "code": "c", "weight": 4 },
+    "drum": { "name": " 드럼통", "label": "드럼통", "code": "d", "weight": 1.5 }
   }
 }

@@ -1,6 +1,6 @@
 // Route settings between two nodes. Without a filter a route only has broad channels:
 // a warehouse sends whatever it holds, and a machine sends its main output or by-products.
-import { MAX_PORTS, isPowerSource, itemCode, itemColor, itemName } from "../content";
+import { MAX_PORTS, RIVERBANK, isPowerSource, itemCode, itemColor, itemName } from "../content";
 import { GameState, canAffordRoute, hasDrive, nodeById, nodeLabel, portsUsed, routeCost, routeMaterials, toggleRoute } from "../engine/game";
 
 export class RouteWindow {
@@ -80,7 +80,7 @@ export class RouteWindow {
     this.drawn = key;
 
     this.route.textContent = `${nodeLabel(s, from)} > ${nodeLabel(s, to)}`;
-    this.drive.textContent = isPowerSource(from.type) || hasDrive(s, from.id) ? "" : "보내는 쪽에 동력이 없어 멈춰 있습니다";
+    this.drive.textContent = isPowerSource(from.type) || from.type === RIVERBANK || hasDrive(s, from.id) ? "" : "보내는 쪽에 동력이 없어 멈춰 있습니다";
     this.ports.textContent = `포트 ${portsUsed(s, from.id)}/${MAX_PORTS} > ${portsUsed(s, to.id)}/${MAX_PORTS} · 연결 비용: ${cost}`;
     this.ports.classList.toggle("short", !afford);
     this.list.replaceChildren(...channels.map((id) => {

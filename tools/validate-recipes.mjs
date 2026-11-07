@@ -188,7 +188,7 @@ for (const milestone of milestones) {
 for (const id of Object.keys(items)) {
   const used = recipes.some((r) => r.in[id]) || Object.values(machines).some((m) => m.cost?.[id]);
   const isGoal = milestones.some((m) => m.goal.item === id);
-  if (!used && !isGoal && !variants[id] && !data.food?.[id] && !data.stockpiled?.includes(id) && !["power", "all", "main", "byproduct"].includes(id)) errors.push(`쓰이지 않는 재료: ${name(id)}`);
+  if (!used && !isGoal && !variants[id] && !data.food?.[id] && !data.stockpiled?.includes(id) && !data.ruleItems?.includes(id) && !["power", "all", "main", "byproduct"].includes(id)) errors.push(`쓰이지 않는 재료: ${name(id)}`);
 }
 
 for (const { milestone, counts, raw, surplus, power, needsFlange } of report) {

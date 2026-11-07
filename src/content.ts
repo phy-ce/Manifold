@@ -64,6 +64,18 @@ export const MOTOR = "spring_motor";
 export const ENGINE = "steam_engine";
 export const PUMP = "drainage_pump";
 export const WATER = "water";
+/** A riverbank in the base graph. It only exists to be linked to a pump. */
+export const RIVERBANK = "riverbank";
+/** What a line from a riverbank to a pump carries. Not an item: it says where the pump draws. */
+export const LINK = "link";
+/** The empty drum, what it holds, and the full item for each fluid. */
+export const DRUM: { empty: string; liters: number; fills: Record<string, string> } = era.drum;
+const kinds: Record<string, string> = era.kinds;
+/** Liquids and gases can't be carried by hand, only along lines or in a container. */
+export const isFluid = (id: string): boolean => id in kinds;
+export const kindOf = (id: string): string => kinds[id] ?? "item";
+/** The unit shown after an amount. */
+export const unitOf = (id: string): string => (kinds[id] === "liquid" ? "L" : "");
 /** How much a riverbank holds, and how often it gains 1 back. */
 export const RIVER: { reserve: number; regenMs: number } = oreData.river;
 /** What a power line carries. Not an item: it drives other lines. */
@@ -231,6 +243,7 @@ export function indexItems(stage = 0): string[] {
       if (!familyMembers(id).length) seen.add(id);
     }
   }
+  if (seen.has(WATER)) Object.values(DRUM.fills).forEach((id) => seen.add(id));
   return [...seen];
 }
 
@@ -248,5 +261,6 @@ export function itemSource(id: string): string | null {
   if (SURFACE_ORES.includes(id)) return "지도의 광맥에서 캡니다";
   if (FORAGE.includes(id)) return "지도에서 채집합니다";
   if (id === WATER) return "강가에서 펌프로 끌어옵니다";
+  if (Object.values(DRUM.fills).includes(id)) return "빈 드럼통을 들고 펌프의 출력을 눌러 채웁니다";
   return null;
 }

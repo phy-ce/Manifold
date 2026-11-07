@@ -1,6 +1,7 @@
 // Base screen: machines as nodes, lines drawn between them.
-import { MAX_PORTS, machinesAt, MOTOR, WAREHOUSE, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, MAX_PORTS, machinesAt, MOTOR, RIVERBANK, WAREHOUSE, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
+  engineLoad,
   GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
@@ -204,10 +205,20 @@ export class GraphView {
   private nodeHtml(s: GameState, node: GameNode): string {
     const used = portsUsed(s, node.id);
     const ports = "●".repeat(used) + "○".repeat(MAX_PORTS - used);
-    const tag = (id: string, n: number) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span>${n}`;
+    const tag = (id: string, n: number) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span>${n}${unitOf(id)}`;
     if (node.type === WAREHOUSE) {
       const kinds = node.store.filter(Boolean).map((x) => tag(x!.id, x!.n)).slice(0, 4).join(" ");
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${kinds || "·"}</span>`;
+    }
+    if (node.type === RIVERBANK) {
+      const site = s.sites[node.siteId!];
+      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tag(site.ore, site.left)}/${site.total}L</span>`;
+    }
+    if (node.type === ENGINE) {
+      const load = engineLoad(s, node);
+      const fuel = nodeProcess(node).slots.map(({ key }) => tag(node.ins[key]?.id ?? key, node.ins[key]?.n ?? 0)).join(" ");
+      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${fuel}</span>` +
+        `<span class="flow">동력 ${load.now}/${load.limit} · 연결 ${load.connected}</span>`;
     }
     if (node.type === MOTOR) {
       const wound = Math.round((node.energy / SPRING_MAX) * 14);
@@ -336,7 +347,7 @@ export class GraphView {
         this.rosterList.append(b);
       }
       const state = status(node);
-      const label = node.type === WAREHOUSE ? nodeLabel(s, node)
+      const label = node.type === WAREHOUSE || node.type === RIVERBANK ? nodeLabel(s, node)
         : node.type === MOTOR ? `${nodeLabel(s, node)} · 힘 ${Math.floor(node.energy)}`
         : `${nodeLabel(s, node)} · ${STATUS_LABEL[state]}`;
       if (b.textContent !== label) b.textContent = label;
