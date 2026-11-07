@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, addTo, createTestGame, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, deliver, mine, moveToNode, nodeById,
+  GameState, addTo, createTestGame, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, deliver, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, regionId, terrain } from "./world";
@@ -864,6 +864,16 @@ describe("spring power", () => {
     motor.energy = 1;
     run(s, 5);
     expect(furnace.ins.coal).toEqual({ id: "Lg", n: 1 });
+    expect(motor.energy).toBe(0);
+  });
+
+  it("runs down by itself over time, but never below empty", () => {
+    const s = createGame(1);
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = 2;
+    run(s, SPRING_LEAK_MS / 1000);
+    expect(motor.energy).toBe(1);
+    run(s, (SPRING_LEAK_MS / 1000) * 3);
     expect(motor.energy).toBe(0);
   });
 

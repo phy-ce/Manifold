@@ -6,6 +6,8 @@ export const SAVE_VERSION = 13;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
 export const SPRING_MAX = 200;
 export const WIND = 5;
+/** A wound spring slowly runs down by itself, losing 1 force this often. */
+export const SPRING_LEAK_MS = 10_000;
 export const STACK = 64;
 export const INV_SLOTS = 8;
 /** The most the player can carry and still walk. */
@@ -652,6 +654,12 @@ export function hasDrive(s: GameState, nodeId: number): boolean {
   return s.lines.some((l) => l.to === nodeId && l.material === POWER && (nodeById(s, l.from)?.energy ?? 0) > 0);
 }
 
+function leakSprings(s: GameState): void {
+  for (const node of s.nodes) {
+    if (node.type === MOTOR) node.energy = Math.max(0, node.energy - 1);
+  }
+}
+
 /** Lines are only passages: something at the sending end has to push. */
 function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives: Map<number, GameNode[]>): void {
   if (line.material === POWER) return;
@@ -942,6 +950,7 @@ export function step(s: GameState): void {
   walk(s);
   survive(s);
   turnSeason(s);
+  if (s.time % SPRING_LEAK_MS === 0) leakSprings(s);
   s.nodes.forEach(runMachine);
   // Least recently served first, so lines leaving one machine share its output evenly.
   const nodes = new Map(s.nodes.map((n) => [n.id, n]));
