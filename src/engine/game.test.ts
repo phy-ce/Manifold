@@ -72,7 +72,7 @@ describe("world", () => {
     expect(generateSites(7)).not.toEqual(generateSites(8));
   });
 
-  it("always holds enough surface ore to finish S1", () => {
+  it("always holds enough surface ore to finish S1-1", () => {
     const need: Record<string, number> = { Lm: 56, Lg: 36, Ml: 8, Kn: 8 };
     for (let seed = 1; seed <= 300; seed += 1) {
       const sites = generateSites(seed);
@@ -143,7 +143,7 @@ describe("endless map", () => {
 });
 
 describe("rules", () => {
-  it("has a recipe for every S1 machine", () => {
+  it("has a recipe for every S1-1 machine", () => {
     for (const type of MACHINE_TYPES.filter((t) => t !== WAREHOUSE && t !== MOTOR)) {
       expect(processOf(type, machineForms(type)[0] ?? "").recipes.length).toBeGreaterThan(0);
     }
@@ -1293,7 +1293,7 @@ describe("building", () => {
   });
 });
 
-describe("S1 playthrough", () => {
+describe("S1-1 playthrough", () => {
   it("builds a steam engine from nothing but clicks and lines", () => {
     const s = createGame(2026);
     gather(s, "iron_ore", 100);
@@ -1341,6 +1341,6 @@ describe("S1 playthrough", () => {
     expect(takeOutput(s, engine, "steam_engine_unit")).toBe(true);
     expect(deliver(s)).toBe(true);
     expect(s.won).toBe(true);
-    console.log(`S1 line finished at ${Math.round(s.time / 1000)}s of game time`);
+    console.log(`S1-1 line finished at ${Math.round(s.time / 1000)}s of game time`);
   });
 });

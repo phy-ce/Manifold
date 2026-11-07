@@ -98,31 +98,31 @@
   ],
   "milestones": [
     {
-      "id": "S1", "name": "증기기관 + 구리 배관",
+      "id": "S1-1", "name": "증기기관 + 구리 배관",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "Be", "Mu"],
       "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor"],
       "goal": { "item": "steam_engine_unit", "amount": 1, "perMinute": 0.2 }
     },
     {
-      "id": "S2", "name": "증기 동력 보급",
+      "id": "S1-2", "name": "증기 동력 보급",
       "unlockSources": ["water"],
       "unlockMachines": ["steam_engine", "steam_manifold", "item_splitter", "drainage_pump", "steam_hammer"],
       "goal": { "item": "iron_plate", "amount": 120, "perMinute": 30 }
     },
     {
-      "id": "S3", "name": "코크스와 고로",
+      "id": "S1-3", "name": "코크스와 고로",
       "unlockSources": ["limestone"],
       "unlockMachines": ["coke_oven", "blast_furnace", "converter", "tar_tank"],
       "goal": { "item": "steel", "amount": 100, "perMinute": 20 }
     },
     {
-      "id": "S4", "name": "증기 공작기계",
+      "id": "S1-4", "name": "증기 공작기계",
       "unlockSources": [],
       "unlockMachines": ["rolling_mill", "lathe", "gear_cutter", "wire_drawer"],
       "goal": { "item": "port_flange", "amount": 6, "perMinute": 2 }
     },
     {
-      "id": "S5", "name": "증기 발전기",
+      "id": "S1-5", "name": "증기 발전기",
       "unlockSources": [],
       "unlockMachines": ["tar_still", "coil_winder", "core_press", "generator_bench"],
       "goal": { "item": "steam_generator", "amount": 3, "perMinute": 0.5 }

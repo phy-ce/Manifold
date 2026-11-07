@@ -275,7 +275,7 @@ invBox.append(invTools, invGrid);
 const win = document.createElement("div");
 win.className = "win";
 win.hidden = true;
-win.innerHTML = `<div class="window"><h2>S1 완료</h2><p>첫 증기기관을 납품했습니다.</p></div>`;
+win.innerHTML = `<div class="window"><h2>S1-1 완료</h2><p>첫 증기기관을 납품했습니다.</p></div>`;
 const keepPlaying = document.createElement("button");
 keepPlaying.type = "button";
 keepPlaying.className = "tech";
