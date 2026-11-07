@@ -2211,13 +2211,24 @@ describe("S1-3", () => {
     const a = placeMachine(s, "brick_kiln", 0, 0)!;
     const b = placeMachine(s, "brick_kiln", 0, 0)!;
     connect(s, motor.id, store.id, POWER);
-    connect(s, motor.id, splitter.id, POWER);
     expect(connect(s, store.id, splitter.id, "all")).toBeTruthy();
     connect(s, splitter.id, a.id, "all");
     connect(s, splitter.id, b.id, "all");
     run(s, 6);
     expect(a.ins.coal?.n).toBe(2);
     expect(b.ins.coal?.n).toBe(2);
+  });
+
+  it("passes items on without power of its own, and uses none", () => {
+    const { s, motor } = stage3();
+    const splitter = placeMachine(s, "item_splitter", 0, 0)!;
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    splitter.store[0] = { id: "Lg", n: 2 };
+    connect(s, splitter.id, kiln.id, "all");
+    motor.energy = 0;
+    run(s, 2);
+    expect(kiln.ins.coal?.n).toBe(2);
+    expect(splitter.store[0]).toBeNull();
   });
 });
 

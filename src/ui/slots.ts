@@ -1,4 +1,5 @@
 // Inventory-style slot buttons, updated in place so clicks are never lost to a redraw.
+import { tr } from "../i18n";
 import { foodEffect, isFluid, itemCode, itemColor, itemName, unitOf } from "../content";
 import { Stack } from "../engine/game";
 import { itemIcon } from "./itemArt";
@@ -52,9 +53,9 @@ export function paintSlot(b: HTMLButtonElement, stack: Stack | null, extra = "",
   const roleTip = names ? `${role!.name}: ${names}` : role?.name ?? "";
   b.className = `slot ${stack ? "" : "empty"} ${!stack && ghost ? "ghost" : ""} ${extra}`;
   b.innerHTML = shown ? face(shown, stack ? `<span class="n">${stack.n}${unitOf(stack.id)}</span>` : "") : role ? `<span class="role">${role.name}</span>` : "·";
-  const eatHint = stack && b.dataset.inv !== undefined && foodEffect(stack.id) ? " (E: 먹기)" : stack && isFluid(stack.id) ? " (용기로만 옮길 수 있음)" : "";
+  const eatHint = stack && b.dataset.inv !== undefined && foodEffect(stack.id) ? tr(" (E: 먹기)") : stack && isFluid(stack.id) ? tr(" (용기로만 옮길 수 있음)") : "";
   b.dataset.tip = shown ? itemName(shown) + eatHint : roleTip;
   b.dataset.item = shown ?? "";
-  const label = stack ? `${itemName(stack.id)} ${stack.n}개` : ghost ? `${itemName(ghost)} 칸, 비어 있음` : role ? `${roleTip} 칸, 비어 있음` : "빈 칸";
+  const label = stack ? `${itemName(stack.id)} ${stack.n}${tr("개")}` : ghost ? `${itemName(ghost)} ${tr("칸, 비어 있음")}` : role ? `${roleTip} ${tr("칸, 비어 있음")}` : tr("빈 칸");
   b.setAttribute("aria-label", label);
 }

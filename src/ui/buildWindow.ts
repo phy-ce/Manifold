@@ -1,4 +1,5 @@
 // Build window: shows what a facility needs, then the player works it into existence.
+import { tr } from "../i18n";
 import { machineCost, machineName, machineWork } from "../content";
 import { GameState, addGhost, canAfford, cancelProject, countOf, installMachine, nextSpot, startProject, workProject } from "../engine/game";
 import { COLS, renderArt } from "./art";
@@ -30,7 +31,7 @@ export class BuildWindow {
     close.type = "button";
     close.className = "tech push";
     close.textContent = "x";
-    close.setAttribute("aria-label", "닫기");
+    close.setAttribute("aria-label", tr("닫기"));
     close.addEventListener("click", () => this.close());
     head.append(this.title, close);
 
@@ -38,7 +39,7 @@ export class BuildWindow {
     this.amount.className = "amount";
     this.work.type = "button";
     this.work.className = "work";
-    this.work.setAttribute("aria-label", "건설 작업");
+    this.work.setAttribute("aria-label", tr("건설 작업"));
     this.art.className = "art";
     this.work.append(this.art);
     this.work.addEventListener("click", () => {
@@ -49,14 +50,14 @@ export class BuildWindow {
 
     this.start.type = "button";
     this.start.className = "tech";
-    this.start.textContent = "착수";
+    this.start.textContent = tr("착수");
     this.start.addEventListener("click", () => {
       if (this.type) startProject(this.game(), this.type);
       this.changed();
     });
     this.cancel.type = "button";
     this.cancel.className = "tech";
-    this.cancel.textContent = "착수 취소";
+    this.cancel.textContent = tr("착수 취소");
     this.cancel.addEventListener("click", () => {
       cancelProject(this.game());
       this.changed();
@@ -71,8 +72,8 @@ export class BuildWindow {
     });
     this.plan.type = "button";
     this.plan.className = "tech";
-    this.plan.textContent = "청사진";
-    this.plan.dataset.tip = "기계 없이 자리만 잡아 둡니다";
+    this.plan.textContent = tr("청사진");
+    this.plan.dataset.tip = tr("기계 없이 자리만 잡아 둡니다");
     this.plan.addEventListener("click", () => {
       const s = this.game();
       const at = nextSpot(s);
@@ -135,13 +136,13 @@ export class BuildWindow {
     const total = machineWork(this.type);
     const done = mine?.done ?? 0;
     const fill = Math.round((done / total) * 18);
-    this.amount.textContent = `착수량 [${"#".repeat(fill).padEnd(18, ".")}] ${done}/${total}`;
+    this.amount.textContent = `${tr("착수량")} [${"#".repeat(fill).padEnd(18, ".")}] ${done}/${total}`;
     this.work.disabled = !mine;
     this.cancel.hidden = !mine;
     this.start.hidden = !!mine;
     this.start.disabled = !!s.project || !canAfford(s, this.type);
     const owned = countOf(s, this.type);
-    const label = `설치 (보유 ${owned})`;
+    const label = `${tr("설치 (보유")} ${owned})`;
     if (this.install.textContent !== label) this.install.textContent = label;
     this.install.disabled = owned < 1;
 

@@ -1,4 +1,5 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
+import { tr } from "../i18n";
 import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MANIFOLD, MAX_PORTS, MOTOR, PLAYABLE_STAGES, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, SURFACE_ORES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, riverBanks, safePath, terrain } from "./world";
 
@@ -26,7 +27,7 @@ export const TANK_CAP = 200;
 export const REVEAL = 4;
 export const BASE_REVEAL = 9;
 
-export const SEASON_NAMES = ["봄", "여름", "가을", "겨울"];
+export const SEASON_NAMES = [tr("봄"), tr("여름"), tr("가을"), tr("겨울")];
 export const SEASON_MS = 240000;
 
 export const MAX_VITAL = 100;
@@ -1161,13 +1162,15 @@ function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives:
   if (line.timer < LINE_MS) return;
   line.timer = 0;
   line.active = false;
-  const motor = drives.get(line.from)?.find((m) => m.energy > 0);
-  if (!motor) return;
   const from = nodes.get(line.from)!;
   const to = nodes.get(line.to)!;
+  // A splitter just lets things through, so what leaves it needs no power.
+  const free = from.type === SPLITTER;
+  const motor = drives.get(line.from)?.find((m) => m.energy > 0);
+  if (!motor && !free) return;
   const moved = isStore(from.type) ? sendStored(from, to) : sendOutput(from, to, line);
   if (!moved) return;
-  motor.energy -= 1;
+  if (!free) motor!.energy -= 1;
   line.active = true;
   line.lastMoved = s.time;
 }

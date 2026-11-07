@@ -1,3 +1,4 @@
+import { tr, restart } from "./i18n";
 import "./style.css";
 import { PLAYABLE_STAGES, STAGES, itemCode, itemColor, itemName } from "./content";
 import { GameState, MAX_CARRY, MAX_VITAL, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkTo, wheelStack } from "./engine/game";
@@ -60,17 +61,17 @@ travel.className = "tech";
 const reset = document.createElement("button");
 reset.type = "button";
 reset.className = "tech push";
-reset.textContent = "새 게임";
+reset.textContent = tr("새 게임");
 const vitals = document.createElement("div");
 vitals.className = "vitals";
 const indexButton = document.createElement("button");
 indexButton.type = "button";
 indexButton.className = "tech";
-indexButton.textContent = "도감";
+indexButton.textContent = tr("도감");
 const saveButton = document.createElement("button");
 saveButton.type = "button";
 saveButton.className = "tech";
-saveButton.textContent = "저장";
+saveButton.textContent = tr("저장");
 
 // Game speed: 0 pauses.
 const SPEEDS: [string, number][] = [["||", 0], ["1x", 1], ["2x", 2], ["4x", 4]];
@@ -82,7 +83,7 @@ const speedButtons = SPEEDS.map(([label, value]) => {
   b.type = "button";
   b.className = `tech ${value === speed ? "selected" : ""}`;
   b.textContent = label;
-  b.setAttribute("aria-label", value ? `${value}배속` : "일시정지");
+  b.setAttribute("aria-label", value ? `${value}${tr("배속")}` : tr("일시정지"));
   b.addEventListener("click", () => {
     speed = value;
     speedButtons.forEach((other, i) => other.classList.toggle("selected", SPEEDS[i][1] === speed));
@@ -93,29 +94,29 @@ speedBar.append(...speedButtons);
 const testStart = document.createElement("button");
 testStart.type = "button";
 testStart.className = "tech";
-testStart.textContent = "테스트 시작";
-testStart.dataset.tip = "지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다";
+testStart.textContent = tr("테스트 시작");
+testStart.dataset.tip = tr("지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다");
 testStart.addEventListener("click", () => {
   if (testStart.dataset.armed !== "1") {
     testStart.dataset.armed = "1";
-    testStart.textContent = "정말 초기화?";
+    testStart.textContent = tr("정말 초기화?");
     setTimeout(() => {
       testStart.dataset.armed = "";
-      testStart.textContent = "테스트 시작";
+      testStart.textContent = tr("테스트 시작");
     }, 3000);
     return;
   }
   state = createTestGame(Math.floor(Math.random() * 100000));
   save();
-  location.reload();
+  restart();
 });
 const help = new HelpWindow();
 const helpButton = document.createElement("button");
 helpButton.type = "button";
 helpButton.className = "tech";
 helpButton.textContent = "?";
-helpButton.dataset.tip = "조작 도움말 (단축키 ?)";
-helpButton.setAttribute("aria-label", "조작 도움말");
+helpButton.dataset.tip = tr("조작 도움말 (단축키 ?)");
+helpButton.setAttribute("aria-label", tr("조작 도움말"));
 helpButton.addEventListener("click", () => help.toggle(true));
 top.append(goal, vitals, travel, indexButton, speedBar, saveButton, helpButton, testStart, reset);
 
@@ -169,7 +170,7 @@ const saveView = new SaveWindow(game, (loaded) => {
     saving = true;
     return;
   }
-  location.reload();
+  restart();
 });
 saveButton.addEventListener("click", () => {
   closeWindows();
@@ -208,8 +209,8 @@ const map = new MapView(game, () => {
 
 const itemIndex = new ItemIndex(game, () => windowView.openNode, redraw);
 indexButton.addEventListener("click", () => itemIndex.toggle());
-indexButton.dataset.tip = "단축키 G";
-travel.dataset.tip = "단축키 M";
+indexButton.dataset.tip = tr("단축키 G");
+travel.dataset.tip = tr("단축키 M");
 // Physical keys, so these still work while the keyboard is set to Korean.
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
@@ -226,7 +227,7 @@ window.addEventListener("keydown", (e) => {
 
 const invBox = document.createElement("section");
 invBox.className = "box";
-invBox.setAttribute("aria-label", "인벤토리");
+invBox.setAttribute("aria-label", tr("인벤토리"));
 const invGrid = document.createElement("div");
 invGrid.className = "slot-grid wide";
 const invSlots = state.inv.map((_, i) => {
@@ -250,7 +251,7 @@ const invSlots = state.inv.map((_, i) => {
 const sortButton = document.createElement("button");
 sortButton.type = "button";
 sortButton.className = "tech";
-sortButton.textContent = "정렬";
+sortButton.textContent = tr("정렬");
 sortButton.addEventListener("click", () => {
   sortSlots(state.inv);
   redraw();
@@ -258,8 +259,8 @@ sortButton.addEventListener("click", () => {
 const trashButton = document.createElement("button");
 trashButton.type = "button";
 trashButton.className = "tech demolish";
-trashButton.textContent = "버리기";
-trashButton.dataset.tip = "들고 있는 아이템을 버립니다";
+trashButton.textContent = tr("버리기");
+trashButton.dataset.tip = tr("들고 있는 아이템을 버립니다");
 trashButton.addEventListener("click", () => {
   trashCursor(state);
   redraw();
@@ -301,7 +302,7 @@ win.innerHTML = `<div class="window"><h2></h2><p></p></div>`;
 const keepPlaying = document.createElement("button");
 keepPlaying.type = "button";
 keepPlaying.className = "tech";
-keepPlaying.textContent = "계속하기";
+keepPlaying.textContent = tr("계속하기");
 keepPlaying.addEventListener("click", () => {
   state.announced = null;
   redraw();
@@ -319,20 +320,20 @@ travel.addEventListener("click", () => {
 reset.addEventListener("click", () => {
   if (reset.dataset.armed !== "1") {
     reset.dataset.armed = "1";
-    reset.textContent = "정말 초기화?";
+    reset.textContent = tr("정말 초기화?");
     setTimeout(() => {
       reset.dataset.armed = "";
-      reset.textContent = "새 게임";
+      reset.textContent = tr("새 게임");
     }, 3000);
     return;
   }
   state = createGame(Math.floor(Math.random() * 100000));
   screen = "base";
   reset.dataset.armed = "";
-  reset.textContent = "새 게임";
+  reset.textContent = tr("새 게임");
   windowView.close();
   save();
-  location.reload();
+  restart();
 });
 
 function redraw(): void {
@@ -345,7 +346,7 @@ function redraw(): void {
   graph.root.hidden = !showBase;
   map.root.hidden = showBase;
 
-  const place = home ? (screen === "base" ? "지도" : "기지로") : "기지로 복귀";
+  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;
   const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
   const { item, amount } = stage.goal;
@@ -355,14 +356,14 @@ function redraw(): void {
     goal.dataset.key = target;
     const shown = Math.min(made, amount);
     const fill = Math.round((shown / amount) * GOAL_BAR);
-    goal.innerHTML = `<span class="goal-tag">목표</span><span class="goal-stage">${stage.id} ${stage.name}</span>` +
+    goal.innerHTML = `<span class="goal-tag">${tr("목표")}</span><span class="goal-stage">${stage.id} ${stage.name}</span>` +
       `<span class="goal-item"><span style="color:${itemColor(item)}">${itemName(item)}</span> ${shown}/${amount}</span>` +
       `<span class="goal-bar">[${"#".repeat(fill).padEnd(GOAL_BAR, ".")}]</span>`;
   }
   const seasonLeft = Math.ceil((SEASON_MS - (state.time % SEASON_MS)) / 1000);
   const clock = `${Math.floor(seasonLeft / 60)}:${String(seasonLeft % 60).padStart(2, "0")}`;
-  const shown = `<span class="meter">${yearAt(state.time)}년차 ${SEASON_NAMES[state.season]} ${clock}</span>${isWeak(state) ? `<span class="meter low">쇠약 ${Math.ceil((state.weakUntil - state.time) / 1000)}초</span>` : ""}` + meter("체력", state.hp) + meter("허기", state.hunger) +
-    `<span class="meter${overloaded(state) ? " low" : ""}">무게 ${carried(state)}/${MAX_CARRY}${overloaded(state) ? " 초과, 이동 불가" : ""}</span>`;
+  const shown = `<span class="meter">${yearAt(state.time)}${tr("년차")} ${SEASON_NAMES[state.season]} ${clock}</span>${isWeak(state) ? `<span class="meter low">${tr("쇠약")} ${Math.ceil((state.weakUntil - state.time) / 1000)}${tr("초")}</span>` : ""}` + meter(tr("체력"), state.hp) + meter(tr("허기"), state.hunger) +
+    `<span class="meter${overloaded(state) ? " low" : ""}">${tr("무게")} ${carried(state)}/${MAX_CARRY}${overloaded(state) ? tr(" 초과, 이동 불가") : ""}</span>`;
   if (vitals.innerHTML !== shown) vitals.innerHTML = shown;
   // A collapse jumps health back up, so it counts as a hit even though the number rises.
   if (state.hp < lastHp) showHurt(lastHp - state.hp);
@@ -370,7 +371,7 @@ function redraw(): void {
   lastHp = state.hp;
   if (state.lost) {
     const items = state.lost.map((s) => `${itemCode(s.id)} -${s.n}`).join(", ");
-    notice.textContent = items ? `쓰러졌습니다. 잃은 재료: ${items}` : "쓰러졌습니다.";
+    notice.textContent = items ? `${tr("쓰러졌습니다. 잃은 재료:")} ${items}` : tr("쓰러졌습니다.");
     notice.hidden = false;
     noticeUntil = performance.now() + NOTICE_MS;
     state.lost = null;
@@ -386,9 +387,9 @@ function redraw(): void {
   win.hidden = !state.announced;
   if (state.announced && win.dataset.stage !== state.announced) {
     win.dataset.stage = state.announced;
-    win.querySelector("h2")!.textContent = `${state.announced} 완료`;
+    win.querySelector("h2")!.textContent = `${state.announced} ${tr("완료")}`;
     const next = STAGES[state.stage];
-    win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `다음 단계: ${next.id} ${next.name}` : `${next.id}은 아직 준비 중입니다.`;
+    win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `${tr("다음 단계:")} ${next.id} ${next.name}` : `${next.id}${tr("은 아직 준비 중입니다.")}`;
   }
   graph.setStage(state.stage);
   itemIndex.sync();

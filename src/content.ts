@@ -1,9 +1,15 @@
 // Typed access to the JSON game data.
-import era from "../data/steam-era.json";
-import oreData from "../data/ores.json";
+import { localize, tr } from "./i18n";
+import eraData from "../data/steam-era.json";
+import oreJson from "../data/ores.json";
 import displayData from "../data/display.json";
-import materials from "../data/materials.json";
+import materialData from "../data/materials.json";
 import { expandRecipes } from "./expandRecipes.mjs";
+
+// The language is set before this file loads, so all data can be translated once here.
+const era = localize(eraData);
+const oreData = localize(oreJson);
+const materials = localize(materialData);
 
 export interface Recipe {
   id: string;
@@ -94,9 +100,9 @@ export const MAIN = "main";
 export const BYPRODUCT = "byproduct";
 
 /** What an input slot is for, whatever fills it. */
-export const inputRole = (key: string): string => (era.fuels.includes(key) ? "연료" : "재료");
+export const inputRole = (key: string): string => (era.fuels.includes(key) ? tr("연료") : tr("재료"));
 /** What an output slot is for: the first holds the product, the rest by-products. */
-export const outputRole = (index: number): string => (index === 0 ? "결과" : "부산물");
+export const outputRole = (index: number): string => (index === 0 ? tr("결과") : tr("부산물"));
 
 export const STAGES = era.milestones;
 /** Stages with their content built so far. */
@@ -128,7 +134,7 @@ const machineRecipes = (type: string): Recipe[] =>
 export const machineForms = (type: string): string[] =>
   [...new Set(machineRecipes(type).flatMap((r) => (r.form ? [r.form] : [])))];
 
-export const formLabel = (form: string): string => forms[form].label;
+export const formLabel = (form: string): string => forms[form].label.trim();
 
 export interface Process {
   recipes: Recipe[];
@@ -286,9 +292,9 @@ export const buildUses = (id: string, stage = 0): [string, Record<string, number
 
 /** Where a raw item comes from, for items no machine makes. */
 export function itemSource(id: string): string | null {
-  if (allSurfaceOres.includes(id)) return "지도의 광맥에서 캡니다";
-  if (FORAGE.includes(id)) return "지도에서 채집합니다";
-  if (id === WATER) return "강가에서 펌프로 끌어옵니다";
-  if (Object.values(DRUM.fills).includes(id)) return "빈 드럼통을 들고 펌프의 출력을 눌러 채웁니다";
+  if (allSurfaceOres.includes(id)) return tr("지도의 광맥에서 캡니다");
+  if (FORAGE.includes(id)) return tr("지도에서 채집합니다");
+  if (id === WATER) return tr("강가에서 펌프로 끌어옵니다");
+  if (Object.values(DRUM.fills).includes(id)) return tr("빈 드럼통을 들고 펌프의 출력을 눌러 채웁니다");
   return null;
 }

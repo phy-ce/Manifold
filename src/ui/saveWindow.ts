@@ -1,4 +1,5 @@
 // Manual save slots, on top of the automatic save.
+import { dateLocale, tr } from "../i18n";
 import { GameState, SAVE_VERSION } from "../engine/game";
 
 const SLOTS = 3;
@@ -33,12 +34,12 @@ export class SaveWindow {
     const head = document.createElement("div");
     head.className = "bar-row";
     const title = document.createElement("h2");
-    title.textContent = "저장";
+    title.textContent = tr("저장");
     const close = document.createElement("button");
     close.type = "button";
     close.className = "tech push";
     close.textContent = "x";
-    close.setAttribute("aria-label", "닫기");
+    close.setAttribute("aria-label", tr("닫기"));
     close.addEventListener("click", () => this.close());
     head.append(title, close);
     this.list.className = "save-list";
@@ -78,19 +79,19 @@ export class SaveWindow {
       const row = document.createElement("div");
       row.className = "bar-row";
       const label = document.createElement("span");
-      label.textContent = `슬롯 ${n} · ${saved ? saved.savedAt : "비어 있음"}`;
-      const store = this.button("저장", true, () => {
-        const entry: Saved = { savedAt: new Date().toLocaleString("ko-KR"), state: this.game() };
+      label.textContent = `${tr("슬롯")} ${n} · ${saved ? saved.savedAt : tr("비어 있음")}`;
+      const store = this.button(tr("저장"), true, () => {
+        const entry: Saved = { savedAt: new Date().toLocaleString(dateLocale()), state: this.game() };
         try {
           localStorage.setItem(slotKey(n), JSON.stringify(entry));
         } catch {
-          label.textContent = `슬롯 ${n} · 저장 실패`;
+          label.textContent = `${tr("슬롯")} ${n} · ${tr("저장 실패")}`;
           return;
         }
         this.draw();
       });
       store.classList.add("push");
-      const load = this.button("불러오기", !!saved, () => {
+      const load = this.button(tr("불러오기"), !!saved, () => {
         if (saved) this.loadState(saved.state);
       });
       row.append(label, store, load);

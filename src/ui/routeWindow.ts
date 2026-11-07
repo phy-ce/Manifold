@@ -1,6 +1,7 @@
 // Route settings between two nodes. Without a filter a route only has broad channels:
 // a warehouse sends whatever it holds, and a machine sends its main output or by-products.
-import { MANIFOLD, MAX_PORTS, RIVERBANK, isPowerSource, itemCode, itemColor, itemName } from "../content";
+import { tr } from "../i18n";
+import { MANIFOLD, MAX_PORTS, RIVERBANK, SPLITTER, isPowerSource, itemCode, itemColor, itemName } from "../content";
 import { GameState, canAffordRoute, hasDrive, nodeById, nodeLabel, portsUsed, routeCost, routeMaterials, toggleRoute } from "../engine/game";
 
 export class RouteWindow {
@@ -23,12 +24,12 @@ export class RouteWindow {
     const head = document.createElement("div");
     head.className = "bar-row";
     const title = document.createElement("h2");
-    title.textContent = "연결 설정";
+    title.textContent = tr("연결 설정");
     const close = document.createElement("button");
     close.type = "button";
     close.className = "tech push";
     close.textContent = "x";
-    close.setAttribute("aria-label", "닫기");
+    close.setAttribute("aria-label", tr("닫기"));
     close.addEventListener("click", () => this.close());
     head.append(title, close);
 
@@ -80,8 +81,8 @@ export class RouteWindow {
     this.drawn = key;
 
     this.route.textContent = `${nodeLabel(s, from)} > ${nodeLabel(s, to)}`;
-    this.drive.textContent = isPowerSource(from.type) || from.type === RIVERBANK || from.type === MANIFOLD || hasDrive(s, from.id) ? "" : "보내는 쪽에 동력이 없어 멈춰 있습니다";
-    this.ports.textContent = `포트 ${portsUsed(s, from.id)}/${MAX_PORTS} > ${portsUsed(s, to.id)}/${MAX_PORTS} · 연결 비용: ${cost}`;
+    this.drive.textContent = isPowerSource(from.type) || from.type === RIVERBANK || from.type === MANIFOLD || from.type === SPLITTER || hasDrive(s, from.id) ? "" : tr("보내는 쪽에 동력이 없어 멈춰 있습니다");
+    this.ports.textContent = `${tr("포트")} ${portsUsed(s, from.id)}/${MAX_PORTS} > ${portsUsed(s, to.id)}/${MAX_PORTS} · ${tr("연결 비용:")} ${cost}`;
     this.ports.classList.toggle("short", !afford);
     this.list.replaceChildren(...channels.map((id) => {
       const line = lines.find((l) => l.material === id);
@@ -99,7 +100,7 @@ export class RouteWindow {
       name.textContent = itemName(id);
       const state = document.createElement("span");
       state.className = "push card-note";
-      state.textContent = line ? (line.active ? "이동 중" : "대기") : "";
+      state.textContent = line ? (line.active ? tr("이동 중") : tr("대기")) : "";
       b.append(mark, code, name, state);
       b.addEventListener("click", () => {
         toggleRoute(this.game(), from.id, to.id, id);

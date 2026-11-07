@@ -1,5 +1,6 @@
 // Base screen: machines as nodes, lines drawn between them.
-import { ENGINE, LINK, MANIFOLD, MAX_PORTS, isPassive, isStore, formLabel, machineForms, machinesAt, MOTOR, POWER, RIVERBANK, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { tr } from "../i18n";
+import { ENGINE, LINK, MANIFOLD, MAX_PORTS, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, RIVERBANK, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   NAME_MAX, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
@@ -15,7 +16,7 @@ type Point2 = [number, number];
 type Curve = [Point2, Point2, Point2, Point2];
 /** Which state a kind of facility shows when its machines differ: the one needing attention. */
 const STATUS_ORDER = ["blocked", "manual", "run", "idle"] as const;
-const STATUS_LABEL = { blocked: "출력 막힘", manual: "작업 대기", run: "가동 중", idle: "재료 부족" };
+const STATUS_LABEL = { blocked: tr("출력 막힘"), manual: tr("작업 대기"), run: tr("가동 중"), idle: tr("재료 부족") };
 
 interface NodeView {
   root: HTMLDivElement;
@@ -30,7 +31,7 @@ interface GhostView {
 }
 /** Which lines stand out. Everything else fades back. */
 type Channel = "all" | "power" | "item" | "link";
-const CHANNELS: [Channel, string][] = [["all", "모든 선"], ["power", "동력"], ["item", "재료"], ["link", "강가"]];
+const CHANNELS: [Channel, string][] = [["all", tr("모든 선")], ["power", tr("동력")], ["item", tr("재료")], ["link", tr("강가")]];
 const channelOf = (material: string): Channel => (material === POWER ? "power" : material === LINK ? "link" : "item");
 /** Board zoom limits, and how much one wheel notch changes it. */
 const ZOOM_MIN = 0.4;
@@ -94,13 +95,30 @@ export class GraphView {
     if (stage === this.stage) return;
     this.stage = stage;
     this.paletteItems.clear();
-    this.palette.replaceChildren(...machinesAt(stage).map((type) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "tech";
-      b.addEventListener("click", () => this.build(type));
-      this.paletteItems.set(type, b);
-      return b;
+    // One entry per stage. Pointing at it drops down that stage's machines.
+    this.palette.replaceChildren(...STAGES.slice(0, Math.min(stage + 1, PLAYABLE_STAGES)).map((tier) => {
+      const group = document.createElement("div");
+      group.className = "tier";
+      const head = document.createElement("button");
+      head.type = "button";
+      head.className = "tech";
+      head.textContent = tier.id;
+      const list = document.createElement("div");
+      list.className = "tier-list";
+      const name = document.createElement("span");
+      name.className = "tier-name";
+      name.textContent = tier.name;
+      list.append(name);
+      for (const type of tier.unlockMachines) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tech";
+        b.addEventListener("click", () => this.build(type));
+        this.paletteItems.set(type, b);
+        list.append(b);
+      }
+      group.append(head, list);
+      return group;
     }));
   }
 
@@ -109,8 +127,8 @@ export class GraphView {
     this.tools.className = "graph-tools";
     this.search.id = "graph-search";
     this.search.type = "search";
-    this.search.placeholder = "노드 찾기";
-    this.search.setAttribute("aria-label", "노드 찾기");
+    this.search.placeholder = tr("노드 찾기");
+    this.search.setAttribute("aria-label", tr("노드 찾기"));
     this.search.addEventListener("input", () => this.draw());
     const lines = document.createElement("div");
     lines.className = "modes";
@@ -133,18 +151,18 @@ export class GraphView {
       b.dataset.tip = tip;
       b.addEventListener("click", run);
     };
-    action(this.copyButton, "복사", "Shift+클릭으로 고른 노드를 복사합니다 (Ctrl+C)", () => this.copy());
-    action(this.pasteButton, "붙여넣기", "복사한 구성을 청사진으로 놓습니다 (Ctrl+V)", () => this.paste());
-    action(this.buildAll, "", "가진 기계로 청사진을 실제로 바꿉니다", () => {
+    action(this.copyButton, tr("복사"), tr("Shift+클릭으로 고른 노드를 복사합니다 (Ctrl+C)"), () => this.copy());
+    action(this.pasteButton, tr("붙여넣기"), tr("복사한 구성을 청사진으로 놓습니다 (Ctrl+V)"), () => this.paste());
+    action(this.buildAll, "", tr("가진 기계로 청사진을 실제로 바꿉니다"), () => {
       buildAllGhosts(this.game());
       this.changed();
     });
-    action(this.zoomButton, "100%", "휠로 확대/축소합니다. 누르면 100%로 돌아갑니다", () => {
+    action(this.zoomButton, "100%", tr("휠로 확대/축소합니다. 누르면 100%로 돌아갑니다"), () => {
       this.zoom = 1;
       this.applyView();
       this.draw();
     });
-    action(this.groupButton, "묶기", "고른 노드를 하나로 묶습니다. 누른 뒤 외부와 연결할 노드를 클릭하세요", () => {
+    action(this.groupButton, tr("묶기"), tr("고른 노드를 하나로 묶습니다. 누른 뒤 외부와 연결할 노드를 클릭하세요"), () => {
       this.pickingPort = !this.pickingPort;
       this.draw();
     });
@@ -174,7 +192,7 @@ export class GraphView {
     link.type = "button";
     link.className = "link";
     link.textContent = "+";
-    link.setAttribute("aria-label", "묶음의 외부 연결 노드에서 선 연결");
+    link.setAttribute("aria-label", tr("묶음의 외부 연결 노드에서 선 연결"));
     link.addEventListener("click", () => {
       this.linkFrom = group.port;
       this.board.classList.add("linking");
@@ -183,8 +201,8 @@ export class GraphView {
     split.type = "button";
     split.className = "link split";
     split.textContent = "x";
-    split.dataset.tip = "묶음을 풉니다. 기계와 선은 그대로입니다";
-    split.setAttribute("aria-label", "묶음 풀기");
+    split.dataset.tip = tr("묶음을 풉니다. 기계와 선은 그대로입니다");
+    split.setAttribute("aria-label", tr("묶음 풀기"));
     split.addEventListener("click", () => {
       removeGroup(this.game(), group.id);
       this.selected.delete(group.id);
@@ -232,9 +250,9 @@ export class GraphView {
       view.root.classList.toggle("found", found);
       const used = portsUsed(s, port.id);
       const running = members.filter((n) => status(n) === "run").length;
-      const html = `<b>${group.name ?? "묶음"} ${group.code}</b><span class="ports">${"●".repeat(used)}${"○".repeat(Math.max(0, MAX_PORTS - used))}</span>` +
-        `<span class="flow">외부: ${nodeLabel(s, port)}</span>` +
-        `<span class="flow">노드 ${members.length} · 가동 ${running}${group.open ? " · 펼침" : ""}</span>`;
+      const html = `<b>${group.name ?? tr("묶음")} ${group.code}</b><span class="ports">${"●".repeat(used)}${"○".repeat(Math.max(0, MAX_PORTS - used))}</span>` +
+        `<span class="flow">${tr("외부:")} ${nodeLabel(s, port)}</span>` +
+        `<span class="flow">${tr("노드")} ${members.length} · ${tr("가동")} ${running}${group.open ? tr(" · 펼침") : ""}</span>`;
       if (html !== view.key) {
         view.key = html;
         view.body.innerHTML = html;
@@ -257,36 +275,36 @@ export class GraphView {
     const ghost = s.ghosts.find((g) => g.id === id);
     const group = s.groups.find((g) => g.id === id);
     const items: [string, boolean, () => void][] = [];
-    if (id !== null && nodeById(s, id)) items.push(["열기", true, () => this.open(id)]);
-    if (id !== null && (nodeById(s, id) || group)) items.push(["이름 바꾸기", true, () => this.askName(id)]);
+    if (id !== null && nodeById(s, id)) items.push([tr("열기"), true, () => this.open(id)]);
+    if (id !== null && (nodeById(s, id) || group)) items.push([tr("이름 바꾸기"), true, () => this.askName(id)]);
     if (ghost) {
-      items.push(["설치", countOf(s, ghost.type) > 0, () => {
+      items.push([tr("설치"), countOf(s, ghost.type) > 0, () => {
         buildGhost(s, ghost.id);
         this.selected.delete(ghost.id);
       }]);
-      items.push(["청사진 지우기", true, () => {
+      items.push([tr("청사진 지우기"), true, () => {
         removeGhost(s, ghost.id);
         this.selected.delete(ghost.id);
       }]);
     }
     if (group) {
-      items.push([group.open ? "접기" : "펼치기", true, () => {
+      items.push([group.open ? tr("접기") : tr("펼치기"), true, () => {
         group.open = !group.open;
       }]);
-      items.push(["묶음 풀기", true, () => {
+      items.push([tr("묶음 풀기"), true, () => {
         removeGroup(s, group.id);
         this.selected.delete(group.id);
       }]);
     }
-    if (this.selected.size) items.push(["복사", true, () => this.copy()]);
-    items.push(["붙여넣기", this.clip.length > 0, () => this.paste(at)]);
+    if (this.selected.size) items.push([tr("복사"), true, () => this.copy()]);
+    items.push([tr("붙여넣기"), this.clip.length > 0, () => this.paste(at)]);
     if ([...this.selected].filter((n) => nodeById(s, n)).length >= 2) {
-      items.push(["묶기", true, () => {
+      items.push([tr("묶기"), true, () => {
         this.pickingPort = true;
       }]);
     }
-    if (s.ghosts.length) items.push(["청사진 모두 설치", s.ghosts.some((g) => countOf(s, g.type) > 0), () => buildAllGhosts(s)]);
-    if (this.selected.size) items.push(["선택 풀기", true, () => this.selected.clear()]);
+    if (s.ghosts.length) items.push([tr("청사진 모두 설치"), s.ghosts.some((g) => countOf(s, g.type) > 0), () => buildAllGhosts(s)]);
+    if (this.selected.size) items.push([tr("선택 풀기"), true, () => this.selected.clear()]);
     this.menu.replaceChildren(...items.map(([label, enabled, run]) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -318,8 +336,8 @@ export class GraphView {
     input.type = "text";
     input.maxLength = NAME_MAX;
     input.value = target?.name ?? "";
-    input.placeholder = "비우면 기본 이름";
-    input.setAttribute("aria-label", "노드 이름");
+    input.placeholder = tr("비우면 기본 이름");
+    input.setAttribute("aria-label", tr("노드 이름"));
     const finish = (save: boolean) => {
       if (this.menu.hidden) return;
       this.menu.hidden = true;
@@ -420,7 +438,7 @@ export class GraphView {
     drop.type = "button";
     drop.className = "link";
     drop.textContent = "x";
-    drop.setAttribute("aria-label", "청사진 지우기");
+    drop.setAttribute("aria-label", tr("청사진 지우기"));
     drop.addEventListener("click", () => {
       removeGhost(this.game(), ghost.id);
       this.selected.delete(ghost.id);
@@ -467,7 +485,7 @@ export class GraphView {
       const found = machineName(ghost.type).toLowerCase().includes(query);
       view.root.classList.toggle("dim", !!query && !found);
       view.root.classList.toggle("found", !!query && found);
-      view.body.dataset.tip = countOf(s, ghost.type) ? "클릭해서 설치" : "기계가 필요합니다";
+      view.body.dataset.tip = countOf(s, ghost.type) ? tr("클릭해서 설치") : tr("기계가 필요합니다");
       const html = this.ghostHtml(s, ghost);
       if (html !== view.key) {
         view.key = html;
@@ -531,7 +549,7 @@ export class GraphView {
   ) {
     this.root.className = "graph-view";
     this.roster.className = "roster";
-    this.roster.setAttribute("aria-label", "기지 설비");
+    this.roster.setAttribute("aria-label", tr("기지 설비"));
     this.projectChip.type = "button";
     this.projectChip.className = "facility building";
     this.projectChip.hidden = true;
@@ -647,7 +665,7 @@ export class GraphView {
     link.type = "button";
     link.className = "link";
     link.textContent = "+";
-    link.setAttribute("aria-label", `${machineName(node.type)}에서 선 연결`);
+    link.setAttribute("aria-label", `${machineName(node.type)}${tr("에서 선 연결")}`);
     link.addEventListener("click", () => {
       this.linkFrom = node.id;
       this.board.classList.add("linking");
@@ -752,7 +770,7 @@ export class GraphView {
     const ports = "●".repeat(used) + "○".repeat(MAX_PORTS - used);
     const tag = (id: string, n: number) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span>${n}${unitOf(id)}`;
     if (node.type === MANIFOLD) {
-      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">동력을 나눕니다</span>`;
+      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tr("동력을 나눕니다")}</span>`;
     }
     if (isStore(node.type)) {
       const kinds = node.store.filter(Boolean).map((x) => tag(x!.id, x!.n)).slice(0, 4).join(" ");
@@ -766,13 +784,13 @@ export class GraphView {
       const load = powerLoad(s, node);
       const fuel = nodeProcess(node).slots.map(({ key }) => tag(node.ins[key]?.id ?? key, node.ins[key]?.n ?? 0)).join(" ");
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${fuel}</span>` +
-        `<span class="flow">동력 ${load.now}/${load.limit} · 연결 ${load.connected}</span>`;
+        `<span class="flow">${tr("동력")} ${load.now}/${load.limit} · ${tr("연결")} ${load.connected}</span>`;
     }
     if (node.type === MOTOR) {
       const load = powerLoad(s, node);
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span>` +
-        `<span class="flow">힘 ${Math.floor(node.energy)}/${SPRING_MAX}</span>` +
-        `<span class="flow">동력 ${load.now}/${load.limit} · 연결 ${load.connected}</span>`;
+        `<span class="flow">${tr("힘")} ${Math.floor(node.energy)}/${SPRING_MAX}</span>` +
+        `<span class="flow">${tr("동력")} ${load.now}/${load.limit} · ${tr("연결")} ${load.connected}</span>`;
     }
     const recipe = recipeOf(node);
     const ins = nodeProcess(node).slots.map(({ key }, i) => tag(node.ins[key]?.id ?? Object.keys(recipe.in)[i], node.ins[key]?.n ?? 0)).join(" ");
@@ -894,7 +912,7 @@ export class GraphView {
       }
       const state = status(node);
       const label = isPassive(node.type) ? nodeLabel(s, node)
-        : node.type === MOTOR ? `${nodeLabel(s, node)} · 힘 ${Math.floor(node.energy)}`
+        : node.type === MOTOR ? `${nodeLabel(s, node)} · ${tr("힘")} ${Math.floor(node.energy)}`
         : `${nodeLabel(s, node)} · ${STATUS_LABEL[state]}`;
       if (b.textContent !== label) b.textContent = label;
       b.dataset.status = state;
@@ -915,12 +933,12 @@ export class GraphView {
     if (!canGroup) this.pickingPort = false;
     this.groupButton.disabled = !canGroup;
     this.groupButton.classList.toggle("selected", this.pickingPort);
-    const groupLabel = this.pickingPort ? "외부 연결 노드를 클릭" : "묶기";
+    const groupLabel = this.pickingPort ? tr("외부 연결 노드를 클릭") : tr("묶기");
     if (this.groupButton.textContent !== groupLabel) this.groupButton.textContent = groupLabel;
     this.board.classList.toggle("picking", this.pickingPort);
     this.pasteButton.disabled = !this.clip.length;
     this.buildAll.hidden = !s.ghosts.length;
-    const allLabel = `청사진 설치 ${s.ghosts.filter((g) => countOf(s, g.type) > 0).length}/${s.ghosts.length}`;
+    const allLabel = `${tr("청사진 설치")} ${s.ghosts.filter((g) => countOf(s, g.type) > 0).length}/${s.ghosts.length}`;
     if (this.buildAll.textContent !== allLabel) this.buildAll.textContent = allLabel;
     const query = this.search.value.trim().toLowerCase();
     for (const [id, view] of this.nodes) {

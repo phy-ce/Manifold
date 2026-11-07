@@ -1,5 +1,6 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
+import { tr } from "../i18n";
 import { WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
 import { GameState, SEASON_NAMES, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
 import { BASE, Site, hash, terrain } from "../engine/world";
@@ -47,7 +48,7 @@ function buildVein(site: Site): Vein {
 }
 
 const siteName = (s: GameState, site: Site): string =>
-  site.ore === WATER ? `강가 ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.rich ? ` ${richnessName(site.rich)}` : "") + (site.left <= 0 ? " (고갈됨)" : canHarvest(s, site) ? "" : " (수확 불가)");
+  site.ore === WATER ? `${tr("강가")} ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.rich ? ` ${richnessName(site.rich)}` : "") + (site.left <= 0 ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
 
 export class MapView {
   readonly root = document.createElement("section");
@@ -78,7 +79,7 @@ export class MapView {
     this.canvas.height = VIEW_H * CELL_H * scale;
     this.canvas.style.width = `${VIEW_W * CELL_W}px`;
     this.canvas.style.height = `${VIEW_H * CELL_H}px`;
-    this.canvas.setAttribute("aria-label", "지도, 칸을 클릭해 이동");
+    this.canvas.setAttribute("aria-label", tr("지도, 칸을 클릭해 이동"));
     this.ctx.scale(scale, scale);
     this.ctx.textBaseline = "middle";
     this.ctx.textAlign = "center";
@@ -108,7 +109,7 @@ export class MapView {
     this.place.className = "bar-row";
     const legend = document.createElement("div");
     legend.className = "card-note map-legend";
-    legend.textContent = "밝은 칸: 보이는 곳 · 어두운 칸: 기억 · 빈 칸: 미탐색";
+    legend.textContent = tr("밝은 칸: 보이는 곳 · 어두운 칸: 기억 · 빈 칸: 미탐색");
     const walkMode = document.createElement("div");
     walkMode.className = "modes";
     const mode = (b: HTMLButtonElement, label: string, tip: string, on: boolean) => {
@@ -122,16 +123,16 @@ export class MapView {
       });
       walkMode.append(b);
     };
-    mode(this.safe, "위험 피하기", "아는 위험 지역을 돌아갑니다 (T)", true);
-    mode(this.straight, "직진", "위험을 무시하고 곧장 갑니다 (T)", false);
+    mode(this.safe, tr("위험 피하기"), tr("아는 위험 지역을 돌아갑니다 (T)"), true);
+    mode(this.straight, tr("직진"), tr("위험을 무시하고 곧장 갑니다 (T)"), false);
     mapBox.append(this.place, walkMode, this.canvas, legend);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
     this.search.id = "map-search";
     this.search.type = "search";
-    this.search.placeholder = "본 적 있는 곳에서 찾기";
-    this.search.setAttribute("aria-label", "지도 검색");
+    this.search.placeholder = tr("본 적 있는 곳에서 찾기");
+    this.search.setAttribute("aria-label", tr("지도 검색"));
     this.search.addEventListener("input", () => this.drawResults());
     this.results.className = "route-list";
     finder.append(this.search, this.results);
@@ -152,12 +153,12 @@ export class MapView {
 
   private describe(x: number, y: number): string {
     const s = this.game();
-    if (x === BASE.x && y === BASE.y) return "기지";
+    if (x === BASE.x && y === BASE.y) return tr("기지");
     if (!isRevealed(s, x, y)) return "";
     const site = s.sites.find((v) => v.x === x && v.y === y);
     if (site) return siteName(s, site);
     const [, cls, height] = terrain(x, y, s.seed);
-    return cls === "t-hill" ? `산 고도 ${height}` : cls === "t-water" ? "강" : "";
+    return cls === "t-hill" ? `${tr("산 고도")} ${height}` : cls === "t-water" ? tr("강") : "";
   }
 
   draw(): void {
@@ -175,7 +176,7 @@ export class MapView {
     this.paint(s);
     // The base may be off screen, so always say how far away it is.
     const steps = Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y));
-    const where = steps ? `H ${steps}칸 ${this.direction(s)}` : "H";
+    const where = steps ? `H ${steps}${tr("칸")} ${this.direction(s)}` : "H";
     if (this.place.textContent !== where) this.place.textContent = where;
     this.drawResults();
   }
@@ -246,7 +247,7 @@ export class MapView {
       name.textContent = siteName(s, site);
       const where = document.createElement("span");
       where.className = "push card-note";
-      where.textContent = `${isVisible(s, site.x, site.y) ? "보임" : "기억"} · ${steps(site)}칸`;
+      where.textContent = `${isVisible(s, site.x, site.y) ? tr("보임") : tr("기억")} · ${steps(site)}${tr("칸")}`;
       b.append(code, name, where);
       b.addEventListener("click", () => {
         walkTo(this.game(), site);
@@ -254,15 +255,15 @@ export class MapView {
       });
       return b;
     }));
-    if (!found.length) this.results.textContent = "본 적 있는 곳에 없습니다";
+    if (!found.length) this.results.textContent = tr("본 적 있는 곳에 없습니다");
   }
 
   /** Which way the base lies from the player. */
   private direction(s: GameState): string {
     const dx = BASE.x - s.player.x;
     const dy = BASE.y - s.player.y;
-    const ns = Math.abs(dy) * 2 > Math.abs(dx) ? (dy < 0 ? "북" : "남") : "";
-    const ew = Math.abs(dx) * 2 > Math.abs(dy) ? (dx < 0 ? "서" : "동") : "";
+    const ns = Math.abs(dy) * 2 > Math.abs(dx) ? (dy < 0 ? tr("북") : tr("남")) : "";
+    const ew = Math.abs(dx) * 2 > Math.abs(dy) ? (dx < 0 ? tr("서") : tr("동")) : "";
     return ns + ew;
   }
 
@@ -272,7 +273,7 @@ export class MapView {
     if (!site) return;
     const open = canHarvest(s, site);
     this.vein.disabled = site.left <= 0 || !open;
-    this.vein.setAttribute("aria-label", `${itemName(site.ore)} 캐기`);
+    this.vein.setAttribute("aria-label", `${itemName(site.ore)} ${tr("캐기")}`);
     if (this.hit > 0) this.hit -= 1;
     const key = `${site.id}|${site.left}|${this.hit > 0}|${open}`;
     if (key === this.drawnVein) return;
@@ -298,7 +299,7 @@ export class MapView {
     const fill = Math.round((site.left / site.total) * 14);
     this.head.innerHTML = `<span style="color:${color}">${itemCode(site.ore)}</span><span>${siteName(s, site)}</span>` +
       `<span class="push">[${"#".repeat(fill).padEnd(14, ".")}] ${site.left}/${site.total}</span>` +
-      (site.ore === WATER ? `<span class="short">기지에서 강가 펌프로 선을 이어 끌어옵니다</span>`
-        : open ? "" : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}에만 수확</span>`);
+      (site.ore === WATER ? `<span class="short">${tr("기지에서 강가 펌프로 선을 이어 끌어옵니다")}</span>`
+        : open ? "" : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}${tr("에만 수확")}</span>`);
   }
 }

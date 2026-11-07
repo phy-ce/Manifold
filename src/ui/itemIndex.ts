@@ -1,5 +1,6 @@
 // Item index: search every known item and see how it is made and what it is used for.
 // It docks beside the game so it can stay open next to a machine window.
+import { tr } from "../i18n";
 import {
   Recipe, machinePower, buildUses, familyMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
 } from "../content";
@@ -51,11 +52,11 @@ export class ItemIndex {
   ) {
     this.root.className = "dock";
     this.root.hidden = true;
-    this.root.setAttribute("aria-label", "아이템 도감");
+    this.root.setAttribute("aria-label", tr("아이템 도감"));
     this.search.id = "index-search";
     this.search.type = "search";
-    this.search.placeholder = "이름이나 코드로 검색";
-    this.search.setAttribute("aria-label", "아이템 검색");
+    this.search.placeholder = tr("이름이나 코드로 검색");
+    this.search.setAttribute("aria-label", tr("아이템 검색"));
     this.search.addEventListener("input", () => {
       this.gridPage = 0;
       this.drawGrid();
@@ -131,11 +132,11 @@ export class ItemIndex {
     row.append(arrow, ...Object.entries(recipe.out).map(([id, n]) => this.itemSlot(id, n)));
     const form = recipe.form && recipe.machine === "forming_bench" ? ` (${formLabel(recipe.form)})` : "";
     const manual = machineManual(recipe.machine);
-    const hand = manual === "keys" ? " · 키 입력" : manual === "click" ? " · 클릭" : "";
+    const hand = manual === "keys" ? tr(" · 키 입력") : manual === "click" ? tr(" · 클릭") : "";
     const note = document.createElement("div");
     note.className = "card-note";
-    const power = machinePower(recipe.machine) ? ` · 동력 ${machinePower(recipe.machine)}` : "";
-    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}초${hand}${power}`;
+    const power = machinePower(recipe.machine) ? ` · ${tr("동력")} ${machinePower(recipe.machine)}` : "";
+    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}${tr("초")}${hand}${power}`;
     const fill = this.fillButton(recipe);
     if (fill) row.append(fill);
     card.append(row, note);
@@ -153,8 +154,8 @@ export class ItemIndex {
     b.className = "tech push";
     b.textContent = "+";
     b.disabled = !bagHolds(s, recipe);
-    b.dataset.tip = b.disabled ? "인벤토리에 재료가 없습니다" : "인벤토리에서 넣기 (Shift: 가득)";
-    b.setAttribute("aria-label", "인벤토리에서 재료 넣기");
+    b.dataset.tip = b.disabled ? tr("인벤토리에 재료가 없습니다") : tr("인벤토리에서 넣기 (Shift: 가득)");
+    b.setAttribute("aria-label", tr("인벤토리에서 재료 넣기"));
     b.addEventListener("click", (e) => {
       fillFromBag(s, node.id, recipe, e.shiftKey ? Infinity : 1);
       this.changed();
@@ -189,7 +190,7 @@ export class ItemIndex {
     row.append(...Object.entries(cost).map(([id, n]) => this.itemSlot(id, n)));
     const note = document.createElement("div");
     note.className = "card-note";
-    note.textContent = `${machineName(type)} 건설 재료`;
+    note.textContent = `${machineName(type)} ${tr("건설 재료")}`;
     card.append(row, note);
     return card;
   }
@@ -205,7 +206,7 @@ export class ItemIndex {
     back.type = "button";
     back.className = "tech";
     back.textContent = "<";
-    back.setAttribute("aria-label", "이전 아이템");
+    back.setAttribute("aria-label", tr("이전 아이템"));
     back.disabled = !this.history.length;
     back.addEventListener("click", () => {
       const previous = this.history.pop();
@@ -215,7 +216,7 @@ export class ItemIndex {
     title.textContent = itemName(id);
     const owned = document.createElement("span");
     owned.className = "push";
-    owned.textContent = `보유 ${countOf(this.game(), id)}`;
+    owned.textContent = `${tr("보유")} ${countOf(this.game(), id)}`;
     head.append(back, title, owned);
 
     const stage = this.game().stage;
@@ -235,8 +236,8 @@ export class ItemIndex {
       return b;
     };
     tabs.append(
-      tabButton("recipes", `얻는 법 ${recipes.length + (source ? 1 : 0)}`),
-      tabButton("uses", `사용처 ${uses.length + builds.length}`),
+      tabButton("recipes", `${tr("얻는 법")} ${recipes.length + (source ? 1 : 0)}`),
+      tabButton("uses", `${tr("사용처")} ${uses.length + builds.length}`),
     );
 
     const cards: HTMLElement[] = [];
@@ -247,7 +248,7 @@ export class ItemIndex {
       cards.push(...uses.map((r) => this.recipeCard(r)));
       cards.push(...builds.map(([type, cost]) => this.buildCard(type, cost)));
     }
-    if (!cards.length) cards.push(this.textCard("아직 없습니다"));
+    if (!cards.length) cards.push(this.textCard(tr("아직 없습니다")));
     // As many cards as the panel has room for.
     const room = this.detail.clientHeight || window.innerHeight / 2;
     const perPage = Math.max(1, Math.floor((room - CARD_HEIGHT) / CARD_HEIGHT));
