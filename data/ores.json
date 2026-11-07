@@ -1,0 +1,30 @@
+{
+  "layers": [
+    { "depth": 0, "name": "지표 산화대", "scanLevel": 1, "veinSize": [40, 120], "distance": [5, 13], "access": "click" },
+    { "depth": 1, "name": "얕은 지하", "scanLevel": 2, "veinSize": [1000, 3000], "distance": [13, 23], "access": "rail" },
+    { "depth": 2, "name": "심부", "scanLevel": 3, "veinSize": [10000, 30000], "distance": [23, 33], "access": "auto" }
+  ],
+  "forage": { "ids": ["Be", "Mu"], "size": [3, 9], "seasons": { "Be": [1, 2], "Mu": [0, 2] } },
+  "ores": {
+    "Lm": { "name": "갈철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 0, "color": "#c9983f", "metal": "Fe", "byproducts": ["Si", "Mn"] },
+    "Hm": { "name": "적철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 1, "color": "#c8453a", "metal": "Fe", "byproducts": ["Si", "Mn"] },
+    "Mt": { "name": "자철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 2, "color": "#8b93a6", "metal": "Fe", "byproducts": ["Ti", "V"] },
+    "Ml": { "name": "공작석", "elements": "Cu", "family": "copper_ore", "firstLayer": 0, "color": "#35b779", "metal": "Cu", "byproducts": ["Cg", "Zn"] },
+    "Cc": { "name": "휘동석", "elements": "Cu, S", "family": "copper_ore", "firstLayer": 1, "color": "#7f8ba8", "metal": "Cu", "byproducts": ["S", "Ag"] },
+    "Cp": { "name": "황동석", "elements": "Cu, Fe, S", "family": "copper_ore", "firstLayer": 2, "color": "#d9b93b", "metal": "Cu", "byproducts": ["S", "Au"] },
+    "Lg": { "name": "갈탄", "elements": "C", "family": "coal", "firstLayer": 0, "color": "#9a7350" },
+    "Bt": { "name": "역청탄", "elements": "C", "family": "coal", "firstLayer": 1, "color": "#a9adb5" },
+    "An": { "name": "무연탄", "elements": "C", "family": "coal", "firstLayer": 2, "color": "#dfe3ea" },
+    "Kn": { "name": "고령토", "elements": "Al, Si", "family": "clay", "firstLayer": 0, "color": "#d9cfc0" }
+  },
+  "processing": {
+    "byproductsPerLevel": { "1": 0, "2": 1, "3": 2 },
+    "alwaysOutputs": ["Sl"]
+  },
+  "movement": [
+    { "level": 1, "name": "도보", "msPerCell": 130 },
+    { "level": 2, "name": "개량 이동", "msPerCell": 85 },
+    { "level": 3, "name": "철로", "msPerCell": 30 },
+    { "level": 4, "name": "자동 운송", "msPerCell": 30, "autoHaul": true }
+  ]
+}

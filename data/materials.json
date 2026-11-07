@@ -1,0 +1,11 @@
+{
+  "metals": {
+    "iron": { "name": "철", "code": "Fe", "color": "#a9bacb", "hardness": 1, "weight": 4 },
+    "copper": { "name": "구리", "code": "Cu", "color": "#e58a55", "hardness": 0.75, "weight": 4 }
+  },
+  "forms": {
+    "plate": { "name": "판", "label": "판", "code": "p", "weight": 2 },
+    "tube": { "name": "관", "label": "관", "code": "t", "weight": 0.5 },
+    "cylinder": { "name": " 실린더", "label": "실린더", "code": "c", "weight": 4 }
+  }
+}

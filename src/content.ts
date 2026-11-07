@@ -1,0 +1,227 @@
+// Typed access to the JSON game data.
+import era from "../data/steam-era.json";
+import oreData from "../data/ores.json";
+import displayData from "../data/display.json";
+import materials from "../data/materials.json";
+import { expandRecipes } from "./expandRecipes.mjs";
+
+export interface Recipe {
+  id: string;
+  machine: string;
+  form?: string;
+  time: number;
+  in: Record<string, number>;
+  out: Record<string, number>;
+  alt?: boolean;
+  disposal?: boolean;
+}
+
+interface Ore {
+  name: string;
+  elements: string;
+  family: string;
+  firstLayer: number;
+  color: string;
+}
+
+interface Variant {
+  metal: string;
+  form: string;
+  code: string;
+  color: string;
+}
+
+const expanded = expandRecipes(era, materials) as unknown as {
+  items: Record<string, string>;
+  variants: Record<string, Variant>;
+  recipes: Recipe[];
+};
+const itemNames = expanded.items;
+const variants = expanded.variants;
+const forms: Record<string, { label: string }> = materials.forms;
+const ores: Record<string, Ore> = oreData.ores;
+const display: Record<string, { code: string; color: string }> = displayData;
+const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number }> = era.machines;
+
+const food: Record<string, { hunger: number; hp: number }> = era.food;
+
+/** Foraged foods and how much a vein of them holds. */
+export const FORAGE: string[] = oreData.forage.ids;
+export const FORAGE_SIZE: number[] = oreData.forage.size;
+const forageSeasonList: Record<string, number[]> = oreData.forage.seasons;
+
+/** Seasons a food can be picked in, or nothing if it isn't seasonal. */
+export const forageSeasons = (id: string): number[] | undefined => forageSeasonList[id];
+
+/** What eating an item restores, if it is food. */
+export const foodEffect = (id: string): { hunger: number; hp: number } | undefined => food[id];
+
+export const MAX_PORTS = era.rules.basePorts;
+export const MILESTONE = era.milestones[0];
+export const SURFACE = oreData.layers[0];
+export const WAREHOUSE = "warehouse";
+export const MOTOR = "spring_motor";
+/** What a power line carries. Not an item: it drives other lines. */
+export const POWER = "power";
+/** Route channels. Filters that pick a single item come later, in the electric age. */
+export const ALL = "all";
+export const MAIN = "main";
+export const BYPRODUCT = "byproduct";
+
+/** Machines available in the current milestone. */
+export const MACHINE_TYPES: string[] = MILESTONE.unlockMachines;
+
+/** Parts of later milestones that share a machine with this one. */
+const LATER_ITEMS = new Set(["port_flange"]);
+const machineRecipes = (type: string): Recipe[] =>
+  expanded.recipes.filter((r) => r.machine === type && !r.alt && !Object.keys(r.out).some((id) => LATER_ITEMS.has(id)));
+
+/** Forms a machine can be set to. Empty when the input alone decides the result. */
+export const machineForms = (type: string): string[] =>
+  [...new Set(machineRecipes(type).flatMap((r) => (r.form ? [r.form] : [])))];
+
+export const formLabel = (form: string): string => forms[form].label;
+
+export interface Process {
+  recipes: Recipe[];
+  slots: { key: string; accepts: string[] }[];
+  outputs: string[];
+  /** Output slots by role: main product first, then by-products. Each lists what it can hold. */
+  outSlots: string[][];
+}
+
+/** What a machine does at a form: the input slots and every possible output. */
+export function processOf(type: string, form: string): Process {
+  const key = `${type}|${form}`;
+  let process = processes.get(key);
+  if (!process) {
+    process = buildProcess(type, form);
+    processes.set(key, process);
+  }
+  return process;
+}
+
+/** Processes never change, and the game asks for them constantly. */
+const processes = new Map<string, Process>();
+
+function buildProcess(type: string, form: string): Process {
+  const recipes = machineRecipes(type).filter((r) => !form || r.form === form);
+  const first = Object.keys(recipes[0].in);
+  const widest = Math.max(...recipes.map((r) => Object.keys(r.out).length));
+  const count = Math.max(widest, 1 + (machines[type].byproductSlots ?? 0));
+  const outSlots = Array.from({ length: count }, (_, i) =>
+    [...new Set(recipes.flatMap((r) => Object.keys(r.out).slice(i, i + 1)))]);
+  return {
+    recipes,
+    // A slot is keyed by its first ingredient and accepts that position in every recipe.
+    slots: first.map((key, i) => ({ key, accepts: [...new Set(recipes.map((r) => Object.keys(r.in)[i]))] })),
+    outputs: [...new Set(recipes.flatMap((r) => Object.keys(r.out)))],
+    outSlots,
+  };
+}
+
+/** Surface ores that supply each raw family used in this milestone. */
+export const SURFACE_ORES: string[] = Object.keys(ores).filter(
+  (id) => ores[id].firstLayer === 0 && MILESTONE.unlockSources.includes(ores[id].family),
+);
+
+export const machineCost = (type: string): Record<string, number> => machines[type].cost ?? {};
+/** How an unpowered machine is worked by hand: "click", "keys", or nothing if it runs itself. */
+export const machineManual = (type: string): string | undefined => machines[type]?.manual;
+export const machineWork = (type: string): number => machines[type].work ?? 1;
+export const machineName = (type: string): string => machines[type].name;
+/** How harshly a machine punishes mistakes, from 1 upward. */
+export const machineDifficulty = (type: string): number => machines[type]?.difficulty ?? 1;
+export const itemName = (id: string): string =>
+  ores[id] ? `${ores[id].name} (${ores[id].elements})` : itemNames[id] ?? id;
+export const itemCode = (id: string): string => variants[id]?.code ?? display[id]?.code ?? id.slice(0, 2);
+export const itemColor = (id: string): string => variants[id]?.color ?? display[id]?.color ?? "#dfe5ea";
+export const formOf = (id: string): string | undefined => variants[id]?.form;
+
+const weights: Record<string, number> = era.weights;
+const metals: Record<string, { weight: number }> = materials.metals;
+const formWeights: Record<string, { weight: number }> = materials.forms;
+
+/** Weight of one item. A part weighs its metal times how much metal its form uses. */
+export function itemWeight(id: string): number {
+  const variant = variants[id];
+  if (variant) return metals[variant.metal].weight * formWeights[variant.form].weight;
+  return weights[id] ?? metals[id]?.weight ?? 1;
+}
+
+/** True when an item can fill a recipe ingredient, directly or through its ore family. */
+export const matches = (item: string, ingredient: string): boolean =>
+  item === ingredient || ores[item]?.family === ingredient;
+
+// ---- Item order
+
+const rawItems = [...Object.keys(ores), ...FORAGE];
+const metalOrder = Object.keys(materials.metals);
+const formOrder = ["ingot", ...Object.keys(materials.forms)];
+
+/** Recipe steps between an item and raw material, by its shortest route. */
+function processingDepth(id: string, visiting = new Set<string>()): number {
+  if (visiting.has(id)) return Infinity;
+  const makers = expanded.recipes.filter((r) => id in r.out && !r.alt);
+  if (!makers.length) return 0;
+  const path = new Set(visiting).add(id);
+  return Math.min(...makers.map((r) => 1 + Math.max(0, ...Object.keys(r.in).map((key) => processingDepth(key, path)))));
+}
+
+const ranks = new Map<string, number[]>();
+
+/** Raw materials, then metal parts by form and metal, then everything else by how processed it is. */
+function itemRank(id: string): number[] {
+  let rank = ranks.get(id);
+  if (!rank) {
+    const raw = rawItems.indexOf(id);
+    const metal = metalOrder.includes(id) ? id : variants[id]?.metal;
+    const form = metalOrder.includes(id) ? "ingot" : variants[id]?.form;
+    if (raw >= 0) rank = [0, raw, 0];
+    else if (metal) rank = [1, formOrder.indexOf(form), metalOrder.indexOf(metal)];
+    else rank = [2, processingDepth(id), 0];
+    ranks.set(id, rank);
+  }
+  return rank;
+}
+
+/** Sort order for stacks. Ores and metals follow their order in the data files: iron, copper, then the rest. */
+export function compareItems(a: string, b: string): number {
+  const x = itemRank(a);
+  const y = itemRank(b);
+  return x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || a.localeCompare(b);
+}
+
+// ---- Item index
+
+const knownRecipes = (): Recipe[] => MACHINE_TYPES.flatMap(machineRecipes).filter((r) => !r.disposal);
+
+/** The ores that fill a family such as "coal". */
+export const familyMembers = (id: string): string[] => SURFACE_ORES.filter((ore) => ores[ore].family === id);
+
+/** Every item the player can meet right now, so later tiers stay a surprise. */
+export function indexItems(): string[] {
+  const seen = new Set<string>([...SURFACE_ORES, ...FORAGE]);
+  for (const recipe of knownRecipes()) {
+    for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
+      if (!familyMembers(id).length) seen.add(id);
+    }
+  }
+  return [...seen];
+}
+
+export const recipesFor = (id: string): Recipe[] => knownRecipes().filter((r) => id in r.out);
+export const usesOf = (id: string): Recipe[] =>
+  knownRecipes().filter((r) => Object.keys(r.in).some((key) => matches(id, key)));
+
+/** Machines that take this item as a building material. */
+export const buildUses = (id: string): [string, Record<string, number>][] =>
+  MACHINE_TYPES.filter((type) => Object.keys(machineCost(type)).some((key) => matches(id, key)))
+    .map((type) => [type, machineCost(type)]);
+
+/** Where a raw item comes from, for items no machine makes. */
+export function itemSource(id: string): string | null {
+  if (SURFACE_ORES.includes(id)) return "지도의 광맥에서 캡니다";
+  if (FORAGE.includes(id)) return "지도에서 채집합니다";
+  return null;
+}
