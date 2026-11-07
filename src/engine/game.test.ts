@@ -4,7 +4,7 @@ import {
   GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, addTo, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
-import { BASE, chunkSites, generateSites, terrain } from "./world";
+import { BASE, chunkSites, generateSites, orderSites, terrain } from "./world";
 
 /** Most tests aren't about survival, so they keep the player fed. */
 const keepAlive = (s: GameState) => {
@@ -2249,6 +2249,20 @@ describe("S1-3", () => {
     run(s, 2);
     expect(kiln.ins.coal?.n).toBe(2);
     expect(splitter.store[0]).toBeNull();
+  });
+});
+
+describe("site search order", () => {
+  const site = (id: number, left: number) => ({ id, ore: "Lm", x: id, y: 0, total: 10, left, seed: 1 });
+  const steps = (v: { x: number }) => v.x;
+
+  it("puts empty sites last, nearest first within each", () => {
+    const sites = [site(1, 0), site(2, 5), site(3, 0), site(4, 5)];
+    expect(orderSites(sites, steps, false).map((v) => v.id)).toEqual([2, 4, 1, 3]);
+  });
+
+  it("leaves empty sites out when hidden", () => {
+    expect(orderSites([site(1, 0), site(2, 5)], steps, true).map((v) => v.id)).toEqual([2]);
   });
 });
 

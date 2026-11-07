@@ -3,7 +3,7 @@
 import { tr } from "../i18n";
 import { WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
 import { GameState, SEASON_NAMES, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
-import { BASE, Site, hash, terrain } from "../engine/world";
+import { BASE, Site, hash, orderSites, terrain } from "../engine/world";
 
 /** Size of the window onto the endless map, which stays centred on the player. */
 const VIEW_W = 60;
@@ -60,6 +60,8 @@ export class MapView {
   private readonly art = document.createElement("pre");
   private readonly search = document.createElement("input");
   private readonly results = document.createElement("div");
+  private readonly hideButton = document.createElement("button");
+  private hideEmpty = false;
   private readonly place = document.createElement("div");
   private readonly safe = document.createElement("button");
   private readonly straight = document.createElement("button");
@@ -135,7 +137,18 @@ export class MapView {
     this.search.setAttribute("aria-label", tr("지도 검색"));
     this.search.addEventListener("input", () => this.drawResults());
     this.results.className = "route-list";
-    finder.append(this.search, this.results);
+    this.hideButton.type = "button";
+    this.hideButton.className = "tech";
+    this.hideButton.textContent = tr("고갈 숨기기");
+    this.hideButton.addEventListener("click", () => {
+      this.hideEmpty = !this.hideEmpty;
+      this.hideButton.classList.toggle("selected", this.hideEmpty);
+      this.drawResults();
+    });
+    const tools = document.createElement("div");
+    tools.className = "bar-row";
+    tools.append(this.hideButton);
+    finder.append(this.search, tools, this.results);
 
     const side = document.createElement("div");
     side.className = "map-side";
@@ -223,7 +236,8 @@ export class MapView {
   private drawResults(): void {
     const s = this.game();
     const query = this.search.value.trim().toLowerCase();
-    const key = `${query}|${s.player.x},${s.player.y}|${s.sites.length}`;
+    const emptied = s.sites.filter((v) => v.left <= 0).length;
+    const key = `${query}|${s.player.x},${s.player.y}|${s.sites.length}|${emptied}|${this.hideEmpty}`;
     if (key === this.drawnResults) return;
     this.drawnResults = key;
     if (!query) {
@@ -231,11 +245,10 @@ export class MapView {
       return;
     }
     const steps = (v: Site) => Math.max(Math.abs(v.x - s.player.x), Math.abs(v.y - s.player.y));
-    const found = s.sites
+    const matching = s.sites
       .filter((v) => isRevealed(s, v.x, v.y))
-      .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v)].some((t) => t.toLowerCase().includes(query)))
-      .sort((a, b) => steps(a) - steps(b))
-      .slice(0, MAX_RESULTS);
+      .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v)].some((t) => t.toLowerCase().includes(query)));
+    const found = orderSites(matching, steps, this.hideEmpty).slice(0, MAX_RESULTS);
     this.results.replaceChildren(...found.map((site) => {
       const b = document.createElement("button");
       b.type = "button";

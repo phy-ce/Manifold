@@ -122,7 +122,7 @@ export const EN: Record<string, string> = {
   "기지": "Base", "산 고도": "Hill, height", "강": "River", "칸": " cells", "보임": "In sight", "기억": "Remembered", "본 적 있는 곳에 없습니다": "Not among places you've seen",
   "북": "N", "남": "S", "서": "W", "동": "E", "캐기": "mine", "기지에서 강가 펌프로 선을 이어 끌어옵니다": "Build a riverbank pump at base and link it here", "에만 수확": " only",
   // Routes and saves
-  "연결 설정": "Route", "보내는 쪽에 동력이 없어 멈춰 있습니다": "Stopped: the sending side has no power", "포트": "Ports", "연결 비용:": "Line cost:", "이동 중": "Moving", "대기": "Idle",
+  "고갈 숨기기": "Hide empty", "연결 설정": "Route", "보내는 쪽에 동력이 없어 멈춰 있습니다": "Stopped: the sending side has no power", "포트": "Ports", "연결 비용:": "Line cost:", "이동 중": "Moving", "대기": "Idle",
   "슬롯": "Slot", "비어 있음": "Empty", "저장 실패": "Save failed", "불러오기": "Load",
   // Slots
   " (E: 먹기)": " (E: eat)", " (용기로만 옮길 수 있음)": " (needs a container)", "개": "", "칸, 비어 있음": " slot, empty", "빈 칸": "Empty slot",

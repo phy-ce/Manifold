@@ -148,6 +148,12 @@ export function riverBanks(seed: number): Point[] {
   });
 }
 
+/** Search order: nearest first, with empty sites last, or left out when hidden. */
+export function orderSites(sites: Site[], steps: (site: Site) => number, hideEmpty: boolean): Site[] {
+  const empty = (site: Site) => (site.left <= 0 ? 1 : 0);
+  return sites.filter((site) => !hideEmpty || !empty(site)).sort((a, b) => empty(a) - empty(b) || steps(a) - steps(b));
+}
+
 /** How many extra steps one point of damage is worth when picking a safe route. */
 const DAMAGE_WEIGHT = 20;
 /** How far a safe route may stray from the straight box between its ends. */
