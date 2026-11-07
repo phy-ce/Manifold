@@ -118,6 +118,9 @@ hurtFlash.className = "hurt";
 hurtFlash.setAttribute("aria-hidden", "true");
 document.body.append(hurtFlash);
 let lastHp = state.hp;
+/** Matches the longest hurt animation in style.css. */
+const HURT_MS = 600;
+let hurtTimer = 0;
 
 function showHurt(amount: number): void {
   hurtFlash.textContent = `-${amount}`;
@@ -126,6 +129,12 @@ function showHurt(amount: number): void {
     void el.offsetWidth; // restart the animation if it is already running
     el.classList.add("hit");
   }
+  // The clock rebuilds the vitals every second, which would replay a mark left on them.
+  clearTimeout(hurtTimer);
+  hurtTimer = window.setTimeout(() => {
+    hurtFlash.classList.remove("hit");
+    vitals.classList.remove("hit");
+  }, HURT_MS);
 }
 
 const notice = document.createElement("div");
