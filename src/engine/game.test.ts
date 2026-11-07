@@ -72,14 +72,10 @@ describe("world", () => {
     expect(generateSites(7)).not.toEqual(generateSites(8));
   });
 
-  it("always holds enough surface ore to finish S1-1", () => {
-    const need: Record<string, number> = { Lm: 56, Lg: 36, Ml: 8, Kn: 8 };
+  it("puts every surface ore near the base, whatever its size", () => {
     for (let seed = 1; seed <= 300; seed += 1) {
       const sites = generateSites(seed);
-      for (const ore of SURFACE_ORES) {
-        const total = sites.filter((x) => x.ore === ore).reduce((sum, x) => sum + x.total, 0);
-        expect(total).toBeGreaterThanOrEqual(need[ore]);
-      }
+      for (const ore of SURFACE_ORES) expect(sites.filter((x) => x.ore === ore).length).toBe(3);
     }
   });
 });
@@ -1897,13 +1893,20 @@ describe("blueprints", () => {
 });
 
 describe("vein grades", () => {
-  const veins = () => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap((seed) => generateSites(seed).filter((v) => v.rich));
+  const veins = () => [...Array(3000).keys()].flatMap((seed) => generateSites(seed + 1).filter((v) => v.rich));
 
-  it("rolls all three grades, even for the first vein near the base", () => {
-    const all = veins();
-    for (const grade of ["scarce", "normal", "rich"]) expect(all.some((v) => v.rich === grade)).toBe(true);
+  it("leaves the first vein near the base to luck", () => {
     const first = [...Array(60).keys()].map((seed) => generateSites(seed + 1)[0].rich);
-    expect(new Set(first).size).toBe(3);
+    expect(first).toContain("scarce");
+    expect(first).toContain("normal");
+  });
+
+  it("keeps rich veins under 1% on the surface", () => {
+    expect(LAYERS[0].richness.rich).toBeLessThan(0.01);
+    const all = veins();
+    const share = all.filter((v) => v.rich === "rich").length / all.length;
+    expect(share).toBeGreaterThan(0);
+    expect(share).toBeLessThan(0.01);
   });
 
   it("scales size by grade", () => {

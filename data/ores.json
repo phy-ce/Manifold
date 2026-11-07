@@ -1,8 +1,8 @@
 {
   "layers": [
-    { "depth": 0, "name": "지표 산화대", "scanLevel": 1, "richness": { "scarce": 0.3, "normal": 0.55, "rich": 0.15 }, "distance": [5, 13], "access": "click" },
-    { "depth": 1, "name": "얕은 지하", "scanLevel": 2, "richness": { "scarce": 0.15, "normal": 0.55, "rich": 0.3 }, "distance": [13, 23], "access": "rail" },
-    { "depth": 2, "name": "심부", "scanLevel": 3, "richness": { "scarce": 0.05, "normal": 0.45, "rich": 0.5 }, "distance": [23, 33], "access": "auto" }
+    { "depth": 0, "name": "지표 산화대", "scanLevel": 1, "richness": { "scarce": 0.4, "normal": 0.595, "rich": 0.005 }, "distance": [5, 13], "access": "click" },
+    { "depth": 1, "name": "얕은 지하", "scanLevel": 2, "richness": { "scarce": 0.3, "normal": 0.67, "rich": 0.03 }, "distance": [13, 23], "access": "rail" },
+    { "depth": 2, "name": "심부", "scanLevel": 3, "richness": { "scarce": 0.2, "normal": 0.7, "rich": 0.1 }, "distance": [23, 33], "access": "auto" }
   ],
   "forage": { "ids": ["Be", "Mu"], "size": [3, 9], "seasons": { "Be": [1, 2], "Mu": [0, 2] } },
   "richness": [
