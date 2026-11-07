@@ -292,6 +292,9 @@ export function addTo(slots: Slots, id: string, n: number): number {
   return n - left;
 }
 
+/** Which year it is, counting from 1. A year is four seasons. */
+export const yearAt = (time: number): number => Math.floor(time / (SEASON_MS * SEASON_NAMES.length)) + 1;
+
 export const seasonAt = (time: number): number => Math.floor(time / SEASON_MS) % SEASON_NAMES.length;
 
 /** Seasonal food can only be picked in its season. Ore is always there. */

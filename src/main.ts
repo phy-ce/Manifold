@@ -1,6 +1,6 @@
 import "./style.css";
 import { PLAYABLE_STAGES, STAGES, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, sortSlots, step, trashCursor, upgradeSave, walkTo, wheelStack } from "./engine/game";
+import { GameState, MAX_CARRY, MAX_VITAL, SAVE_VERSION, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, sortSlots, step, trashCursor, upgradeSave, yearAt, walkTo, wheelStack } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -348,7 +348,7 @@ function redraw(): void {
   }
   const seasonLeft = Math.ceil((SEASON_MS - (state.time % SEASON_MS)) / 1000);
   const clock = `${Math.floor(seasonLeft / 60)}:${String(seasonLeft % 60).padStart(2, "0")}`;
-  const shown = `<span class="meter">${SEASON_NAMES[state.season]} ${clock}</span>${isWeak(state) ? `<span class="meter low">쇠약 ${Math.ceil((state.weakUntil - state.time) / 1000)}초</span>` : ""}` + meter("체력", state.hp) + meter("허기", state.hunger) +
+  const shown = `<span class="meter">${yearAt(state.time)}년차 ${SEASON_NAMES[state.season]} ${clock}</span>${isWeak(state) ? `<span class="meter low">쇠약 ${Math.ceil((state.weakUntil - state.time) / 1000)}초</span>` : ""}` + meter("체력", state.hp) + meter("허기", state.hunger) +
     `<span class="meter${overloaded(state) ? " low" : ""}">무게 ${carried(state)}/${MAX_CARRY}${overloaded(state) ? " 초과, 이동 불가" : ""}</span>`;
   if (vitals.innerHTML !== shown) vitals.innerHTML = shown;
   // A collapse jumps health back up, so it counts as a hit even though the number rises.
