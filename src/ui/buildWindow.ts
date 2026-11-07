@@ -1,6 +1,6 @@
 // Build window: shows what a facility needs, then the player works it into existence.
 import { machineCost, machineName, machineWork } from "../content";
-import { GameState, canAfford, cancelProject, countOf, startProject, workProject } from "../engine/game";
+import { GameState, addGhost, canAfford, cancelProject, countOf, installMachine, nextSpot, startProject, workProject } from "../engine/game";
 import { COLS, renderArt } from "./art";
 import { makeSlot, paintSlot } from "./slots";
 
@@ -13,6 +13,8 @@ export class BuildWindow {
   private readonly art = document.createElement("pre");
   private readonly start = document.createElement("button");
   private readonly cancel = document.createElement("button");
+  private readonly install = document.createElement("button");
+  private readonly plan = document.createElement("button");
   private rows: [string, number, HTMLSpanElement][] = [];
   private type: string | null = null;
 
@@ -59,9 +61,28 @@ export class BuildWindow {
       cancelProject(this.game());
       this.changed();
     });
+    this.install.type = "button";
+    this.install.className = "tech";
+    this.install.addEventListener("click", () => {
+      const s = this.game();
+      const at = nextSpot(s);
+      if (this.type && installMachine(s, this.type, at.x, at.y)) this.close();
+      this.changed();
+    });
+    this.plan.type = "button";
+    this.plan.className = "tech";
+    this.plan.textContent = "청사진";
+    this.plan.dataset.tip = "기계 없이 자리만 잡아 둡니다";
+    this.plan.addEventListener("click", () => {
+      const s = this.game();
+      const at = nextSpot(s);
+      if (this.type) addGhost(s, this.type, at.x, at.y);
+      this.close();
+      this.changed();
+    });
     const actions = document.createElement("div");
     actions.className = "bar-row";
-    actions.append(this.start, this.cancel);
+    actions.append(this.start, this.cancel, this.install, this.plan);
 
     panel.append(head, this.needs, this.work, this.amount, actions);
     this.root.append(panel);
@@ -119,6 +140,10 @@ export class BuildWindow {
     this.cancel.hidden = !mine;
     this.start.hidden = !!mine;
     this.start.disabled = !!s.project || !canAfford(s, this.type);
+    const owned = countOf(s, this.type);
+    const label = `설치 (보유 ${owned})`;
+    if (this.install.textContent !== label) this.install.textContent = label;
+    this.install.disabled = owned < 1;
 
     // The facility rises from the ground as the work fills up.
     const key = `${this.type}|${done}|${!!mine}`;

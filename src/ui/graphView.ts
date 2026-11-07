@@ -1,8 +1,8 @@
 // Base screen: machines as nodes, lines drawn between them.
-import { ENGINE, MAX_PORTS, machinesAt, MOTOR, RIVERBANK, WAREHOUSE, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, LINK, MAX_PORTS, machinesAt, MOTOR, POWER, RIVERBANK, WAREHOUSE, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
-  powerLoad,
-  GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
+  powerLoad, buildAllGhosts, buildGhost, copyToGhosts, countOf, installHeld, removeGhost,
+  Ghost, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
 
@@ -23,6 +23,18 @@ interface NodeView {
   link: HTMLButtonElement;
   key: string;
 }
+interface GhostView {
+  root: HTMLDivElement;
+  body: HTMLButtonElement;
+  key: string;
+}
+/** Which lines stand out. Everything else fades back. */
+type Channel = "all" | "power" | "item" | "link";
+const CHANNELS: [Channel, string][] = [["all", "모든 선"], ["power", "동력"], ["item", "재료"], ["link", "강가"]];
+const channelOf = (material: string): Channel => (material === POWER ? "power" : material === LINK ? "link" : "item");
+/** How far a paste lands from the original when the pointer isn't over the board. */
+const PASTE_OFFSET = 40;
+
 interface LineView {
   path: SVGPathElement;
   hit: SVGPathElement;
@@ -49,19 +61,230 @@ export class GraphView {
   private panFrom: { x: number; y: number } | null = null;
 
   private stage = -1;
+  private readonly paletteItems = new Map<string, HTMLButtonElement>();
+  private readonly tools = document.createElement("div");
+  private readonly search = document.createElement("input");
+  private readonly channels = new Map<Channel, HTMLButtonElement>();
+  private readonly copyButton = document.createElement("button");
+  private readonly pasteButton = document.createElement("button");
+  private readonly buildAll = document.createElement("button");
+  private readonly ghostViews = new Map<number, GhostView>();
+  private readonly ghostWires = new Map<string, SVGPathElement>();
+  private readonly marquee = document.createElement("div");
+  private readonly selected = new Set<number>();
+  private clip: number[] = [];
+  private channel: Channel = "all";
+  private pointer: { x: number; y: number } | null = null;
+  private boxFrom: { x: number; y: number } | null = null;
 
   /** Fills the build list with what the current stage has opened. */
   setStage(stage: number): void {
     if (stage === this.stage) return;
     this.stage = stage;
+    this.paletteItems.clear();
     this.palette.replaceChildren(...machinesAt(stage).map((type) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "tech";
-      b.textContent = `${machineName(type)} +`;
       b.addEventListener("click", () => this.build(type));
+      this.paletteItems.set(type, b);
       return b;
     }));
+  }
+
+  /** The tools above the board: find, pick which lines stand out, copy and paste. */
+  private makeTools(): void {
+    this.tools.className = "graph-tools";
+    this.search.id = "graph-search";
+    this.search.type = "search";
+    this.search.placeholder = "노드 찾기";
+    this.search.setAttribute("aria-label", "노드 찾기");
+    this.search.addEventListener("input", () => this.draw());
+    const lines = document.createElement("div");
+    lines.className = "modes";
+    for (const [channel, label] of CHANNELS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        this.channel = channel;
+        this.draw();
+      });
+      this.channels.set(channel, b);
+      lines.append(b);
+    }
+    const action = (b: HTMLButtonElement, label: string, tip: string, run: () => void) => {
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = label;
+      b.dataset.tip = tip;
+      b.addEventListener("click", run);
+    };
+    action(this.copyButton, "복사", "Shift+클릭으로 고른 노드를 복사합니다 (Ctrl+C)", () => this.copy());
+    action(this.pasteButton, "붙여넣기", "복사한 구성을 청사진으로 놓습니다 (Ctrl+V)", () => this.paste());
+    action(this.buildAll, "", "가진 기계로 청사진을 실제로 바꿉니다", () => {
+      buildAllGhosts(this.game());
+      this.changed();
+    });
+    this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.buildAll);
+  }
+
+  private copy(): void {
+    if (this.selected.size) this.clip = [...this.selected];
+    this.draw();
+  }
+
+  /** Lays the copied nodes down as a plan, at the pointer if it is over the board. */
+  private paste(): void {
+    const s = this.game();
+    const spots = this.clip.flatMap((id) => {
+      const at = this.spotOf(s, id);
+      return at ? [at] : [];
+    });
+    if (!spots.length) return;
+    const left = Math.min(...spots.map((p) => p.x));
+    const top = Math.min(...spots.map((p) => p.y));
+    const dx = this.pointer ? Math.max(0, this.pointer.x) - left : PASTE_OFFSET;
+    const dy = this.pointer ? Math.max(0, this.pointer.y) - top : PASTE_OFFSET;
+    const copies = copyToGhosts(s, this.clip, dx, dy);
+    this.selected.clear();
+    for (const ghost of copies) this.selected.add(ghost.id);
+    this.changed();
+  }
+
+  private spotOf(s: GameState, id: number): { x: number; y: number } | undefined {
+    return nodeById(s, id) ?? s.ghosts.find((g) => g.id === id);
+  }
+
+  private boardPoint(e: MouseEvent): { x: number; y: number } {
+    const box = this.board.getBoundingClientRect();
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
+  }
+
+  private toggleSelected(id: number): void {
+    if (!this.selected.delete(id)) this.selected.add(id);
+    this.draw();
+  }
+
+  private onKey(e: KeyboardEvent): void {
+    if (this.root.hidden || e.target instanceof HTMLInputElement) return;
+    const s = this.game();
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyC") this.copy();
+    else if ((e.ctrlKey || e.metaKey) && e.code === "KeyV") this.paste();
+    else if (e.key === "Delete") {
+      // Only plans can be deleted from the board. Real machines are demolished in their window.
+      for (const id of [...this.selected]) {
+        if (s.ghosts.some((g) => g.id === id)) {
+          removeGhost(s, id);
+          this.selected.delete(id);
+        }
+      }
+      this.changed();
+    }
+  }
+
+  private makeGhost(ghost: Ghost): GhostView {
+    const root = document.createElement("div");
+    root.className = "node plan";
+    const body = document.createElement("button");
+    body.type = "button";
+    body.className = "node-body";
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "link";
+    drop.textContent = "x";
+    drop.setAttribute("aria-label", "청사진 지우기");
+    drop.addEventListener("click", () => {
+      removeGhost(this.game(), ghost.id);
+      this.selected.delete(ghost.id);
+      this.changed();
+    });
+    root.append(body, drop);
+    body.addEventListener("pointerdown", (e) => {
+      this.drag = { id: ghost.id, dx: e.clientX, dy: e.clientY, moved: false };
+    });
+    body.addEventListener("click", (e) => {
+      if (this.dragged) {
+        this.dragged = false;
+        return;
+      }
+      if (e.shiftKey) return this.toggleSelected(ghost.id);
+      if (buildGhost(this.game(), ghost.id)) {
+        this.selected.delete(ghost.id);
+        this.changed();
+        return;
+      }
+      root.classList.add("refused");
+      setTimeout(() => root.classList.remove("refused"), 260);
+    });
+    this.board.append(root);
+    return { root, body, key: "" };
+  }
+
+  private drawGhosts(s: GameState): void {
+    for (const [id, view] of this.ghostViews) {
+      if (!s.ghosts.some((g) => g.id === id)) {
+        view.root.remove();
+        this.ghostViews.delete(id);
+      }
+    }
+    const query = this.search.value.trim().toLowerCase();
+    for (const ghost of s.ghosts) {
+      let view = this.ghostViews.get(ghost.id);
+      if (!view) {
+        view = this.makeGhost(ghost);
+        this.ghostViews.set(ghost.id, view);
+      }
+      view.root.style.transform = `translate(${ghost.x}px, ${ghost.y}px)`;
+      view.root.classList.toggle("selected", this.selected.has(ghost.id));
+      const found = machineName(ghost.type).toLowerCase().includes(query);
+      view.root.classList.toggle("dim", !!query && !found);
+      view.root.classList.toggle("found", !!query && found);
+      const owned = countOf(s, ghost.type);
+      const html = `<b>${machineName(ghost.type)}</b><span class="flow">청사진 · 보유 ${owned}</span>` +
+        `<span class="flow">${owned ? "클릭해서 설치" : "기계가 필요합니다"}</span>`;
+      if (html !== view.key) {
+        view.key = html;
+        view.body.innerHTML = html;
+      }
+    }
+    const live = new Set<string>();
+    for (const line of s.ghostLines) {
+      const a = this.spotOf(s, line.from);
+      const b = this.spotOf(s, line.to);
+      if (!a || !b) continue;
+      const key = `${line.from}>${line.to}:${line.material}`;
+      live.add(key);
+      let path = this.ghostWires.get(key);
+      if (!path) {
+        path = document.createElementNS(SVG, "path");
+        path.setAttribute("class", "wire plan-wire");
+        path.setAttribute("marker-end", "url(#wire-arrow)");
+        this.svg.append(path);
+        this.ghostWires.set(key, path);
+      }
+      const [p0, c1, c2, p3] = this.curve(a, b, false);
+      path.setAttribute("d", `M${p0[0]} ${p0[1]} C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p3[0]} ${p3[1]}`);
+      path.style.stroke = itemColor(line.material);
+      path.classList.toggle("muted", this.channel !== "all" && channelOf(line.material) !== this.channel);
+    }
+    for (const [key, path] of this.ghostWires) {
+      if (!live.has(key)) {
+        path.remove();
+        this.ghostWires.delete(key);
+      }
+    }
+  }
+
+  /** Whether a node matches the search: its name, code or anything it holds. */
+  private matches(s: GameState, node: GameNode, query: string): boolean {
+    const held = [
+      ...Object.values(node.ins).flatMap((stack) => (stack ? [stack.id] : [])),
+      ...Object.keys(node.outs).filter((id) => node.outs[id] > 0),
+      ...node.store.flatMap((stack) => (stack ? [stack.id] : [])),
+    ];
+    return [nodeLabel(s, node), ...held.flatMap((id) => [itemName(id), itemCode(id)])].some((text) => text.toLowerCase().includes(query));
   }
 
   constructor(
@@ -83,33 +306,62 @@ export class GraphView {
     });
     this.roster.append(this.projectChip);
     this.palette.className = "palette";
+    this.makeTools();
+    this.marquee.className = "marquee";
+    this.marquee.hidden = true;
     const scroll = document.createElement("div");
     scroll.className = "box board-scroll";
     this.board.className = "board";
     this.svg.setAttribute("class", "wires");
     this.svg.innerHTML = '<defs><marker id="wire-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="wire-arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs>';
-    this.board.append(this.svg);
+    this.board.append(this.svg, this.marquee);
     scroll.append(this.board);
     this.rosterList.className = "roster-list";
     this.rosterList.hidden = true;
-    this.root.append(this.roster, this.rosterList, this.palette, scroll);
+    this.root.append(this.roster, this.rosterList, this.palette, this.tools, scroll);
     this.board.addEventListener("click", (e) => {
-      if (e.target === this.board) this.cancelLink();
+      if (e.target !== this.board && e.target !== this.svg) return;
+      this.cancelLink();
+      const s = this.game();
+      // A machine in hand goes down where the player clicks.
+      if (s.cursor && isMachine(s.cursor.id)) {
+        const at = this.boardPoint(e);
+        if (installHeld(s, Math.max(0, at.x - NODE_W / 2), Math.max(0, at.y - NODE_H / 2))) this.changed();
+      }
+    });
+    this.board.addEventListener("pointermove", (e) => {
+      this.pointer = this.boardPoint(e);
+    });
+    this.board.addEventListener("pointerleave", () => {
+      this.pointer = null;
     });
     // No scrollbars: drag the ground to look around.
     this.board.addEventListener("pointerdown", (e) => {
       const target = e.target as Element;
       if (target !== this.board && target !== this.svg) return;
+      const cursor = this.game().cursor;
+      if (cursor && isMachine(cursor.id)) return;
+      // Shift-drag draws a box around nodes. A plain drag moves the view.
+      if (e.shiftKey) {
+        this.boxFrom = this.boardPoint(e);
+        return;
+      }
+      this.selected.clear();
       this.panFrom = { x: e.clientX - this.pan.x, y: e.clientY - this.pan.y };
       this.board.classList.add("panning");
     });
     window.addEventListener("pointermove", (e) => this.onDrag(e));
-    window.addEventListener("pointerup", () => this.endDrag());
+    window.addEventListener("pointerup", (e) => {
+      if (this.boxFrom) this.endBox(e);
+      this.endDrag();
+    });
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         this.cancelLink();
         this.closeList();
+        this.selected.clear();
       }
+      this.onKey(e);
     });
     // A click anywhere else closes the dropdown.
     document.addEventListener("click", (e) => {
@@ -160,14 +412,14 @@ export class GraphView {
     });
     root.append(body, link);
     body.addEventListener("pointerdown", (e) => {
-      const current = nodeById(this.game(), node.id)!;
-      this.drag = { id: node.id, dx: e.clientX - current.x, dy: e.clientY - current.y, moved: false };
+      this.drag = { id: node.id, dx: e.clientX, dy: e.clientY, moved: false };
     });
-    body.addEventListener("click", () => {
+    body.addEventListener("click", (e) => {
       if (this.dragged) {
         this.dragged = false;
         return;
       }
+      if (e.shiftKey) return this.toggleSelected(node.id);
       this.clickNode(node.id);
     });
     this.board.append(root);
@@ -182,17 +434,48 @@ export class GraphView {
       this.board.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px)`;
       return;
     }
-    if (!this.drag) return;
-    const node = nodeById(this.game(), this.drag.id);
-    if (!node) return;
-    const x = Math.max(0, e.clientX - this.drag.dx);
-    const y = Math.max(0, e.clientY - this.drag.dy);
-    if (Math.abs(x - node.x) + Math.abs(y - node.y) > 3) this.drag.moved = true;
-    if (this.drag.moved) {
-      node.x = x;
-      node.y = y;
-      this.draw(); // keep dragging smooth between ticks
+    if (this.boxFrom) {
+      const at = this.boardPoint(e);
+      const left = Math.min(at.x, this.boxFrom.x);
+      const top = Math.min(at.y, this.boxFrom.y);
+      this.marquee.hidden = false;
+      this.marquee.style.transform = `translate(${left}px, ${top}px)`;
+      this.marquee.style.width = `${Math.abs(at.x - this.boxFrom.x)}px`;
+      this.marquee.style.height = `${Math.abs(at.y - this.boxFrom.y)}px`;
+      return;
     }
+    if (!this.drag) return;
+    const s = this.game();
+    const dx = e.clientX - this.drag.dx;
+    const dy = e.clientY - this.drag.dy;
+    if (!this.drag.moved && Math.abs(dx) + Math.abs(dy) <= 3) return;
+    this.drag.moved = true;
+    this.drag.dx = e.clientX;
+    this.drag.dy = e.clientY;
+    // Dragging one of the selected nodes carries the whole selection.
+    const moving = this.selected.has(this.drag.id) ? [...this.selected] : [this.drag.id];
+    for (const id of moving) {
+      const spot = this.spotOf(s, id);
+      if (!spot) continue;
+      spot.x = Math.max(0, spot.x + dx);
+      spot.y = Math.max(0, spot.y + dy);
+    }
+    this.draw(); // keep dragging smooth between ticks
+  }
+
+  /** Selects everything inside the drawn box. */
+  private endBox(e: PointerEvent): void {
+    const from = this.boxFrom!;
+    const at = this.boardPoint(e);
+    const [left, right] = [Math.min(from.x, at.x), Math.max(from.x, at.x)];
+    const [top, bottom] = [Math.min(from.y, at.y), Math.max(from.y, at.y)];
+    const s = this.game();
+    for (const item of [...s.nodes, ...s.ghosts]) {
+      if (item.x + NODE_W > left && item.x < right && item.y + NODE_H > top && item.y < bottom) this.selected.add(item.id);
+    }
+    this.boxFrom = null;
+    this.marquee.hidden = true;
+    this.draw();
   }
 
   private endDrag(): void {
@@ -239,9 +522,7 @@ export class GraphView {
    * The curve of a route. It leaves from the side facing its target, and when traffic
    * runs both ways each direction keeps to its own lane, like a two-way road.
    */
-  private curve(s: GameState, line: Line, twoWay: boolean): Curve {
-    const a = nodeById(s, line.from)!;
-    const b = nodeById(s, line.to)!;
+  private curve(a: { x: number; y: number }, b: { x: number; y: number }, twoWay: boolean): Curve {
     const ax = a.x + NODE_W / 2;
     const ay = a.y + NODE_H / 2;
     const bx = b.x + NODE_W / 2;
@@ -358,6 +639,18 @@ export class GraphView {
   draw(): void {
     const s = this.game();
     this.drawRoster(s);
+    for (const [type, b] of this.paletteItems) {
+      const owned = countOf(s, type);
+      const label = `${machineName(type)} ${owned ? `x${owned}` : "+"}`;
+      if (b.textContent !== label) b.textContent = label;
+    }
+    for (const [channel, b] of this.channels) b.classList.toggle("selected", channel === this.channel);
+    this.copyButton.disabled = !this.selected.size;
+    this.pasteButton.disabled = !this.clip.length;
+    this.buildAll.hidden = !s.ghosts.length;
+    const allLabel = `청사진 설치 ${s.ghosts.filter((g) => countOf(s, g.type) > 0).length}/${s.ghosts.length}`;
+    if (this.buildAll.textContent !== allLabel) this.buildAll.textContent = allLabel;
+    const query = this.search.value.trim().toLowerCase();
     for (const [id, view] of this.nodes) {
       if (!nodeById(s, id)) {
         view.root.remove();
@@ -376,6 +669,10 @@ export class GraphView {
       const state = status(node);
       view.root.dataset.status = state;
       view.root.classList.toggle("source", this.linkFrom === node.id);
+      view.root.classList.toggle("selected", this.selected.has(node.id));
+      const found = !!query && this.matches(s, node, query);
+      view.root.classList.toggle("dim", !!query && !found);
+      view.root.classList.toggle("found", found);
       const html = this.nodeHtml(s, node);
       if (html !== view.key) {
         view.key = html;
@@ -384,6 +681,11 @@ export class GraphView {
       width = Math.max(width, node.x + NODE_W + 60);
       height = Math.max(height, node.y + NODE_H + 60);
     }
+    for (const ghost of s.ghosts) {
+      width = Math.max(width, ghost.x + NODE_W + 60);
+      height = Math.max(height, ghost.y + NODE_H + 60);
+    }
+    this.drawGhosts(s);
     this.board.style.width = `${width}px`;
     this.board.style.height = `${height}px`;
 
@@ -409,11 +711,14 @@ export class GraphView {
         this.lines.set(key, view);
       }
       const twoWay = routes.has(`${group[0].to}>${group[0].from}`);
-      const [p0, c1, c2, p3] = this.curve(s, group[0], twoWay);
+      const [p0, c1, c2, p3] = this.curve(nodeById(s, group[0].from)!, nodeById(s, group[0].to)!, twoWay);
       const shape = `M${p0[0]} ${p0[1]} C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p3[0]} ${p3[1]}`;
       view.path.setAttribute("d", shape);
       view.hit.setAttribute("d", shape);
       view.path.style.stroke = group.length === 1 ? itemColor(group[0].material) : "";
+      const lit = this.channel === "all" || group.some((l) => channelOf(l.material) === this.channel);
+      for (const mark of [view.path, view.tag, view.mover]) mark.classList.toggle("muted", !lit);
+      view.path.classList.toggle("lit", lit && this.channel !== "all");
       const names = group.map((l) => itemName(l.material)).join(", ");
       view.hit.dataset.tip = names;
       view.tag.dataset.tip = names;

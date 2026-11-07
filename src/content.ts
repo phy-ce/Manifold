@@ -169,7 +169,9 @@ export const machineName = (type: string): string => machines[type].name;
 /** How harshly a machine punishes mistakes, from 1 upward. */
 export const machineDifficulty = (type: string): number => machines[type]?.difficulty ?? 1;
 export const itemName = (id: string): string =>
-  ores[id] ? `${ores[id].name} (${ores[id].elements})` : itemNames[id] ?? id;
+  ores[id] ? `${ores[id].name} (${ores[id].elements})` : itemNames[id] ?? machines[id]?.name ?? id;
+/** A finished machine is an item until it is installed. */
+export const isMachine = (id: string): boolean => id in machines;
 export const itemCode = (id: string): string => variants[id]?.code ?? display[id]?.code ?? id.slice(0, 2);
 export const itemColor = (id: string): string => variants[id]?.color ?? display[id]?.color ?? "#dfe5ea";
 export const formOf = (id: string): string | undefined => variants[id]?.form;
@@ -178,10 +180,14 @@ const weights: Record<string, number> = era.weights;
 const metals: Record<string, { weight: number }> = materials.metals;
 const formWeights: Record<string, { weight: number }> = materials.forms;
 
+/** Every machine weighs the same to carry. */
+const MACHINE_WEIGHT = 10;
+
 /** Weight of one item. A part weighs its metal times how much metal its form uses. */
 export function itemWeight(id: string): number {
   const variant = variants[id];
   if (variant) return metals[variant.metal].weight * formWeights[variant.form].weight;
+  if (machines[id]) return MACHINE_WEIGHT;
   return weights[id] ?? metals[id]?.weight ?? 1;
 }
 
@@ -215,6 +221,7 @@ function itemRank(id: string): number[] {
     const form = metalOrder.includes(id) ? "ingot" : variants[id]?.form;
     if (raw >= 0) rank = [0, raw, 0];
     else if (metal) rank = [1, formOrder.indexOf(form), metalOrder.indexOf(metal)];
+    else if (id in machines) rank = [3, Object.keys(machines).indexOf(id), 0];
     else rank = [2, processingDepth(id), 0];
     ranks.set(id, rank);
   }

@@ -427,6 +427,18 @@ export function renderArt(type: string, mode: Status, frame: number): string {
   return printCanvas(g, COLS, ROWS);
 }
 
+const small = document.createElement("canvas");
+const smallContext = small.getContext("2d", { willReadFrequently: true })!;
+
+/** A machine shrunk to item-icon size. */
+export function machineIcon(type: string, cols: number, rows: number): string {
+  drawScene(type, "idle", 0);
+  small.width = cols;
+  small.height = rows;
+  smallContext.drawImage(canvas, 0, 0, cols, rows);
+  return printCanvas(smallContext, cols, rows);
+}
+
 /** The same scene as character runs, for drawing on a canvas. */
 export function artRuns(type: string, mode: Status, frame: number): ArtRun[] {
   drawScene(type, mode, frame);

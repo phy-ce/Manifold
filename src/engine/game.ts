@@ -1,5 +1,5 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
-import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, WAREHOUSE, WATER, compareItems, isFluid, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { ALL, BYPRODUCT, DRUM, ENGINE, LINK, MAIN, MAX_PORTS, MOTOR, PLAYABLE_STAGES, POWER, PUMP, RIVER, RIVERBANK, Recipe, STAGES, WAREHOUSE, WATER, compareItems, isFluid, isMachine, isPowerSource, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, Point, Site, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, linePath, riverBanks, terrain } from "./world";
 
 export const SAVE_VERSION = 13;
@@ -73,6 +73,22 @@ export interface GameNode {
   siteId?: number;
 }
 
+/** A planned machine: shown faded on the board, doing nothing until a real one takes its place. */
+export interface Ghost {
+  id: number;
+  type: string;
+  form: string;
+  x: number;
+  y: number;
+}
+
+/** A planned line. Either end can be a real node or a ghost. */
+export interface GhostLine {
+  from: number;
+  to: number;
+  material: string;
+}
+
 /** A facility being built. Materials are paid when work starts. */
 export interface Project {
   type: string;
@@ -107,6 +123,8 @@ export interface GameState {
   revealed: Record<string, number[]>;
   nodes: GameNode[];
   lines: Line[];
+  ghosts: Ghost[];
+  ghostLines: GhostLine[];
   nextId: number;
   /** How many of each machine have ever been built. Codes are never reused. */
   built: Record<string, number>;
@@ -160,6 +178,8 @@ export function createGame(seed: number): GameState {
     revealed: {},
     nodes: [],
     lines: [],
+    ghosts: [],
+    ghostLines: [],
     nextId: 1,
     built: {},
     project: null,
@@ -464,18 +484,106 @@ export function startProject(s: GameState, type: string): boolean {
   return true;
 }
 
-/** One click of work. The node appears when the work is finished. */
+/** Puts one item in the bag, or a warehouse if the bag is full. False when neither has room. */
+function giveItem(s: GameState, id: string): boolean {
+  return addTo(s.inv, id, 1) > 0 || bank(s, id, 1) > 0;
+}
+
+/** One click of work. The finished machine is an item, to install or store. */
 export function workProject(s: GameState): boolean {
   const project = s.project;
   if (!atBase(s) || !project) return false;
-  project.done += isWeak(s) ? WEAK_WORK : 1;
-  if (project.done >= machineWork(project.type)) {
-    const count = s.nodes.length;
-    const node = placeMachine(s, project.type, 260 + (count % 4) * 210, 30 + (Math.floor(count / 4) % 5) * 124)!;
-    node.paid = project.paid;
-    s.project = null;
-  }
+  const work = machineWork(project.type);
+  project.done = Math.min(work, project.done + (isWeak(s) ? WEAK_WORK : 1));
+  // With nowhere to put the machine, the work waits at the last step.
+  if (project.done >= work && giveItem(s, project.type)) s.project = null;
   return true;
+}
+
+/** A free-looking spot on the board for a new node. */
+export function nextSpot(s: GameState): Point {
+  const count = s.nodes.length + s.ghosts.length;
+  return { x: 260 + (count % 4) * 210, y: 30 + (Math.floor(count / 4) % 5) * 124 };
+}
+
+/** Installs a machine item from the bag or a warehouse. */
+export function installMachine(s: GameState, type: string, x: number, y: number): GameNode | null {
+  if (countOf(s, type) < 1) return null;
+  const node = placeMachine(s, type, x, y);
+  if (node) spend(s, type, 1);
+  return node;
+}
+
+/** Installs the machine item in the player's hand. */
+export function installHeld(s: GameState, x: number, y: number): GameNode | null {
+  if (!s.cursor || !isMachine(s.cursor.id)) return null;
+  const node = placeMachine(s, s.cursor.id, x, y);
+  if (node) drop(s, 1);
+  return node;
+}
+
+/** Plans a machine without needing one yet. */
+export function addGhost(s: GameState, type: string, x: number, y: number, form = machineForms(type)[0] ?? ""): Ghost | null {
+  if (!machinesAt(s.stage).includes(type)) return null;
+  const ghost: Ghost = { id: s.nextId++, type, form, x, y };
+  s.ghosts.push(ghost);
+  return ghost;
+}
+
+/** Copies nodes and ghosts as a new plan, with the lines running between them. */
+export function copyToGhosts(s: GameState, ids: number[], dx: number, dy: number): Ghost[] {
+  const copies = new Map<number, Ghost>();
+  for (const id of ids) {
+    const source = nodeById(s, id) ?? s.ghosts.find((g) => g.id === id);
+    if (!source || source.type === RIVERBANK) continue;
+    copies.set(id, { id: s.nextId++, type: source.type, form: source.form, x: source.x + dx, y: source.y + dy });
+  }
+  s.ghosts.push(...copies.values());
+  for (const line of [...s.lines, ...s.ghostLines]) {
+    const from = copies.get(line.from);
+    const to = copies.get(line.to);
+    if (from && to) s.ghostLines.push({ from: from.id, to: to.id, material: line.material });
+    // A pump's riverbank stays where it is, so the copy points at the same one.
+    else if (to && line.material === LINK) s.ghostLines.push({ from: line.from, to: to.id, material: LINK });
+  }
+  return [...copies.values()];
+}
+
+export function removeGhost(s: GameState, id: number): void {
+  s.ghosts = s.ghosts.filter((g) => g.id !== id);
+  s.ghostLines = s.ghostLines.filter((l) => l.from !== id && l.to !== id);
+}
+
+/** Turns planned lines into real ones once both ends exist and the parts are there. */
+function settleGhostLines(s: GameState): void {
+  s.ghostLines = s.ghostLines.filter((line) => {
+    if (!nodeById(s, line.from) || !nodeById(s, line.to)) return true;
+    if (!routeMaterials(s, line.from, line.to).includes(line.material) || hasLine(s, line.from, line.to, line.material)) return false;
+    return !toggleRoute(s, line.from, line.to, line.material);
+  });
+}
+
+/** Replaces a ghost with a real machine, using one from the bag or a warehouse. */
+export function buildGhost(s: GameState, id: number): GameNode | null {
+  const ghost = s.ghosts.find((g) => g.id === id);
+  if (!ghost) return null;
+  const node = installMachine(s, ghost.type, ghost.x, ghost.y);
+  if (!node) return null;
+  if (ghost.form) setForm(s, node.id, ghost.form);
+  s.ghosts = s.ghosts.filter((g) => g !== ghost);
+  for (const line of s.ghostLines) {
+    if (line.from === id) line.from = node.id;
+    if (line.to === id) line.to = node.id;
+  }
+  settleGhostLines(s);
+  return node;
+}
+
+/** Replaces every ghost it has a machine for. Returns how many it placed. */
+export function buildAllGhosts(s: GameState): number {
+  const built = s.ghosts.map((g) => g.id).filter((id) => buildGhost(s, id));
+  settleGhostLines(s);
+  return built.length;
 }
 
 export function cancelProject(s: GameState): boolean {
@@ -487,6 +595,8 @@ export function cancelProject(s: GameState): boolean {
 
 /** Brings a save from an older layout up to date. */
 export function upgradeSave(s: GameState): GameState {
+  s.ghosts ??= [];
+  s.ghostLines ??= [];
   // Goals used to be handed in. Count what was handed in or still exists as made.
   const old = s as GameState & { delivered?: number; won?: boolean };
   if (s.stage === undefined) {
@@ -528,8 +638,11 @@ export function removeNode(s: GameState, id: number): boolean {
   for (const stack of Object.values(node.ins)) if (stack && !isFluid(stack.id)) bank(s, stack.id, stack.n);
   for (const [item, n] of Object.entries(node.outs)) if (n && !isFluid(item)) bank(s, item, n);
   s.nodes = s.nodes.filter((n) => n !== node);
-  refund(s, node.paid);
+  // Older saves built nodes straight from materials, and get those back instead.
+  if (node.paid.length) refund(s, node.paid);
+  else if (!giveItem(s, node.type)) s.cursor ??= { id: node.type, n: 1 };
   cutLines(s, (l) => l.from !== id && l.to !== id);
+  s.ghostLines = s.ghostLines.filter((l) => l.from !== id && l.to !== id);
   return true;
 }
 

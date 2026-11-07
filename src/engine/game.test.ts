@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, TANK_CAP, addTo, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, TANK_CAP, addTo, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -498,7 +498,7 @@ describe("warehouses", () => {
   const buildWarehouse = (s: GameState) => {
     expect(startProject(s, WAREHOUSE)).toBe(true);
     for (let i = 0; i < 25; i += 1) workProject(s);
-    return s.nodes.filter((n) => n.type === WAREHOUSE).at(-1)!;
+    return installMachine(s, WAREHOUSE, 0, 0)!;
   };
 
   it("costs metal to build", () => {
@@ -536,7 +536,7 @@ describe("warehouses", () => {
     expect(removeNode(s, extra.id)).toBe(false);
     extra.store[0] = null;
     expect(removeNode(s, extra.id)).toBe(true);
-    expect(countOf(s, "iron")).toBe(10);
+    expect(countOf(s, WAREHOUSE)).toBe(1);
   });
 
   it("moves goods between lines into a built warehouse", () => {
@@ -1276,15 +1276,52 @@ describe("building", () => {
     expect(s.inv[0]).toEqual({ id: "Kn", n: 9 });
   });
 
-  it("pays on start and only creates the node when the work is done", () => {
+  it("pays on start and gives a machine item when the work is done", () => {
     const s = withClay(12);
     expect(startProject(s, "brick_kiln")).toBe(true);
     expect(s.inv[0]).toEqual({ id: "Kn", n: 2 });
     for (let i = 0; i < 19; i += 1) workProject(s);
-    expect(s.nodes.some((n) => n.type === "brick_kiln")).toBe(false);
+    expect(countOf(s, "brick_kiln")).toBe(0);
     workProject(s);
-    expect(s.nodes.some((n) => n.type === "brick_kiln")).toBe(true);
+    expect(countOf(s, "brick_kiln")).toBe(1);
+    expect(s.nodes.some((n) => n.type === "brick_kiln")).toBe(false);
     expect(s.project).toBeNull();
+  });
+
+  it("installs a machine item from the bag or a warehouse, and needs one", () => {
+    const s = createGame(1);
+    expect(installMachine(s, "brick_kiln", 10, 20)).toBeNull();
+    warehouse(s).store[0] = { id: "brick_kiln", n: 2 };
+    const kiln = installMachine(s, "brick_kiln", 10, 20)!;
+    expect([kiln.x, kiln.y]).toEqual([10, 20]);
+    expect(countOf(s, "brick_kiln")).toBe(1);
+  });
+
+  it("installs the machine in hand where the player clicks", () => {
+    const s = createGame(1);
+    s.cursor = { id: "spring_motor", n: 2 };
+    expect(installHeld(s, 5, 6)).toBeTruthy();
+    expect(s.cursor).toEqual({ id: "spring_motor", n: 1 });
+    s.cursor = { id: "Lm", n: 1 };
+    expect(installHeld(s, 5, 6)).toBeNull();
+  });
+
+  it("keeps a machine item in storage for later", () => {
+    const s = withClay(10);
+    startProject(s, "brick_kiln");
+    for (let i = 0; i < 20; i += 1) workProject(s);
+    const index = s.inv.findIndex((slot) => slot?.id === "brick_kiln");
+    clickStack(s, s.inv, index, "left");
+    clickStack(s, warehouse(s).store, 0, "left");
+    expect(warehouse(s).store[0]).toEqual({ id: "brick_kiln", n: 1 });
+    expect(installMachine(s, "brick_kiln", 0, 0)).toBeTruthy();
+  });
+
+  it("won't install a machine from a later stage", () => {
+    const s = createGame(1);
+    s.inv[0] = { id: "steam_hammer", n: 1 };
+    expect(installMachine(s, "steam_hammer", 0, 0)).toBeNull();
+    expect(s.inv[0]).toEqual({ id: "steam_hammer", n: 1 });
   });
 
   it("runs one project at a time", () => {
@@ -1301,16 +1338,27 @@ describe("building", () => {
     expect(workProject(s)).toBe(false);
   });
 
-  it("refunds a cancelled project and a removed machine in full", () => {
+  it("refunds a cancelled project, and a removed machine comes back as an item", () => {
     const s = withClay(10);
     startProject(s, "brick_kiln");
     cancelProject(s);
     expect(countOf(s, "clay")).toBe(10);
     startProject(s, "brick_kiln");
     for (let i = 0; i < 20; i += 1) workProject(s);
+    const kiln = installMachine(s, "brick_kiln", 0, 0)!;
+    expect(countOf(s, "brick_kiln")).toBe(0);
+    removeNode(s, kiln.id);
+    expect(countOf(s, "brick_kiln")).toBe(1);
     expect(countOf(s, "clay")).toBe(0);
-    removeNode(s, s.nodes.find((n) => n.type === "brick_kiln")!.id);
+  });
+
+  it("gives old machines their materials back instead", () => {
+    const s = createGame(1);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    kiln.paid = [{ id: "Kn", n: 10 }];
+    removeNode(s, kiln.id);
     expect(countOf(s, "clay")).toBe(10);
+    expect(countOf(s, "brick_kiln")).toBe(0);
   });
 
   it("spends from the warehouse too", () => {
@@ -1697,6 +1745,105 @@ describe("fluids", () => {
     const { s, pump } = pumped();
     expect(removeNode(s, pump.id)).toBe(true);
     expect(countOf(s, "water")).toBe(0);
+  });
+});
+
+describe("blueprints", () => {
+  const line = () => {
+    const s = createGame(1);
+    const motor = placeMachine(s, MOTOR, 10, 10)!;
+    const kiln = placeMachine(s, "brick_kiln", 100, 10)!;
+    connect(s, motor.id, kiln.id, POWER);
+    addTo(s.nodes[0].store, "iron_plate", 8);
+    addTo(s.nodes[0].store, "copper_tube", 8);
+    return { s, motor, kiln };
+  };
+
+  it("copies nodes and their lines as ghosts that do nothing", () => {
+    const { s, motor, kiln } = line();
+    const copies = copyToGhosts(s, [motor.id, kiln.id], 50, 60);
+    expect(copies.map((g) => [g.type, g.x, g.y])).toEqual([[MOTOR, 60, 70], ["brick_kiln", 150, 70]]);
+    expect(s.ghostLines).toEqual([{ from: copies[0].id, to: copies[1].id, material: POWER }]);
+    expect(s.nodes).toHaveLength(3);
+    run(s, 2);
+    expect(s.lines).toHaveLength(1);
+  });
+
+  it("leaves out lines that reach outside the selection", () => {
+    const { s, kiln } = line();
+    copyToGhosts(s, [kiln.id], 0, 0);
+    expect(s.ghostLines).toEqual([]);
+  });
+
+  it("needs a real machine before a ghost becomes one", () => {
+    const { s, kiln } = line();
+    const [ghost] = copyToGhosts(s, [kiln.id], 0, 0);
+    expect(buildGhost(s, ghost.id)).toBeNull();
+    expect(s.ghosts).toHaveLength(1);
+    s.inv[0] = { id: "brick_kiln", n: 1 };
+    expect(buildGhost(s, ghost.id)?.type).toBe("brick_kiln");
+    expect(s.ghosts).toHaveLength(0);
+    expect(s.inv[0]).toBeNull();
+  });
+
+  it("makes the planned lines real once both ends exist, paying for them", () => {
+    const { s, motor, kiln } = line();
+    const copies = copyToGhosts(s, [motor.id, kiln.id], 0, 200);
+    s.inv[0] = { id: MOTOR, n: 1 };
+    s.inv[1] = { id: "brick_kiln", n: 1 };
+    const plates = countOf(s, "iron_plate");
+    const a = buildGhost(s, copies[0].id)!;
+    expect(s.ghostLines).toHaveLength(1);
+    const b = buildGhost(s, copies[1].id)!;
+    expect(s.ghostLines).toHaveLength(0);
+    expect(s.lines.some((l) => l.from === a.id && l.to === b.id && l.material === POWER)).toBe(true);
+    expect(countOf(s, "iron_plate")).toBe(plates - 1);
+  });
+
+  it("keeps a planned line waiting when the parts run out", () => {
+    const { s, motor, kiln } = line();
+    const copies = copyToGhosts(s, [motor.id, kiln.id], 0, 200);
+    s.nodes[0].store = s.nodes[0].store.map(() => null);
+    s.inv[0] = { id: MOTOR, n: 1 };
+    s.inv[1] = { id: "brick_kiln", n: 1 };
+    expect(buildAllGhosts(s)).toBe(2);
+    expect(s.ghostLines).toHaveLength(1);
+    expect(copies).toHaveLength(2);
+  });
+
+  it("restores a machine's form", () => {
+    const s = createGame(1);
+    const bench = placeMachine(s, "forming_bench", 0, 0)!;
+    setForm(s, bench.id, "cylinder");
+    const [ghost] = copyToGhosts(s, [bench.id], 0, 0);
+    s.inv[0] = { id: "forming_bench", n: 1 };
+    expect(buildGhost(s, ghost.id)?.form).toBe("cylinder");
+  });
+
+  it("builds what it can and leaves the rest planned", () => {
+    const { s, motor, kiln } = line();
+    copyToGhosts(s, [motor.id, kiln.id], 0, 0);
+    s.inv[0] = { id: "brick_kiln", n: 1 };
+    expect(buildAllGhosts(s)).toBe(1);
+    expect(s.ghosts.map((g) => g.type)).toEqual([MOTOR]);
+  });
+
+  it("drops a ghost and its lines", () => {
+    const { s, motor, kiln } = line();
+    const copies = copyToGhosts(s, [motor.id, kiln.id], 0, 0);
+    removeGhost(s, copies[0].id);
+    expect(s.ghosts).toHaveLength(1);
+    expect(s.ghostLines).toEqual([]);
+  });
+
+  it("copies a pump's link to the same riverbank", () => {
+    const s = createTestGame(1);
+    const bank = s.nodes.find((n) => n.type === "riverbank")!;
+    const pump = placeMachine(s, "drainage_pump", 0, 0)!;
+    connect(s, bank.id, pump.id, "link");
+    const [ghost] = copyToGhosts(s, [pump.id, bank.id], 0, 0);
+    expect(ghost.type).toBe("drainage_pump");
+    expect(s.ghostLines).toEqual([{ from: bank.id, to: ghost.id, material: "link" }]);
   });
 });
 

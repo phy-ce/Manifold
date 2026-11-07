@@ -80,7 +80,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 /* Map */
 .map-view, .graph-view { flex: 1; min-height: 0; display: grid; gap: var(--gap-lg); }
 .map-view { grid-template-columns: max-content minmax(0, 1fr); align-items: start; align-content: start; }
-.graph-view { grid-template-rows: auto auto minmax(0, 1fr); }
+.graph-view { grid-template-rows: auto auto auto minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
 .map-side { display: grid; gap: var(--gap-lg); min-width: 0; }
@@ -113,6 +113,17 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .node[data-status="manual"] .progress { color: var(--go); }
 .node[data-status="blocked"] { border-color: var(--alert); animation: pulse .7s steps(2) infinite; }
 .node.source { outline: 2px solid var(--go); }
+.node.selected { outline: 2px solid var(--fire); }
+.node.found { outline: 2px solid var(--go); }
+.node.dim { opacity: .25; }
+.node.plan { opacity: .55; border-style: dashed; background: transparent; }
+.node.plan:hover { opacity: .85; }
+.wire.plan-wire { stroke-dasharray: 6 5; opacity: .5; }
+.wire.muted, .wire-tag.muted, .mover.muted { opacity: .08; }
+.wire.lit { stroke-width: 3; opacity: 1; }
+.marquee { position: absolute; left: 0; top: 0; z-index: 5; border: 1px dashed var(--go); pointer-events: none; }
+.graph-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
+.graph-tools input { width: calc(var(--slot) * 3); min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .node.refused { outline: 2px solid var(--alert); }
 .linking .node { cursor: copy; }
 .node-body { display: grid; gap: 1px; width: 100%; height: 100%; padding: var(--gap-sm) var(--gap); text-align: left; font-size: var(--text-sm); line-height: 1.3; touch-action: none; cursor: grab; }
