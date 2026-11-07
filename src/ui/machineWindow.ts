@@ -1,7 +1,7 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, PUMP, RIVERBANK, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canRemove, expectedOutput, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, canAffordRoute, canRemove, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -210,6 +210,37 @@ export class MachineWindow {
       b.textContent = formLabel(form);
       b.addEventListener("click", () => {
         setForm(this.game(), node.id, form);
+        this.open(node.id);
+        this.changed();
+      });
+      this.modes.append(b);
+    }
+    if (node.type === PUMP) this.buildRivers(node);
+  }
+
+  /** A pump chooses its riverbank here, from the ones the player has found. */
+  private buildRivers(node: GameNode): void {
+    const s = this.game();
+    const linked = riverOf(s, node);
+    const banks = foundRivers(s);
+    this.modes.hidden = false;
+    if (!banks.length) {
+      const note = document.createElement("span");
+      note.className = "card-note";
+      note.textContent = "지도에서 강가를 먼저 찾아야 합니다";
+      this.modes.append(note);
+      return;
+    }
+    for (const bank of banks) {
+      const on = linked?.id === bank.siteId;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `tech ${on ? "selected" : ""}`;
+      b.textContent = nodeLabel(s, bank);
+      b.disabled = !on && !linked && !canAffordRoute(s, bank.id, node.id);
+      b.dataset.tip = on ? "다시 누르면 연결을 끊습니다" : b.disabled ? "철판 1, 구리관 1이 필요합니다" : "이 강가에서 물을 끌어옵니다";
+      b.addEventListener("click", () => {
+        linkRiver(s, node.id, bank.id);
         this.open(node.id);
         this.changed();
       });

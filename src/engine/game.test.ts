@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, TANK_CAP, addTo, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, TANK_CAP, addTo, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -1474,6 +1474,30 @@ describe("riverbanks", () => {
     expect(connect(s, other.id, pump.id, "link")).toBeNull();
     expect(routeMaterials(s, bank.id, s.nodes[0].id)).toEqual([]);
     expect(routeMaterials(s, pump.id, bank.id)).toEqual([]);
+  });
+
+  it("lets the pump pick any found riverbank, and move between them", () => {
+    const { s, bank, pump } = atRiver();
+    s.lines = [];
+    addTo(s.nodes[0].store, "iron_plate", 4);
+    addTo(s.nodes[0].store, "copper_tube", 4);
+    const [first, second] = foundRivers(s);
+    expect(linkRiver(s, pump.id, first.id)).toBe(true);
+    expect(riverOf(s, pump)?.id).toBe(first.siteId);
+    expect(linkRiver(s, pump.id, second.id)).toBe(true);
+    expect(riverOf(s, pump)?.id).toBe(second.siteId);
+    expect(s.lines.filter((l) => l.to === pump.id && l.material === "link")).toHaveLength(1);
+    expect(linkRiver(s, pump.id, second.id)).toBe(true);
+    expect(riverOf(s, pump)).toBeUndefined();
+    expect(bank).toBeTruthy();
+  });
+
+  it("won't link without the parts for a line", () => {
+    const { s, pump } = atRiver();
+    s.lines = [];
+    s.nodes[0].store = s.nodes[0].store.map(() => null);
+    expect(linkRiver(s, pump.id, foundRivers(s)[0].id)).toBe(false);
+    expect(riverOf(s, pump)).toBeUndefined();
   });
 
   it("can't be demolished", () => {

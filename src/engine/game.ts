@@ -299,6 +299,18 @@ function showRivers(s: GameState): void {
   }
 }
 
+/** Riverbanks the player has found, as base nodes. */
+export const foundRivers = (s: GameState): GameNode[] => s.nodes.filter((node) => node.type === RIVERBANK);
+
+/** Points a pump at a riverbank, moving it off any other. Choosing its own riverbank again unlinks it. */
+export function linkRiver(s: GameState, pumpId: number, bankId: number): boolean {
+  const current = s.lines.find((l) => l.to === pumpId && l.material === LINK);
+  if (current?.from === bankId) return removeLine(s, current.id);
+  if (!canAffordRoute(s, bankId, pumpId) && !current) return false;
+  if (current) removeLine(s, current.id);
+  return toggleRoute(s, bankId, pumpId, LINK);
+}
+
 /** The riverbank a pump is linked to, if any. */
 export function riverOf(s: GameState, pump: GameNode): Site | undefined {
   const line = s.lines.find((l) => l.to === pump.id && l.material === LINK);
