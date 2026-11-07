@@ -4,7 +4,7 @@ import {
   GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, addTo, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
-import { BASE, chunkSites, generateSites, orderSites, terrain } from "./world";
+import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 
 /** Most tests aren't about survival, so they keep the player fed. */
 const keepAlive = (s: GameState) => {
@@ -1991,6 +1991,16 @@ describe("safe walking", () => {
       expect(Math.max(Math.abs(cell.x - at.x), Math.abs(cell.y - at.y))).toBe(1);
       at = cell;
     }
+  });
+
+  it("steps around a small hazard, but crosses one that would take too long to avoid", () => {
+    const from = { x: 0, y: 0 };
+    const to = { x: 10, y: 0 };
+    /** A wall of 3-damage cells at x = 5, reaching `half` cells up and down. */
+    const wall = (half: number) => (x: number, y: number) => (x === 5 && Math.abs(y) <= half ? 3 : 0);
+    const crossings = (half: number) => safePath(from, to, wall(half)).filter((c) => wall(half)(c.x, c.y)).length;
+    expect(crossings(1)).toBe(0);
+    expect(crossings(20)).toBe(1);
   });
 
   it("keeps a very long walk fast", () => {

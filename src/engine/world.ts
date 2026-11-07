@@ -155,7 +155,7 @@ export function orderSites(sites: Site[], steps: (site: Site) => number, hideEmp
 }
 
 /** How many extra steps one point of damage is worth when picking a safe route. */
-const DAMAGE_WEIGHT = 20;
+const DAMAGE_WEIGHT = 4;
 /** How far a safe route may stray from the straight box between its ends. */
 const SAFE_MARGIN = 30;
 /** Give up and walk straight past this many cells, so a far click can't stall the game. */
