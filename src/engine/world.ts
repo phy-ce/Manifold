@@ -91,8 +91,8 @@ export function generateSites(seed: number): Site[] {
       do {
         const dist = min + rng() * (max - min);
         const angle = rng() * Math.PI * 2;
-        x = Math.round(BASE.x + Math.cos(angle) * dist);
-        y = Math.round(BASE.y + Math.sin(angle) * dist * CELL_ASPECT);
+        x = Math.round(BASE.x + Math.cos(angle) * dist) + 0; // + 0 turns -0 into 0, which is what a save gives back
+        y = Math.round(BASE.y + Math.sin(angle) * dist * CELL_ASPECT) + 0;
       } while (taken.has(`${x},${y}`));
       taken.add(`${x},${y}`);
       const vein = rollVein(rng, ore);
