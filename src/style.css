@@ -98,7 +98,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 
 /* Base graph */
 .board-scroll { overflow: hidden; padding: 0; min-height: 0; }
-.board { position: relative; cursor: grab; }
+.board { position: relative; cursor: grab; transform-origin: 0 0; }
 .board.panning { cursor: grabbing; }
 .wires { position: absolute; inset: 0; width: 100%; height: 100%; }
 .wire { fill: none; stroke: var(--dim); stroke-width: 2; opacity: .75; pointer-events: none; }
@@ -116,9 +116,9 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .node.selected { outline: 2px solid var(--fire); }
 .node.found { outline: 2px solid var(--go); }
 .node.dim { opacity: .25; }
-.node.plan { opacity: .55; border-style: dashed; background: transparent; }
-.node.plan:hover { opacity: .85; }
-.wire.plan-wire { stroke-dasharray: 6 5; opacity: .5; }
+.node.plan { opacity: .5; }
+.node.plan:hover { opacity: .75; }
+.wire.plan-wire { opacity: .35; }
 .wire.muted, .wire-tag.muted, .mover.muted { opacity: .08; }
 .wire.lit { stroke-width: 3; opacity: 1; }
 .marquee { position: absolute; left: 0; top: 0; z-index: 5; border: 1px dashed var(--go); pointer-events: none; }

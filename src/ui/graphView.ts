@@ -1,5 +1,5 @@
 // Base screen: machines as nodes, lines drawn between them.
-import { ENGINE, LINK, MAX_PORTS, machinesAt, MOTOR, POWER, RIVERBANK, WAREHOUSE, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, LINK, MAX_PORTS, formLabel, machineForms, machinesAt, MOTOR, POWER, RIVERBANK, WAREHOUSE, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   powerLoad, buildAllGhosts, buildGhost, copyToGhosts, countOf, installHeld, removeGhost,
   Ghost, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
@@ -32,6 +32,10 @@ interface GhostView {
 type Channel = "all" | "power" | "item" | "link";
 const CHANNELS: [Channel, string][] = [["all", "모든 선"], ["power", "동력"], ["item", "재료"], ["link", "강가"]];
 const channelOf = (material: string): Channel => (material === POWER ? "power" : material === LINK ? "link" : "item");
+/** Board zoom limits, and how much one wheel notch changes it. */
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 1.6;
+const ZOOM_STEP = 1.1;
 /** How far a paste lands from the original when the pointer isn't over the board. */
 const PASTE_OFFSET = 40;
 
@@ -58,6 +62,9 @@ export class GraphView {
   private linkFrom: number | null = null;
   private drag: { id: number; dx: number; dy: number; moved: boolean } | null = null;
   private pan = { x: 0, y: 0 };
+  private zoom = 1;
+  private readonly view = document.createElement("div");
+  private readonly zoomButton = document.createElement("button");
   private panFrom: { x: number; y: number } | null = null;
 
   private stage = -1;
@@ -127,7 +134,12 @@ export class GraphView {
       buildAllGhosts(this.game());
       this.changed();
     });
-    this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.buildAll);
+    action(this.zoomButton, "100%", "휠로 확대/축소합니다. 누르면 100%로 돌아갑니다", () => {
+      this.zoom = 1;
+      this.applyView();
+      this.draw();
+    });
+    this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.buildAll, this.zoomButton);
   }
 
   private copy(): void {
@@ -159,7 +171,27 @@ export class GraphView {
 
   private boardPoint(e: MouseEvent): { x: number; y: number } {
     const box = this.board.getBoundingClientRect();
-    return { x: e.clientX - box.left, y: e.clientY - box.top };
+    return { x: (e.clientX - box.left) / this.zoom, y: (e.clientY - box.top) / this.zoom };
+  }
+
+  private applyView(): void {
+    this.board.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoom})`;
+    const label = `${Math.round(this.zoom * 100)}%`;
+    if (this.zoomButton.textContent !== label) this.zoomButton.textContent = label;
+  }
+
+  /** Zooms around the pointer, so the spot under it stays put. */
+  private onWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, this.zoom * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP)));
+    const box = this.view.getBoundingClientRect();
+    const x = e.clientX - box.left;
+    const y = e.clientY - box.top;
+    const scale = next / this.zoom;
+    this.pan = { x: Math.min(0, x - (x - this.pan.x) * scale), y: Math.min(0, y - (y - this.pan.y) * scale) };
+    this.zoom = next;
+    this.applyView();
+    this.draw();
   }
 
   private toggleSelected(id: number): void {
@@ -187,6 +219,7 @@ export class GraphView {
   private makeGhost(ghost: Ghost): GhostView {
     const root = document.createElement("div");
     root.className = "node plan";
+    root.dataset.status = "idle";
     const body = document.createElement("button");
     body.type = "button";
     body.className = "node-body";
@@ -241,9 +274,8 @@ export class GraphView {
       const found = machineName(ghost.type).toLowerCase().includes(query);
       view.root.classList.toggle("dim", !!query && !found);
       view.root.classList.toggle("found", !!query && found);
-      const owned = countOf(s, ghost.type);
-      const html = `<b>${machineName(ghost.type)}</b><span class="flow">청사진 · 보유 ${owned}</span>` +
-        `<span class="flow">${owned ? "클릭해서 설치" : "기계가 필요합니다"}</span>`;
+      view.body.dataset.tip = countOf(s, ghost.type) ? "클릭해서 설치" : "기계가 필요합니다";
+      const html = this.ghostHtml(s, ghost);
       if (html !== view.key) {
         view.key = html;
         view.body.innerHTML = html;
@@ -275,6 +307,16 @@ export class GraphView {
         this.ghostWires.delete(key);
       }
     }
+  }
+
+  /** The same card as a real node, with nothing in it: no code, no materials. */
+  private ghostHtml(s: GameState, ghost: Ghost): string {
+    const used = s.ghostLines.filter((l) => l.from === ghost.id || l.to === ghost.id).length;
+    const form = machineForms(ghost.type).length > 1 ? ` (${formLabel(ghost.form)})` : "";
+    const ports = "●".repeat(used) + "○".repeat(Math.max(0, MAX_PORTS - used));
+    const plain = ghost.type === WAREHOUSE || ghost.type === MOTOR || ghost.type === ENGINE;
+    return `<b>${machineName(ghost.type)}${form}</b><span class="ports">${ports}</span><span class="flow">&nbsp;</span>` +
+      (plain ? "" : `<span class="progress">[${".".repeat(14)}]</span>`);
   }
 
   /** Whether a node matches the search: its name, code or anything it holds. */
@@ -309,16 +351,16 @@ export class GraphView {
     this.makeTools();
     this.marquee.className = "marquee";
     this.marquee.hidden = true;
-    const scroll = document.createElement("div");
-    scroll.className = "box board-scroll";
+    this.view.className = "box board-scroll";
+    this.view.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     this.board.className = "board";
     this.svg.setAttribute("class", "wires");
     this.svg.innerHTML = '<defs><marker id="wire-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="wire-arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs>';
     this.board.append(this.svg, this.marquee);
-    scroll.append(this.board);
+    this.view.append(this.board);
     this.rosterList.className = "roster-list";
     this.rosterList.hidden = true;
-    this.root.append(this.roster, this.rosterList, this.palette, this.tools, scroll);
+    this.root.append(this.roster, this.rosterList, this.palette, this.tools, this.view);
     this.board.addEventListener("click", (e) => {
       if (e.target !== this.board && e.target !== this.svg) return;
       this.cancelLink();
@@ -431,7 +473,7 @@ export class GraphView {
   private onDrag(e: PointerEvent): void {
     if (this.panFrom) {
       this.pan = { x: Math.min(0, e.clientX - this.panFrom.x), y: Math.min(0, e.clientY - this.panFrom.y) };
-      this.board.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px)`;
+      this.applyView();
       return;
     }
     if (this.boxFrom) {
@@ -446,8 +488,8 @@ export class GraphView {
     }
     if (!this.drag) return;
     const s = this.game();
-    const dx = e.clientX - this.drag.dx;
-    const dy = e.clientY - this.drag.dy;
+    const dx = (e.clientX - this.drag.dx) / this.zoom;
+    const dy = (e.clientY - this.drag.dy) / this.zoom;
     if (!this.drag.moved && Math.abs(dx) + Math.abs(dy) <= 3) return;
     this.drag.moved = true;
     this.drag.dx = e.clientX;
@@ -686,8 +728,9 @@ export class GraphView {
       height = Math.max(height, ghost.y + NODE_H + 60);
     }
     this.drawGhosts(s);
-    this.board.style.width = `${width}px`;
-    this.board.style.height = `${height}px`;
+    // Zoomed out, the board still has to fill the view so the ground stays draggable.
+    this.board.style.width = `${Math.max(width, this.view.clientWidth / this.zoom)}px`;
+    this.board.style.height = `${Math.max(height, this.view.clientHeight / this.zoom)}px`;
 
     // All materials between the same two nodes share one line.
     const routes = new Map<string, Line[]>();
