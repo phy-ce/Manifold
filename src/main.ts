@@ -197,6 +197,17 @@ const map = new MapView(game, () => {
 
 const itemIndex = new ItemIndex(game, () => windowView.openNode, redraw);
 indexButton.addEventListener("click", () => itemIndex.toggle());
+indexButton.dataset.tip = "단축키 G";
+travel.dataset.tip = "단축키 M";
+// Physical keys, so these still work while the keyboard is set to Korean.
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.code === "KeyG") itemIndex.toggle();
+  if (e.code === "KeyM") {
+    closeWindows();
+    travel.click();
+  }
+});
 
 const invBox = document.createElement("section");
 invBox.className = "box";
