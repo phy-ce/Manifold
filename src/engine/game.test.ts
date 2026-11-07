@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAYERS, kindOf, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
+import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
   GameState, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, addTo, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
@@ -282,7 +282,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "fan"]);
   });
 
   it("makes the chosen form from whichever metal goes in", () => {
@@ -2124,6 +2124,21 @@ describe("S1-3", () => {
     expect(oven.outs.coal_tar).toBe(1);
     expect(takeOutput(s, oven.id, "coal_tar")).toBe(false);
     expect(routeMaterials(s, oven.id, s.nodes[0].id)).toEqual(["main"]);
+  });
+
+  it("needs fans to build what blows air", () => {
+    expect(machineCost("blast_furnace").iron_fan).toBe(2);
+    expect(machineCost("converter").iron_fan).toBe(1);
+  });
+
+  it("forms a fan from iron on the bench", () => {
+    const s = createGame(1);
+    const bench = placeMachine(s, "forming_bench", 0, 0)!;
+    setForm(s, bench.id, "fan");
+    bench.ins.iron = { id: "iron", n: 3 };
+    power(s, bench.id);
+    run(s, 11);
+    expect(bench.outs.iron_fan).toBe(1);
   });
 
   it("disposes of tar in a tank", () => {

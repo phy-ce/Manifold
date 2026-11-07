@@ -50,8 +50,8 @@
     "steam_hammer": { "name": "증기 해머", "power": 3, "cost": { "iron_cylinder": 1, "iron_plate": 8 }, "work": 30 },
 
     "coke_oven": { "name": "코크스로", "cost": { "brick": 40 }, "work": 40 },
-    "blast_furnace": { "name": "고로", "power": 4, "cost": { "brick": 60, "iron_plate": 30, "copper_tube": 10 }, "work": 60 },
-    "converter": { "name": "베세머 전로", "power": 6, "cost": { "brick": 20, "iron_plate": 40, "iron_cylinder": 2 }, "work": 50 },
+    "blast_furnace": { "name": "고로", "power": 4, "cost": { "brick": 60, "iron_plate": 30, "copper_tube": 10, "iron_fan": 2 }, "work": 60 },
+    "converter": { "name": "베세머 전로", "power": 6, "cost": { "brick": 20, "iron_plate": 40, "iron_cylinder": 2, "iron_fan": 1 }, "work": 50 },
     "tar_tank": { "name": "타르 저장조", "cost": { "iron_plate": 10 }, "work": 20 },
 
     "rolling_mill": { "name": "압연기", "power": 3, "cost": { "steel": 20, "iron_cylinder": 2 } },
@@ -68,7 +68,8 @@
     { "form": "plate", "machine": "plate_hammer", "time": 4, "in": 2, "out": 1, "metals": ["iron", "copper"] },
     { "form": "tube", "machine": "forming_bench", "time": 4, "in": 1, "out": 2, "metals": ["iron", "copper"] },
     { "form": "cylinder", "machine": "forming_bench", "time": 12, "in": 4, "out": 1, "metals": ["iron", "copper"] },
-    { "form": "drum", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] }
+    { "form": "drum", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] },
+    { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
     { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2, "coal": 1 }, "out": { "brick": 2 } },

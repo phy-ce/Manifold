@@ -145,5 +145,5 @@ export const EN: Record<string, string> = {
   "갈철석": "Limonite", "적철석": "Hematite", "자철석": "Magnetite", "공작석": "Malachite", "휘동석": "Chalcocite", "황동석": "Chalcopyrite", "갈탄": "Lignite", "역청탄": "Bituminous coal",
   "무연탄": "Anthracite", "고령토": "Kaolin", "도보": "On foot", "개량 이동": "Better walking", "철로": "Rail", "자동 운송": "Auto haul",
   // Game data: metals and forms. A part's name is its metal plus its form.
-  "철": "Iron", "구리": "Copper", "판": " plate", "관": " tube", " 실린더": " cylinder", "실린더": "Cylinder", " 드럼통": " drum", "드럼통": "Drum",
+  "철": "Iron", "구리": "Copper", "판": " plate", "관": " tube", " 실린더": " cylinder", "실린더": "Cylinder", " 드럼통": " drum", "드럼통": "Drum", " 송풍기": " fan", "송풍기": "Fan",
 };
