@@ -17,13 +17,14 @@ const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder"]);
 interface Lump {
   /** Gives each lump its own outline. */
   seed: number;
-  smooth?: boolean;
+  /** Grain contrast varies, but every mineral keeps a rough surface. */
+  grain?: number;
   /** Gas pockets left in the rock, as in slag. */
   holes?: number;
 }
 
 const LUMPS: Record<string, Lump> = {
-  Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, smooth: true },
+  Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, grain: 0.7 },
   slag: { seed: 41, holes: 9 },
 };
 
@@ -43,30 +44,44 @@ function shade(hex: string, k: number): string {
 }
 
 /** Rough rock with a lit top-left and mineral flecks. */
-function drawLump(color: string, { seed, smooth = false, holes = 0 }: Lump): string {
+function drawLump(color: string, { seed, grain = 1, holes = 0 }: Lump): string {
   g.clearRect(0, 0, COLS, ROWS);
-  g.save();
-  g.scale(COLS / SHEET_W, ROWS / SHEET_H);
-  const cx = SHEET_W / 2;
+  const cx = SHEET_W / 2 - 0.8;
   const cy = SHEET_H / 2;
-  const edge = (a: number) => (smooth ? 0.95 : 0.78 + hash(Math.floor(a * 2.2), 1, seed) * 0.34);
-  for (let y = 0; y < SHEET_H; y += 1) {
-    for (let x = 0; x < SHEET_W; x += 1) {
-      const dx = (x - cx) / 9;
-      const dy = (y - cy) / 7.4;
+  const edge = (a: number) => 0.82 + hash(Math.floor(a * 2.2), 1, seed) * 0.25;
+  const inside = (x: number, y: number) => {
+    const dx = ((x + 0.5) * SHEET_W / COLS - cx) / 7.8;
+    const dy = ((y + 0.5) * SHEET_H / ROWS - cy) / 6.1;
+    return Math.hypot(dx, dy) <= edge(Math.atan2(dy, dx) + Math.PI);
+  };
+  // Draw on whole character cells: fractional canvas scaling blurs the grains.
+  for (let y = 0; y < ROWS; y += 1) {
+    for (let x = 0; x < COLS; x += 1) {
+      if (!inside(x, y)) continue;
+      const dx = ((x + 0.5) * SHEET_W / COLS - cx) / 7.8;
+      const dy = ((y + 0.5) * SHEET_H / ROWS - cy) / 6.1;
       const a = Math.atan2(dy, dx) + Math.PI;
-      if (Math.hypot(dx, dy) > edge(a)) continue;
-      const light = 0.62 + (-dx - dy) * 0.32;
-      const fleck = !smooth && hash(x, y, seed) > 0.8;
-      g.fillStyle = shade(color, fleck ? 1.5 : light + hash(x, y, seed + 1) * 0.12);
+      const rim = Math.hypot(dx, dy) / edge(a);
+      const light = 0.66 + (-dx - dy) * 0.25;
+      const speck = hash(x, y, seed);
+      // Small bright inclusions sit in mottled rock, with occasional dark seams.
+      const cluster = hash(Math.floor(x / 2), Math.floor(y / 2), seed + 2);
+      const fleck = speck > 0.84 || (cluster > 0.72 && speck > 0.6);
+      const texture = (hash(x, y, seed + 1) - 0.5) * 0.26 * grain;
+      const tone = fleck ? light + 0.55 * grain : light + texture - (speck < 0.12 ? 0.2 : 0);
+      g.fillStyle = shade(color, Math.max(0.24, tone - (rim > 0.87 ? 0.17 : 0)));
       g.fillRect(x, y, 1, 1);
     }
   }
-  g.fillStyle = shade(color, 0.2);
   for (let i = 0; i < holes; i += 1) {
-    g.fillRect(4 + Math.floor(hash(i, 1, seed) * 11), 3 + Math.floor(hash(i, 2, seed) * 11), 2, 2);
+    const x = Math.floor(COLS * (0.24 + hash(i, 1, seed) * 0.43));
+    const y = Math.floor(ROWS * (0.3 + hash(i, 2, seed) * 0.4));
+    if (!inside(x - 1, y) || !inside(x + 2, y + 1)) continue;
+    g.fillStyle = shade(color, 0.2);
+    g.fillRect(x, y, 2, 1);
+    g.fillStyle = shade(color, 0.8);
+    g.fillRect(x, y + 1, 1, 1);
   }
-  g.restore();
   return printCanvas(g, COLS, ROWS);
 }
 
