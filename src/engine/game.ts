@@ -676,6 +676,10 @@ function readiness(node: GameNode): "ready" | "idle" | "blocked" {
   return fed ? "ready" : "idle";
 }
 
+/** What one batch will give, once the inputs are enough to start. Empty until then. */
+export const expectedOutput = (node: GameNode): string[] =>
+  readiness(node) === "ready" ? Object.keys(recipeOf(node).out) : [];
+
 export function status(node: GameNode): Status {
   if (node.type === WAREHOUSE) return "idle";
   if (node.type === MOTOR) return node.energy > 0 ? "run" : "idle";

@@ -1,7 +1,7 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { MOTOR, WAREHOUSE, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, STEAM_MAX, canRemove, lacksPower, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, OUTPUT_CAP, SPRING_MAX, STEAM_MAX, canRemove, expectedOutput, lacksPower, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -361,11 +361,12 @@ export class MachineWindow {
     for (const [key, b] of this.inputs) {
       paintSlot(b, node.ins[key], "", undefined, { name: inputRole(key), fits: slots.find((slot) => slot.key === key)!.accepts });
     }
+    const expected = expectedOutput(node);
     this.outputs.forEach(([held, b], i) => {
       const item = held.find((id) => node.outs[id] > 0);
       const n = item ? node.outs[item] : 0;
       const role = i > 0 ? "byproduct" : "";
-      paintSlot(b, item ? { id: item, n } : null, `${role} ${n >= OUTPUT_CAP ? "full" : ""}`, undefined, { name: outputRole(i), fits: held });
+      paintSlot(b, item ? { id: item, n } : null, `${role} ${n >= OUTPUT_CAP ? "full" : ""}`, item ? undefined : expected[i], { name: outputRole(i), fits: held });
     });
     const waiting = state === "manual";
     const manual = machineManual(node.type);

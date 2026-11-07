@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
-  GameState, STEAM_MAX, addTo, bagHolds, fillFromBag, lacksPower, runsRecipe, canStart, createTestGame, nearestRiver, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, STEAM_MAX, addTo, bagHolds, expectedOutput, fillFromBag, lacksPower, runsRecipe, canStart, createTestGame, nearestRiver, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, terrain } from "./world";
@@ -1521,6 +1521,36 @@ describe("filling a machine from the index", () => {
     expect(runsRecipe(bench, tube)).toBe(true);
     expect(runsRecipe(bench, cylinder)).toBe(false);
     expect(fillFromBag(s, bench.id, cylinder, 1)).toBe(false);
+  });
+});
+
+describe("expected output", () => {
+  it("appears only once the inputs are enough for a batch", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    expect(expectedOutput(furnace)).toEqual([]);
+    furnace.ins.iron_ore = { id: "Lm", n: 1 };
+    furnace.ins.coal = { id: "Lg", n: 1 };
+    expect(expectedOutput(furnace)).toEqual([]);
+    furnace.ins.iron_ore = { id: "Lm", n: 2 };
+    expect(expectedOutput(furnace)).toEqual(["iron", "slag"]);
+  });
+
+  it("follows what the input decides", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    furnace.ins.iron_ore = { id: "Ml", n: 2 };
+    furnace.ins.coal = { id: "Lg", n: 1 };
+    expect(expectedOutput(furnace)).toEqual(["copper", "slag"]);
+  });
+
+  it("stays quiet while the output is blocked", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    furnace.ins.iron_ore = { id: "Lm", n: 2 };
+    furnace.ins.coal = { id: "Lg", n: 1 };
+    furnace.outs.copper = 1;
+    expect(expectedOutput(furnace)).toEqual([]);
   });
 });
 
