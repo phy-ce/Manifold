@@ -131,6 +131,16 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .wire.muted, .wire-tag.muted, .mover.muted { opacity: .08; }
 .wire.lit { stroke-width: 3; opacity: 1; }
 .marquee { position: absolute; left: 0; top: 0; z-index: 5; border: 1px dashed var(--go); pointer-events: none; }
+.context-menu { position: fixed; z-index: 40; display: grid; min-width: calc(var(--slot) * 2.5); background: var(--panel); border: 1px solid var(--line); }
+.context-menu button { padding: var(--gap-sm) var(--gap); text-align: left; font-size: var(--text-sm); border-bottom: 1px solid var(--line); }
+.context-menu button:last-child { border-bottom: 0; }
+.context-menu button:hover:not(:disabled) { background: var(--line); }
+.context-menu button:disabled { color: var(--faint); cursor: default; }
+.window.help { width: min(calc(100vw - var(--gap) * 4), calc(var(--slot) * 14)); }
+.help-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-lg); }
+.help-list h3 { margin: 0 0 var(--gap-sm); font-size: var(--text-md); color: var(--fire); }
+.help-row { display: grid; grid-template-columns: calc(var(--slot) * 2.2) minmax(0, 1fr); gap: var(--gap); padding: 2px 0; font-size: var(--text-sm); }
+.help-row kbd { font: inherit; font-weight: 700; color: var(--go); }
 .graph-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 .graph-tools input { width: calc(var(--slot) * 3); min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .node.refused { outline: 2px solid var(--alert); }

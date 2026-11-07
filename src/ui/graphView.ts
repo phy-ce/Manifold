@@ -78,6 +78,7 @@ export class GraphView {
   private readonly ghostViews = new Map<number, GhostView>();
   private readonly ghostWires = new Map<string, SVGPathElement>();
   private readonly marquee = document.createElement("div");
+  private readonly menu = document.createElement("div");
   private readonly groupButton = document.createElement("button");
   private readonly groupViews = new Map<number, GhostView>();
   /** Waiting for the player to click the node that will face the outside. */
@@ -165,6 +166,7 @@ export class GraphView {
   private makeGroup(group: Group): GhostView {
     const root = document.createElement("div");
     root.className = "node group";
+    root.dataset.id = String(group.id);
     const body = document.createElement("button");
     body.type = "button";
     body.className = "node-body";
@@ -240,8 +242,71 @@ export class GraphView {
     }
   }
 
-  /** Lays the copied nodes down as a plan, at the pointer if it is over the board. */
-  private paste(): void {
+  /** Right-click: what can be done to this node, or to the ground. */
+  private openMenu(e: MouseEvent): void {
+    e.preventDefault();
+    const s = this.game();
+    const card = (e.target as Element).closest<HTMLElement>(".node");
+    const id = card ? Number(card.dataset.id) : null;
+    // Right-clicking something outside the selection works on just that thing.
+    if (id !== null && !this.selected.has(id)) {
+      this.selected.clear();
+      this.selected.add(id);
+    }
+    const at = this.boardPoint(e);
+    const ghost = s.ghosts.find((g) => g.id === id);
+    const group = s.groups.find((g) => g.id === id);
+    const items: [string, boolean, () => void][] = [];
+    if (id !== null && nodeById(s, id)) items.push(["열기", true, () => this.open(id)]);
+    if (ghost) {
+      items.push(["설치", countOf(s, ghost.type) > 0, () => {
+        buildGhost(s, ghost.id);
+        this.selected.delete(ghost.id);
+      }]);
+      items.push(["청사진 지우기", true, () => {
+        removeGhost(s, ghost.id);
+        this.selected.delete(ghost.id);
+      }]);
+    }
+    if (group) {
+      items.push([group.open ? "접기" : "펼치기", true, () => {
+        group.open = !group.open;
+      }]);
+      items.push(["묶음 풀기", true, () => {
+        removeGroup(s, group.id);
+        this.selected.delete(group.id);
+      }]);
+    }
+    if (this.selected.size) items.push(["복사", true, () => this.copy()]);
+    items.push(["붙여넣기", this.clip.length > 0, () => this.paste(at)]);
+    if ([...this.selected].filter((n) => nodeById(s, n)).length >= 2) {
+      items.push(["묶기", true, () => {
+        this.pickingPort = true;
+      }]);
+    }
+    if (s.ghosts.length) items.push(["청사진 모두 설치", s.ghosts.some((g) => countOf(s, g.type) > 0), () => buildAllGhosts(s)]);
+    if (this.selected.size) items.push(["선택 풀기", true, () => this.selected.clear()]);
+    this.menu.replaceChildren(...items.map(([label, enabled, run]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.disabled = !enabled;
+      b.addEventListener("click", () => {
+        run();
+        this.changed();
+      });
+      return b;
+    }));
+    this.menu.hidden = false;
+    // Keep the whole menu on screen near the window's edges.
+    const box = this.menu.getBoundingClientRect();
+    this.menu.style.left = `${Math.min(e.clientX, window.innerWidth - box.width)}px`;
+    this.menu.style.top = `${Math.min(e.clientY, window.innerHeight - box.height)}px`;
+    this.draw();
+  }
+
+  /** Lays the copied nodes down as a plan, at the given spot or the pointer if it is over the board. */
+  private paste(spot?: { x: number; y: number }): void {
     const s = this.game();
     const spots = this.clip.flatMap((id) => {
       const at = this.spotOf(s, id);
@@ -250,8 +315,9 @@ export class GraphView {
     if (!spots.length) return;
     const left = Math.min(...spots.map((p) => p.x));
     const top = Math.min(...spots.map((p) => p.y));
-    const dx = this.pointer ? Math.max(0, this.pointer.x) - left : PASTE_OFFSET;
-    const dy = this.pointer ? Math.max(0, this.pointer.y) - top : PASTE_OFFSET;
+    const target = spot ?? this.pointer;
+    const dx = target ? Math.max(0, target.x) - left : PASTE_OFFSET;
+    const dy = target ? Math.max(0, target.y) - top : PASTE_OFFSET;
     const copies = copyToGhosts(s, this.clip, dx, dy);
     this.selected.clear();
     for (const ghost of copies) this.selected.add(ghost.id);
@@ -312,6 +378,7 @@ export class GraphView {
   private makeGhost(ghost: Ghost): GhostView {
     const root = document.createElement("div");
     root.className = "node plan";
+    root.dataset.id = String(ghost.id);
     root.dataset.status = "idle";
     const body = document.createElement("button");
     body.type = "button";
@@ -442,6 +509,8 @@ export class GraphView {
     this.roster.append(this.projectChip);
     this.palette.className = "palette";
     this.makeTools();
+    this.menu.className = "context-menu";
+    this.menu.hidden = true;
     this.marquee.className = "marquee";
     this.marquee.hidden = true;
     this.view.className = "box board-scroll";
@@ -453,7 +522,8 @@ export class GraphView {
     this.view.append(this.board);
     this.rosterList.className = "roster-list";
     this.rosterList.hidden = true;
-    this.root.append(this.roster, this.rosterList, this.palette, this.tools, this.view);
+    this.root.append(this.roster, this.rosterList, this.palette, this.tools, this.view, this.menu);
+    this.board.addEventListener("contextmenu", (e) => this.openMenu(e));
     this.board.addEventListener("click", (e) => {
       if (e.target !== this.board && e.target !== this.svg) return;
       this.cancelLink();
@@ -496,11 +566,13 @@ export class GraphView {
         this.closeList();
         this.selected.clear();
         this.pickingPort = false;
+        this.menu.hidden = true;
       }
       this.onKey(e);
     });
     // A click anywhere else closes the dropdown.
     document.addEventListener("click", (e) => {
+      this.menu.hidden = true;
       const target = e.target as Node;
       if (!this.roster.contains(target) && !this.rosterList.contains(target)) this.closeList();
     });
@@ -534,6 +606,7 @@ export class GraphView {
   private makeNode(node: GameNode): NodeView {
     const root = document.createElement("div");
     root.className = "node";
+    root.dataset.id = String(node.id);
     const body = document.createElement("button");
     body.type = "button";
     body.className = "node-body";

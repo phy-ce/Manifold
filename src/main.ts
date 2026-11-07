@@ -7,6 +7,7 @@ import { GraphView } from "./ui/graphView";
 import { ItemIndex } from "./ui/itemIndex";
 import { MachineWindow } from "./ui/machineWindow";
 import { RouteWindow } from "./ui/routeWindow";
+import { HelpWindow } from "./ui/helpWindow";
 import { SaveWindow } from "./ui/saveWindow";
 import { MapView } from "./ui/mapView";
 import { makeSlot, paintSlot } from "./ui/slots";
@@ -108,7 +109,15 @@ testStart.addEventListener("click", () => {
   save();
   location.reload();
 });
-top.append(goal, vitals, travel, indexButton, speedBar, saveButton, testStart, reset);
+const help = new HelpWindow();
+const helpButton = document.createElement("button");
+helpButton.type = "button";
+helpButton.className = "tech";
+helpButton.textContent = "?";
+helpButton.dataset.tip = "조작 도움말 (단축키 ?)";
+helpButton.setAttribute("aria-label", "조작 도움말");
+helpButton.addEventListener("click", () => help.toggle(true));
+top.append(goal, vitals, travel, indexButton, speedBar, saveButton, helpButton, testStart, reset);
 
 // A small number shows the damage taken. No full-screen flash: it was hard on the eyes.
 const hurtFlash = document.createElement("div");
@@ -296,7 +305,7 @@ keepPlaying.addEventListener("click", () => {
 win.firstElementChild!.append(keepPlaying);
 
 document.body.append(itemIndex.root);
-app.append(top, notice, graph.root, map.root, invBox, windowView.root, buildView.root, routeView.root, saveView.root, win);
+app.append(top, notice, graph.root, map.root, invBox, windowView.root, buildView.root, routeView.root, saveView.root, help.root, win);
 
 travel.addEventListener("click", () => {
   if (atBase(state)) screen = screen === "base" ? "map" : "base";
