@@ -2174,16 +2174,36 @@ describe("S1-3", () => {
   });
 
   it("carries power through a manifold, and counts it in the load", () => {
-    const { s, motor } = stage3();
+    const { s } = stage3();
+    const engine = placeMachine(s, "steam_engine", 0, 0)!;
+    engine.ins.coal = { id: "Lg", n: 16 };
+    engine.ins.water = { id: "water", n: 40 };
     const manifold = placeMachine(s, "steam_manifold", 0, 0)!;
     const hammer = placeMachine(s, "steam_hammer", 0, 0)!;
     hammer.ins.iron = { id: "iron", n: 12 };
-    expect(connect(s, motor.id, manifold.id, POWER)).toBeTruthy();
+    expect(connect(s, engine.id, manifold.id, POWER)).toBeTruthy();
     expect(connect(s, manifold.id, hammer.id, POWER)).toBeTruthy();
     run(s, 1);
     expect(hammer.speed).toBe(1);
-    expect(powerLoad(s, motor).connected).toBe(3);
+    expect(powerLoad(s, engine).connected).toBe(3);
     expect(hasDrive(s, hammer.id)).toBe(true);
+  });
+
+  it("takes steam only, never a spring's power", () => {
+    const { s, motor } = stage3();
+    const manifold = placeMachine(s, "steam_manifold", 0, 0)!;
+    expect(routeMaterials(s, motor.id, manifold.id)).toEqual([]);
+    expect(connect(s, motor.id, manifold.id, POWER)).toBeNull();
+  });
+
+  it("cuts a spring's line to a manifold from an old save", () => {
+    const { s, motor } = stage3();
+    const manifold = placeMachine(s, "steam_manifold", 0, 0)!;
+    s.lines.push({ id: 999, from: motor.id, to: manifold.id, material: POWER, timer: 0, active: false, lastMoved: 0, paid: [{ id: "iron_plate", n: 1 }] });
+    const plates = countOf(s, "iron_plate");
+    upgradeSave(s);
+    expect(s.lines.some((l) => l.id === 999)).toBe(false);
+    expect(countOf(s, "iron_plate")).toBe(plates + 1);
   });
 
   it("won't loop power round a pair of manifolds forever", () => {

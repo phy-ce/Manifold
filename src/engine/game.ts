@@ -710,6 +710,8 @@ export function loadSave(raw: unknown): GameState | null {
 export function upgradeSave(s: GameState): GameState {
   s.ghosts ??= [];
   s.ghostLines ??= [];
+  // Springs could once feed a manifold.
+  cutLines(s, (l) => !(nodeById(s, l.from)?.type === MOTOR && nodeById(s, l.to)?.type === MANIFOLD));
   s.groups ??= [];
   s.safeWalk ??= true;
   // Veins found before grades existed were all normal in size.
@@ -784,6 +786,8 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
     const taken = s.lines.some((l) => l.to === to.id && l.material === LINK && l.from !== from.id);
     return to.type === PUMP && !taken ? [LINK] : [];
   }
+  // A manifold splits steam, so a spring can't feed one.
+  if (from.type === MOTOR && to.type === MANIFOLD) return [];
   if (isPowerSource(from.type) || from.type === MANIFOLD) return to.type === ENGINE ? [] : [POWER];
   if (to.type === MANIFOLD) return [];
   // A warehouse has no filter: it can only send what it holds, in turn.
