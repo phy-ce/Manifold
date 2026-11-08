@@ -19,8 +19,10 @@ export function expandRecipes(era, materials) {
         code: metal.code + form.code,
         color: metal.color,
       };
+      // Several machines can share a form, each with its own template; later ones name their machine.
+      const base = `${template.form}_${metalId}`;
       generated.push({
-        id: `${template.form}_${metalId}`,
+        id: generated.some((r) => r.id === base) ? `${base}_${template.machine}` : base,
         machine: template.machine,
         form: template.form,
         // Harder metals take longer to work.

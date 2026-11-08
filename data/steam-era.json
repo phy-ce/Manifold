@@ -70,7 +70,8 @@
     "generator_bench": { "name": "발전기 조립대", "power": 4, "cost": { "steel_plate": 20, "gear": 10 } }
   },
   "recipeTemplates": [
-    { "form": "plate", "machine": "plate_hammer", "time": 4, "in": 2, "out": 1, "metals": ["iron", "copper"] },
+    { "form": "plate", "machine": "plate_hammer", "time": 4, "in": 2, "out": 1, "metals": ["iron", "copper", "steel"] },
+    { "form": "plate", "machine": "steam_hammer", "time": 2, "in": 3, "out": 2, "metals": ["iron", "copper", "steel"] },
     { "form": "tube", "machine": "forming_bench", "time": 4, "in": 1, "out": 2, "metals": ["iron", "copper"] },
     { "form": "cylinder", "machine": "forming_bench", "time": 12, "in": 4, "out": 1, "metals": ["iron", "copper"] },
     { "form": "drum", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] },
@@ -92,7 +93,6 @@
 
     { "id": "pump_water", "machine": "drainage_pump", "time": 0.5, "in": {}, "out": { "water": 1 } },
     { "id": "steam", "machine": "steam_engine", "time": 10, "in": { "coal": 1, "water": 4 }, "out": {} },
-    { "id": "iron_plate_steam", "machine": "steam_hammer", "time": 2, "in": { "iron": 3 }, "out": { "iron_plate": 2 } },
 
     { "id": "coke", "machine": "coke_oven", "time": 10, "in": { "coal": 2 }, "out": { "coke": 1, "coal_tar": 1 } },
     { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "iron": 4, "slag": 2 } },

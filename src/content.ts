@@ -309,7 +309,32 @@ export function compareItems(a: string, b: string): number {
 
 // ---- Item index
 
-const knownRecipes = (stage: number): Recipe[] => machinesAt(stage).flatMap(machineRecipes).filter((r) => !r.disposal);
+/**
+ * Recipes the player can actually run by a stage: on an open machine, with every input
+ * obtainable by then. A machine open early can't leak a later material, such as steel on the plate hammer.
+ */
+const knownCache = new Map<number, Recipe[]>();
+function knownRecipes(stage: number): Recipe[] {
+  const cached = knownCache.get(stage);
+  if (cached) return cached;
+  const open = machinesAt(stage).flatMap(machineRecipes).filter((r) => !r.disposal);
+  const have = new Set<string>([...stageOres(stage), ...FORAGE]);
+  const obtainable = (key: string) => [...have].some((id) => matches(id, key));
+  const known: Recipe[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const recipe of open) {
+      if (known.includes(recipe) || !Object.keys(recipe.in).every(obtainable)) continue;
+      known.push(recipe);
+      Object.keys(recipe.out).forEach((id) => have.add(id));
+      grew = true;
+    }
+  }
+  // Keep the data's order, so lists read the same as before.
+  const ordered = open.filter((r) => known.includes(r));
+  knownCache.set(stage, ordered);
+  return ordered;
+}
 
 /** The ores that fill a family such as "coal". */
 export const familyMembers = (id: string): string[] => allSurfaceOres.filter((ore) => ores[ore].family === id);

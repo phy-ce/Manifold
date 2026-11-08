@@ -585,6 +585,17 @@ describe("slot roles", () => {
 describe("item index", () => {
   const ids = (list: { id: string }[]) => list.map((r) => r.id);
 
+  it("makes every metal's plate on both hammers, the steam hammer with the better yield", () => {
+    for (const metal of ["iron", "copper"]) {
+      const ways = recipesFor(`${metal}_plate`, 1);
+      expect(ways.find((r) => r.machine === "plate_hammer")).toMatchObject({ in: { [metal]: 2 }, out: { [`${metal}_plate`]: 1 } });
+      expect(ways.find((r) => r.machine === "steam_hammer")).toMatchObject({ in: { [metal]: 3 }, out: { [`${metal}_plate`]: 2 } });
+    }
+    // Steel plate only shows once steel can be made.
+    expect(recipesFor("steel_plate", 1)).toEqual([]);
+    expect(recipesFor("steel_plate", 2).map((r) => r.machine)).toEqual(expect.arrayContaining(["plate_hammer", "steam_hammer"]));
+  });
+
   it("lists current items and hides later tiers", () => {
     const items = indexItems();
     for (const id of ["Lm", "Lg", "Kn", "Ml", "Be", "iron", "copper_plate", "iron_cylinder", "steam_engine_unit", "Bc"]) {
