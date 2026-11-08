@@ -88,7 +88,10 @@ export const EN: Record<string, string> = {
   "에서 선 연결": ": start a line", "동력을 나눕니다": "Splits power", "연결": "Linked", "힘": "Force",
   "외부 연결 노드를 클릭": "Click the outside node", "청사진 설치": "Install blueprints",
   // Help
-  "전체": "General", "이 도움말": "This help", "지도와 기지 전환, 기지 밖에서는 복귀": "Switch map and base, or return home",
+  "전체": "General", "이 도움말": "This help", "지도와 기지 전환, 기지 밖에서는 복귀": "Switch map and base, or return home", "지도에서 걷기 (두 키를 함께 누르면 대각선)": "Walk on the map (two keys together go diagonally)",
+  "동굴에서 탐사: 멈춰서 주변 광맥 찾기": "In a cave, prospect: stand still to find veins nearby", "자연 동굴": "Natural cave", "출구": "Way out", "출구로": "To the way out",
+  "암반": "Bedrock", "동굴 생물 서식지": "Cave creature den", "동굴로 들어가기": "Enter the cave", "나가기": "Climb out", "탐사": "Prospect", "탐사 중": "Prospecting",
+  "멈춰서 주변 바위를 두드려 광맥을 찾습니다 (P)": "Stand still and tap the rock to find veins nearby (P)",
   "도감 열기": "Open the index", "이동 방식 전환: 위험 피하기, 직진": "Switch walking: avoid danger, straight",
   "창 닫기, 선택 풀기": "Close windows, clear selection", "아이템 칸": "Item slots", "왼쪽 클릭": "Left click",
   "집기, 놓기, 합치기, 바꾸기": "Pick up, put down, merge, swap", "오른쪽 클릭": "Right click", "절반 집기, 1개 놓기": "Take half, place one",

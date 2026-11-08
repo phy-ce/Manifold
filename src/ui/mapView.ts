@@ -1,9 +1,9 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
-import { WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
-import { GameState, SEASON_NAMES, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, walkTo } from "../engine/game";
-import { BASE, Site, hash, orderSites, terrain } from "../engine/world";
+import { CAVE, CAVES, WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
+import { GameState, REVEAL, SEASON_NAMES, atCaveExit, caveDoorHere, caveSeenAt, currentCave, enterCave, leaveCave, onThisMap, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, startProbe, walkTo } from "../engine/game";
+import { BASE, CELL_ASPECT, HABITAT, Point, ROCK, Site, caveCell, hash, orderSites, terrain } from "../engine/world";
 
 /** Size of the window onto the endless map, which stays centred on the player. */
 const VIEW_W = 60;
@@ -15,6 +15,7 @@ const MAX_RESULTS = 10;
 const COLOR: Record<string, string> = {
   "t-plain": "#3c4955", "t-hill1": "#7c8b9b", "t-hill2": "#a9b6c2", "t-hill3": "#e6ebef", "t-water": "#4d8fc4",
   player: "#8fd16f", base: "#dfe5ea", path: "#ffb238", remembered: "#3a4552", memoryBg: "#141a22", seenBg: "#1d2631",
+  cave: "#c9a27a", rock: "#2b3541", habitat: "#d0544c", probe: "#ffb238",
 };
 
 interface VeinCell {
@@ -48,7 +49,7 @@ function buildVein(site: Site): Vein {
 }
 
 const siteName = (s: GameState, site: Site): string =>
-  site.ore === WATER ? `${tr("강가")} ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.rich ? ` ${richnessName(site.rich)}` : "") + (site.left <= 0 ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
+  site.ore === CAVE ? tr("자연 동굴") : site.ore === WATER ?`${tr("강가")} ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.rich ? ` ${richnessName(site.rich)}` : "") + (site.left <= 0 ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
 
 export class MapView {
   readonly root = document.createElement("section");
@@ -63,6 +64,11 @@ export class MapView {
   private readonly hideButton = document.createElement("button");
   private hideEmpty = false;
   private readonly place = document.createElement("div");
+  /** Going in and out of a cave, and prospecting inside one. */
+  private readonly caveBar = document.createElement("div");
+  private readonly enter = document.createElement("button");
+  private readonly leave = document.createElement("button");
+  private readonly probe = document.createElement("button");
   private readonly safe = document.createElement("button");
   private readonly straight = document.createElement("button");
   private veins = new Map<number, Vein>();
@@ -127,7 +133,22 @@ export class MapView {
     };
     mode(this.safe, tr("위험 피하기"), tr("아는 위험 지역을 돌아갑니다 (T)"), true);
     mode(this.straight, tr("직진"), tr("위험을 무시하고 곧장 갑니다 (T)"), false);
-    mapBox.append(this.place, walkMode, this.canvas, legend);
+    this.caveBar.className = "modes";
+    const action = (b: HTMLButtonElement, label: string, act: (s: GameState) => boolean, tip?: string) => {
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = label;
+      if (tip) b.dataset.tip = tip;
+      b.addEventListener("click", () => {
+        act(this.game());
+        this.changed();
+      });
+      this.caveBar.append(b);
+    };
+    action(this.enter, tr("동굴로 들어가기"), enterCave);
+    action(this.leave, tr("나가기"), leaveCave);
+    action(this.probe, tr("탐사"), startProbe, tr("멈춰서 주변 바위를 두드려 광맥을 찾습니다 (P)"));
+    mapBox.append(this.place, walkMode, this.caveBar, this.canvas, legend);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -166,9 +187,18 @@ export class MapView {
 
   private describe(x: number, y: number): string {
     const s = this.game();
+    const cave = currentCave(s);
+    if (cave) {
+      if (!caveSeenAt(s, x, y)) return "";
+      if (x === cave.map.entry.x && y === cave.map.entry.y) return tr("출구");
+      const vein = s.sites.find((v) => v.x === x && v.y === y && onThisMap(s, v));
+      if (vein) return siteName(s, vein);
+      const cell = caveCell(cave.map, x, y);
+      return cell === ROCK ? tr("암반") : cell === HABITAT ? tr("동굴 생물 서식지") : "";
+    }
     if (x === BASE.x && y === BASE.y) return tr("기지");
     if (!isRevealed(s, x, y)) return "";
-    const site = s.sites.find((v) => v.x === x && v.y === y);
+    const site = s.sites.find((v) => v.x === x && v.y === y && onThisMap(s, v));
     if (site) return siteName(s, site);
     const [, cls, height] = terrain(x, y, s.seed);
     return cls === "t-hill" ? `${tr("산 고도")} ${height}` : cls === "t-water" ? tr("강") : "";
@@ -179,17 +209,29 @@ export class MapView {
     this.safe.classList.toggle("selected", s.safeWalk);
     this.straight.classList.toggle("selected", !s.safeWalk);
     this.drawVein(s);
-    // The map only changes when the player moves or a vein empties.
-    const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1), 0);
-    const key = `${s.player.x},${s.player.y},${s.path.length},${s.sites.length},${emptied},${s.season}`;
+    const cave = currentCave(s);
+    const probing = s.probe === null ? -1 : Math.min(1, (s.time - s.probe) / CAVES.probeMs);
+    this.enter.hidden = !caveDoorHere(s);
+    this.leave.hidden = !atCaveExit(s);
+    this.probe.hidden = !cave;
+    this.probe.classList.toggle("selected", probing >= 0);
+    const probeLabel = probing >= 0 ? `${tr("탐사 중")} ${"▮".repeat(Math.round(probing * 4)).padEnd(4, "▯")}` : tr("탐사");
+    if (this.probe.textContent !== probeLabel) this.probe.textContent = probeLabel;
+    this.caveBar.hidden = this.enter.hidden && this.leave.hidden && this.probe.hidden;
+    // The map only changes when the player moves, a vein empties or turns up, or prospecting ticks on.
+    const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0), 0);
+    const key = `${s.cave},${s.player.x},${s.player.y},${s.path.length},${s.sites.length},${emptied},${s.season},${Math.round(probing * 8)}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(VIEW_W / 2);
     this.originY = s.player.y - Math.floor(VIEW_H / 2);
-    this.paint(s);
-    // The base may be off screen, so always say how far away it is.
-    const steps = Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y));
-    const where = steps ? `H ${steps}${tr("칸")} ${this.direction(s)}` : "H";
+    if (cave) this.paintCave(s, probing);
+    else this.paint(s);
+    // The way out may be off screen, so always say how far away it is.
+    const home: Point = cave ? cave.map.entry : BASE;
+    const steps = Math.max(Math.abs(s.player.x - home.x), Math.abs(s.player.y - home.y));
+    const mark = cave ? `${tr("자연 동굴")} · Layer ${CAVES.layer} · <` : "H";
+    const where = steps ? `${mark} ${steps}${tr("칸")} ${this.direction(s, home)}` : mark;
     if (this.place.textContent !== where) this.place.textContent = where;
     this.drawResults();
   }
@@ -198,7 +240,7 @@ export class MapView {
     const g = this.ctx;
     g.clearRect(0, 0, VIEW_W * CELL_W, VIEW_H * CELL_H);
     g.font = "15px 'JetBrains Mono', Consolas, monospace";
-    const sites = new Map(s.sites.map((site) => [`${site.x},${site.y}`, site]));
+    const sites = new Map(s.sites.filter((site) => onThisMap(s, site)).map((site) => [`${site.x},${site.y}`, site]));
     const path = new Set(s.path.map((p) => `${p.x},${p.y}`));
     for (let vy = 0; vy < VIEW_H; vy += 1) {
       for (let vx = 0; vx < VIEW_W; vx += 1) {
@@ -214,6 +256,7 @@ export class MapView {
         let color: string;
         if (s.player.x === x && s.player.y === y) [glyph, color] = ["@", COLOR.player];
         else if (x === BASE.x && y === BASE.y) [glyph, color] = ["H", COLOR.base];
+        else if (site?.ore === CAVE) [glyph, color] = [">", COLOR.cave];
         else if (site) {
           glyph = site.ore === WATER ? "W" : site.left <= 0 ? "x" : !canHarvest(s, site) ? "'" : site.rich === "rich" ? "#" : site.rich === "scarce" ? "+" : "*";
           color = itemColor(site.ore);
@@ -232,6 +275,56 @@ export class MapView {
     }
   }
 
+  /**
+   * A cave, in the same glyphs as the surface: rock is a solid block, creature habitat is w,
+   * the way out is <, and veins show only once prospecting has found them.
+   */
+  private paintCave(s: GameState, probing: number): void {
+    const cave = currentCave(s)!;
+    const g = this.ctx;
+    g.clearRect(0, 0, VIEW_W * CELL_W, VIEW_H * CELL_H);
+    g.font = "15px 'JetBrains Mono', Consolas, monospace";
+    const sites = new Map(s.sites.filter((site) => onThisMap(s, site)).map((site) => [`${site.x},${site.y}`, site]));
+    const path = new Set(s.path.map((p) => `${p.x},${p.y}`));
+    for (let vy = 0; vy < VIEW_H; vy += 1) {
+      for (let vx = 0; vx < VIEW_W; vx += 1) {
+        const x = this.originX + vx;
+        const y = this.originY + vy;
+        if (!caveSeenAt(s, x, y)) continue;
+        const seen = Math.hypot(x - s.player.x, (y - s.player.y) / CELL_ASPECT) <= REVEAL;
+        const cell = caveCell(cave.map, x, y);
+        g.globalAlpha = seen ? 1 : 0.5;
+        g.fillStyle = cell === ROCK ? COLOR.rock : seen ? COLOR.seenBg : COLOR.memoryBg;
+        g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
+        const site = sites.get(`${x},${y}`);
+        let glyph = "";
+        let color = COLOR["t-plain"];
+        if (s.player.x === x && s.player.y === y) [glyph, color] = ["@", COLOR.player];
+        else if (x === cave.map.entry.x && y === cave.map.entry.y) [glyph, color] = ["<", COLOR.base];
+        else if (site) [glyph, color] = [site.left <= 0 ? "x" : site.rich === "rich" ? "#" : site.rich === "scarce" ? "+" : "*", itemColor(site.ore)];
+        else if (path.has(`${x},${y}`)) [glyph, color] = ["-", COLOR.path];
+        else if (cell === HABITAT) [glyph, color] = ["w", COLOR.habitat];
+        else if (cell !== ROCK) glyph = ".";
+        if (glyph) {
+          g.fillStyle = color;
+          g.fillText(glyph, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+        }
+        g.globalAlpha = 1;
+      }
+    }
+    if (probing >= 0) {
+      // The reach of prospecting, growing as it goes.
+      const cx = (s.player.x - this.originX) * CELL_W + CELL_W / 2;
+      const cy = (s.player.y - this.originY) * CELL_H + CELL_H / 2;
+      g.strokeStyle = COLOR.probe;
+      g.globalAlpha = 0.6;
+      g.beginPath();
+      g.ellipse(cx, cy, CAVES.probeRadius * CELL_W * probing, CAVES.probeRadius * CELL_ASPECT * CELL_H * probing, 0, 0, Math.PI * 2);
+      g.stroke();
+      g.globalAlpha = 1;
+    }
+  }
+
   /** Finds things the player has seen: nothing in unexplored ground is listed. */
   private drawResults(): void {
     const s = this.game();
@@ -246,7 +339,7 @@ export class MapView {
     }
     const steps = (v: Site) => Math.max(Math.abs(v.x - s.player.x), Math.abs(v.y - s.player.y));
     const matching = s.sites
-      .filter((v) => isRevealed(s, v.x, v.y))
+      .filter((v) => onThisMap(s, v) && (s.cave !== null || isRevealed(s, v.x, v.y)))
       .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v)].some((t) => t.toLowerCase().includes(query)));
     const found = orderSites(matching, steps, this.hideEmpty).slice(0, MAX_RESULTS);
     this.results.replaceChildren(...found.map((site) => {
@@ -260,7 +353,8 @@ export class MapView {
       name.textContent = siteName(s, site);
       const where = document.createElement("span");
       where.className = "push card-note";
-      where.textContent = `${isVisible(s, site.x, site.y) ? tr("보임") : tr("기억")} · ${steps(site)}${tr("칸")}`;
+      const visible = s.cave !== null ? Math.hypot(site.x - s.player.x, (site.y - s.player.y) / CELL_ASPECT) <= REVEAL : isVisible(s, site.x, site.y);
+      where.textContent = `${visible ? tr("보임") : tr("기억")} · ${steps(site)}${tr("칸")}`;
       b.append(code, name, where);
       b.addEventListener("click", () => {
         walkTo(this.game(), site);
@@ -271,10 +365,10 @@ export class MapView {
     if (!found.length) this.results.textContent = tr("본 적 있는 곳에 없습니다");
   }
 
-  /** Which way the base lies from the player. */
-  private direction(s: GameState): string {
-    const dx = BASE.x - s.player.x;
-    const dy = BASE.y - s.player.y;
+  /** Which way the base, or a cave's way out, lies from the player. */
+  private direction(s: GameState, home: Point = BASE): string {
+    const dx = home.x - s.player.x;
+    const dy = home.y - s.player.y;
     const ns = Math.abs(dy) * 2 > Math.abs(dx) ? (dy < 0 ? tr("북") : tr("남")) : "";
     const ew = Math.abs(dx) * 2 > Math.abs(dy) ? (dx < 0 ? tr("서") : tr("동")) : "";
     return ns + ew;

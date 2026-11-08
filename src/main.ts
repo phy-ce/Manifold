@@ -1,7 +1,7 @@
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_VITAL, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkTo, wheelStack } from "./engine/game";
+import { GameState, MAX_VITAL, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, currentCave, inCave, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
@@ -225,6 +225,41 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// WASD walks on the map. Held keys keep walking at the normal pace, one cell per finished step.
+const WALK_KEYS: Record<string, [number, number]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
+const heldWalk = new Set<string>();
+const onMap = (): boolean => !map.root.hidden && !document.querySelector(".window-back:not([hidden]), .win:not([hidden])");
+function keyWalk(): void {
+  if (!heldWalk.size || state.path.length > 1 || !onMap()) return;
+  let dx = 0;
+  let dy = 0;
+  for (const code of heldWalk) {
+    dx += WALK_KEYS[code][0];
+    dy += WALK_KEYS[code][1];
+  }
+  // Only start a new step once the one under way is done, or straight away from standing still.
+  if (!state.path.length) walkStep(state, dx, dy);
+}
+window.addEventListener("keydown", (e) => {
+  if (!(e.code in WALK_KEYS) || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
+  e.preventDefault();
+  if (e.repeat) return;
+  // A key takes over from a walk set by clicking.
+  if (!heldWalk.size && state.path.length > 1) state.path = [];
+  heldWalk.add(e.code);
+  keyWalk();
+  redraw();
+});
+window.addEventListener("keyup", (e) => {
+  heldWalk.delete(e.code);
+});
+// P prospects, underground.
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "KeyP" || e.repeat || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
+  if (startProbe(state)) redraw();
+});
+window.addEventListener("blur", () => heldWalk.clear());
+
 const invBox = document.createElement("section");
 invBox.className = "box";
 invBox.setAttribute("aria-label", tr("인벤토리"));
@@ -327,7 +362,10 @@ document.body.append(itemIndex.root);
 app.append(top, notice, graph.root, map.root, invBox, windowView.root, buildView.root, routeView.root, saveView.root, help.root, win);
 
 travel.addEventListener("click", () => {
+  const cave = currentCave(state);
   if (atBase(state)) screen = screen === "base" ? "map" : "base";
+  // Underground the way home starts at the cave's way out.
+  else if (cave) walkTo(state, cave.map.entry);
   else walkTo(state, BASE);
   redraw();
 });
@@ -360,7 +398,7 @@ function redraw(): void {
   graph.root.hidden = !showBase;
   map.root.hidden = showBase;
 
-  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : tr("기지로 복귀");
+  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : inCave(state) ? tr("출구로") : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;
   const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
   const { item, amount } = stage.goal;
@@ -427,6 +465,7 @@ function tick(): void {
   last = now;
   backlog = Math.min(backlog + dt * speed, MAX_CATCH_UP_MS * Math.max(1, speed));
   while (backlog >= STEP_MS) {
+    keyWalk();
     step(state);
     backlog -= STEP_MS;
   }

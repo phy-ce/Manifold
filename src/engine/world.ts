@@ -1,6 +1,6 @@
 // Deterministic world generation. The map has no edges: chunks are rolled from the
 // seed and their coordinates the first time they come into view.
-import { FORAGE, FORAGE_SIZE, RICHNESS, SURFACE, SURFACE_ORES } from "../content";
+import { CAVE, CAVES, FAMILY_WEIGHT, FORAGE, FORAGE_CHANCE, FORAGE_SIZE, LAYERS, RICHNESS, SURFACE_ORES, familyOf } from "../content";
 
 export const CHUNK = 16;
 export const BASE = { x: 0, y: 0 };
@@ -23,6 +23,10 @@ export interface Site extends Point {
   rich?: string;
   /** Three letters and digits, for a riverbank once it is found. */
   code?: string;
+  /** The cave this site lies in, by its entrance's id. Surface sites have none. */
+  cave?: number;
+  /** Cave veins stay hidden until prospecting finds them. */
+  found?: boolean;
 }
 
 export function rngFrom(seed: number): () => number {
@@ -49,14 +53,14 @@ const FAR = [13, 42];
 /** Chunk veins stay out of the starter area, which is laid out on its own. */
 const STARTER_RADIUS = 20;
 
-/** A vein's grade and size are pure luck: distance from the base plays no part. */
-function rollVein(rng: () => number, ore: string): { total: number; rich?: string } {
+/** A vein's grade and size are pure luck: distance from the base plays no part. Each layer sets its own odds. */
+export function rollVein(rng: () => number, ore: string, layer = 0): { total: number; rich?: string } {
   if (FORAGE.includes(ore)) {
     const [low, high] = FORAGE_SIZE;
     return { total: Math.round(low + rng() * (high - low)) };
   }
   let roll = rng();
-  const odds: Record<string, number> = SURFACE.richness;
+  const odds: Record<string, number> = LAYERS[layer].richness;
   const grade = RICHNESS.find((r) => (roll -= odds[r.id]) < 0) ?? RICHNESS[RICHNESS.length - 1];
   const [low, high] = grade.size;
   return { total: Math.round(low + rng() * (high - low)), rich: grade.id };
@@ -122,19 +126,172 @@ export function laterVeins(seed: number, ore: string): Omit<Site, "id">[] {
   });
 }
 
+/** Picks a family by its weight, then one of the pool's ores in that family. */
+export function pickOre(rng: () => number, pool: string[]): string {
+  const families = [...new Set(pool.map((id) => familyOf(id)!))];
+  let roll = rng() * families.reduce((sum, f) => sum + (FAMILY_WEIGHT[f] ?? 10), 0);
+  const family = families.find((f) => (roll -= FAMILY_WEIGHT[f] ?? 10) < 0) ?? families[families.length - 1];
+  const ores = pool.filter((id) => familyOf(id) === family);
+  return ores[Math.floor(rng() * ores.length)];
+}
+
 /** Veins of one chunk. The same seed and coordinates always give the same veins. */
 export function chunkSites(seed: number, cx: number, cy: number, later: string[] = []): Omit<Site, "id">[] {
   const rng = rngFrom(Math.imul(cx + 991, 73856093) ^ Math.imul(cy + 577, 19349663) ^ Math.imul(seed + 1, 83492791));
   const count = rng() < 0.5 ? 1 : rng() < 0.4 ? 2 : 0;
   const sites: Omit<Site, "id">[] = [];
+  const spot = () => [cx * CHUNK + Math.floor(rng() * CHUNK), cy * CHUNK + Math.floor(rng() * CHUNK)];
+  const far = (x: number, y: number) => Math.hypot(x - BASE.x, (y - BASE.y) / CELL_ASPECT) >= STARTER_RADIUS;
   for (let i = 0; i < count; i += 1) {
-    const x = cx * CHUNK + Math.floor(rng() * CHUNK);
-    const y = cy * CHUNK + Math.floor(rng() * CHUNK);
-    const pool = [...SURFACE_ORES, ...FORAGE, ...later];
-    const ore = pool[Math.floor(rng() * pool.length)];
+    const [x, y] = spot();
+    const ore = pickOre(rng, [...SURFACE_ORES, ...later]);
     const vein = rollVein(rng, ore);
-    if (Math.hypot(x - BASE.x, (y - BASE.y) / CELL_ASPECT) < STARTER_RADIUS) continue;
-    sites.push({ ore, x, y, ...vein, left: vein.total, seed: seed + Math.abs(cx * 131 + cy * 17 + i) });
+    if (far(x, y)) sites.push({ ore, x, y, ...vein, left: vein.total, seed: seed + Math.abs(cx * 131 + cy * 17 + i) });
+  }
+  // Food is rolled on its own, so it never crowds out ore.
+  if (rng() < FORAGE_CHANCE) {
+    const [x, y] = spot();
+    const ore = FORAGE[Math.floor(rng() * FORAGE.length)];
+    const vein = rollVein(rng, ore);
+    if (far(x, y)) sites.push({ ore, x, y, ...vein, left: vein.total, seed: seed + Math.abs(cx * 131 + cy * 17 + 7) });
+  }
+  if (rng() < CAVES.chunkChance) {
+    const [x, y] = spot();
+    if (far(x, y) && terrain(x, y, seed)[1] !== "t-water") sites.push({ ore: CAVE, x, y, total: 0, left: 0, seed: seed + Math.abs(cx * 977 + cy * 31) });
+  }
+  return sites;
+}
+
+/** The cave entrance every world has near the base, on dry ground. */
+export function nearCave(seed: number): Point {
+  const rng = rngFrom(Math.imul(seed + 13, 2246822519));
+  const [min, max] = CAVES.near;
+  for (;;) {
+    const dist = min + rng() * (max - min);
+    const angle = rng() * Math.PI * 2;
+    const x = Math.round(BASE.x + Math.cos(angle) * dist) + 0;
+    const y = Math.round(BASE.y + Math.sin(angle) * dist * CELL_ASPECT) + 0;
+    if (terrain(x, y, seed)[1] !== "t-water") return { x, y };
+  }
+}
+
+// ---- Caves
+
+/** What a cave cell is. Habitat is open floor where cave creatures live, so it hurts to cross. */
+export const FLOOR = 0;
+export const ROCK = 1;
+export const HABITAT = 2;
+export interface CaveMap {
+  width: number;
+  height: number;
+  cells: Uint8Array;
+  /** Where the player comes in, and goes out. */
+  entry: Point;
+}
+const caveCache = new Map<number, CaveMap>();
+
+/** A cave's layout. It is rolled from the entrance's seed, so it never needs saving. */
+export function caveMap(caveSeed: number): CaveMap {
+  const cached = caveCache.get(caveSeed);
+  if (cached) return cached;
+  const { width, height } = CAVES;
+  const rng = rngFrom(Math.imul(caveSeed + 17, 2654435761));
+  const at = (x: number, y: number) => y * width + x;
+  let cells = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const edge = x < 1 || y < 1 || x > width - 2 || y > height - 2;
+      cells[at(x, y)] = edge || rng() < 0.45 ? ROCK : FLOOR;
+    }
+  }
+  // Smooth the noise into caverns: a cell turns to rock with five or more rock around it.
+  for (let pass = 0; pass < 5; pass += 1) {
+    const next = cells.slice();
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        let rock = 0;
+        for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) rock += cells[at(x + dx, y + dy)];
+        next[at(x, y)] = rock >= 5 ? ROCK : FLOOR;
+      }
+    }
+    cells = next;
+  }
+  // Keep only the largest open space, so every floor cell can be reached.
+  const region = new Int32Array(width * height).fill(-1);
+  let best = 0;
+  let bestSize = 0;
+  for (let i = 0, id = 0; i < cells.length; i += 1) {
+    if (cells[i] !== FLOOR || region[i] >= 0) continue;
+    const stack = [i];
+    region[i] = id;
+    let size = 0;
+    while (stack.length) {
+      const c = stack.pop()!;
+      size += 1;
+      const x = c % width;
+      const y = Math.floor(c / width);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = at(x + dx, y + dy);
+        if (cells[n] === FLOOR && region[n] < 0) {
+          region[n] = id;
+          stack.push(n);
+        }
+      }
+    }
+    if (size > bestSize) [best, bestSize] = [id, size];
+    id += 1;
+  }
+  for (let i = 0; i < cells.length; i += 1) if (cells[i] === FLOOR && region[i] !== best) cells[i] = ROCK;
+  // The entrance: the open cell nearest the top middle.
+  let entry = { x: 0, y: 0 };
+  let near = Infinity;
+  for (let i = 0; i < cells.length; i += 1) {
+    if (cells[i] !== FLOOR) continue;
+    const x = i % width;
+    const y = Math.floor(i / width);
+    const d = Math.hypot(x - width / 2, y * 2);
+    if (d < near) [near, entry] = [d, { x, y }];
+  }
+  // Creature habitats: small patches of floor, well away from the entrance.
+  const floor = [...cells.keys()].filter((i) => cells[i] === FLOOR && Math.hypot((i % width) - entry.x, Math.floor(i / width) - entry.y) > 12);
+  const [fewest, most] = CAVES.habitats;
+  const patches = fewest + Math.floor(rng() * (most - fewest + 1));
+  for (let p = 0; p < patches && floor.length; p += 1) {
+    const centre = floor[Math.floor(rng() * floor.length)];
+    const cx = centre % width;
+    const cy = Math.floor(centre / width);
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const n = at(cx + dx, cy + dy);
+        if (cells[n] === FLOOR && rng() < 0.75) cells[n] = HABITAT;
+      }
+    }
+  }
+  const map = { width, height, cells, entry };
+  caveCache.set(caveSeed, map);
+  return map;
+}
+
+export const caveCell = (map: CaveMap, x: number, y: number): number =>
+  x < 0 || y < 0 || x >= map.width || y >= map.height ? ROCK : map.cells[y * map.width + x];
+
+/** A cave's veins, on open floor away from the entrance and out of the habitats. */
+export function caveSites(caveSeed: number, cave: number, pool: string[]): Omit<Site, "id">[] {
+  const map = caveMap(caveSeed);
+  const rng = rngFrom(Math.imul(caveSeed + 29, 40503) ^ 0x5bd1e995);
+  const [fewest, most] = CAVES.sites;
+  const count = fewest + Math.floor(rng() * (most - fewest + 1));
+  const spots = [...map.cells.keys()].filter((i) => {
+    const x = i % map.width;
+    const y = Math.floor(i / map.width);
+    return map.cells[i] === FLOOR && Math.hypot(x - map.entry.x, y - map.entry.y) >= 6;
+  });
+  const sites: Omit<Site, "id">[] = [];
+  for (let i = 0; i < count && spots.length && pool.length; i += 1) {
+    const [cell] = spots.splice(Math.floor(rng() * spots.length), 1);
+    const ore = pickOre(rng, pool);
+    const vein = rollVein(rng, ore, CAVES.layer);
+    sites.push({ ore, x: cell % map.width, y: Math.floor(cell / map.width), ...vein, left: vein.total, seed: caveSeed + i * 11, cave, found: false });
   }
   return sites;
 }
@@ -165,7 +322,8 @@ const SAFE_SEARCH_LIMIT = 40000;
  * The route that takes the least damage, by A*. Hazards cost extra rather than blocking,
  * because a river runs forever and sometimes has to be crossed.
  */
-export function safePath(a: Point, b: Point, damageAt: (x: number, y: number) => number): Point[] {
+export function safePath(a: Point, b: Point, damageAt: (x: number, y: number) => number, blocked?: (x: number, y: number) => boolean): Point[] {
+  if (blocked?.(b.x, b.y)) return [];
   const left = Math.min(a.x, b.x) - SAFE_MARGIN;
   const right = Math.max(a.x, b.x) + SAFE_MARGIN;
   const top = Math.min(a.y, b.y) - SAFE_MARGIN;
@@ -219,6 +377,8 @@ export function safePath(a: Point, b: Point, damageAt: (x: number, y: number) =>
         const nx = x + dx;
         const ny = y + dy;
         if ((!dx && !dy) || nx < left || nx > right || ny < top || ny > bottom) continue;
+        // Walls can't be walked through, nor a corner cut between two of them.
+        if (blocked && (blocked(nx, ny) || (dx && dy && (blocked(x + dx, y) || blocked(x, y + dy))))) continue;
         const next = here + 1 + damageAt(nx, ny) * DAMAGE_WEIGHT;
         const id = key(nx, ny);
         if (next >= (cost.get(id) ?? Infinity)) continue;
@@ -228,7 +388,8 @@ export function safePath(a: Point, b: Point, damageAt: (x: number, y: number) =>
       }
     }
   }
-  return linePath(a, b);
+  // Underground there is no walking straight through rock.
+  return blocked ? [] : linePath(a, b);
 }
 
 export function linePath(a: Point, b: Point): Point[] {

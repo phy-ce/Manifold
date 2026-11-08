@@ -26,7 +26,8 @@ interface Ore {
   name: string;
   elements: string;
   family: string;
-  firstLayer: number;
+  /** The shallowest and deepest layers this ore turns up in. */
+  layers: number[];
   color: string;
 }
 
@@ -91,6 +92,17 @@ export const LAYERS: { depth: number; name: string; richness: Record<string, num
 export const richnessName = (id: string | undefined): string => RICHNESS.find((r) => r.id === id)?.name ?? "";
 /** How much a riverbank holds, and how often it gains 1 back. */
 export const RIVER: { reserve: number; regenMs: number } = oreData.river;
+/** How often each raw family turns up among veins, relative to the others. */
+export const FAMILY_WEIGHT: Record<string, number> = oreData.familyWeight;
+/** The chance a chunk also holds a patch of food, apart from its ore. */
+export const FORAGE_CHANCE: number = oreData.forageChance;
+/** A cave entrance on the map. It is a site, but nothing is mined from it. */
+export const CAVE = "cave";
+/** Natural caves: one layer down, small, with veins found by prospecting. */
+export const CAVES: {
+  layer: number; width: number; height: number; sites: number[]; habitats: number[];
+  damage: number; probeMs: number; probeRadius: number; chunkChance: number; near: number[];
+} = oreData.cave;
 /** What a power line carries. Not an item: it drives other lines. */
 export const POWER = "power";
 /** Route channels. Filters that pick a single item come later, in the electric age. */
@@ -196,9 +208,17 @@ function buildProcess(type: string, form: string): Process {
 
 /** Surface ores that supply each raw family used in this milestone. */
 export const SURFACE_ORES: string[] = Object.keys(ores).filter(
-  (id) => ores[id].firstLayer === 0 && MILESTONE.unlockSources.includes(ores[id].family),
+  (id) => ores[id].layers[0] === 0 && MILESTONE.unlockSources.includes(ores[id].family),
 );
-const allSurfaceOres = Object.keys(ores).filter((id) => ores[id].firstLayer === 0);
+const allSurfaceOres = Object.keys(ores).filter((id) => ores[id].layers[0] === 0);
+/** Whether an ore turns up in a layer. */
+export const inLayer = (id: string, layer: number): boolean => !!ores[id] && ores[id].layers[0] <= layer && layer <= ores[id].layers[1];
+/** Ores of the opened families that turn up in a layer. */
+export function layerOres(layer: number, stage: number): string[] {
+  const opened = STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockSources);
+  return Object.keys(ores).filter((id) => inLayer(id, layer) && opened.includes(ores[id].family));
+}
+export const familyOf = (id: string): string | undefined => ores[id]?.family;
 
 /** Surface ores open at a stage, counting every stage before it. */
 export function stageOres(stage: number): string[] {

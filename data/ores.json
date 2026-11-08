@@ -11,18 +11,21 @@
     { "id": "rich", "name": "풍부", "size": [120, 360] }
   ],
   "river": { "reserve": 300, "regenMs": 2000 },
+  "familyWeight": { "iron_ore": 35, "coal": 35, "copper_ore": 20, "clay": 10, "limestone": 15 },
+  "forageChance": 0.25,
+  "cave": { "layer": 1, "width": 64, "height": 48, "sites": [4, 6], "habitats": [3, 5], "damage": 3, "probeMs": 1300, "probeRadius": 7, "chunkChance": 0.05, "near": [14, 22] },
   "ores": {
-    "Lm": { "name": "갈철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 0, "color": "#c9983f", "metal": "Fe", "byproducts": ["Si", "Mn"] },
-    "Hm": { "name": "적철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 1, "color": "#c8453a", "metal": "Fe", "byproducts": ["Si", "Mn"] },
-    "Mt": { "name": "자철석", "elements": "Fe", "family": "iron_ore", "firstLayer": 2, "color": "#8b93a6", "metal": "Fe", "byproducts": ["Ti", "V"] },
-    "Ml": { "name": "공작석", "elements": "Cu", "family": "copper_ore", "firstLayer": 0, "color": "#35b779", "metal": "Cu", "byproducts": ["Cg", "Zn"] },
-    "Cc": { "name": "휘동석", "elements": "Cu, S", "family": "copper_ore", "firstLayer": 1, "color": "#7f8ba8", "metal": "Cu", "byproducts": ["S", "Ag"] },
-    "Cp": { "name": "황동석", "elements": "Cu, Fe, S", "family": "copper_ore", "firstLayer": 2, "color": "#d9b93b", "metal": "Cu", "byproducts": ["S", "Au"] },
-    "Lg": { "name": "갈탄", "elements": "C", "family": "coal", "firstLayer": 0, "color": "#9a7350" },
-    "Bt": { "name": "역청탄", "elements": "C", "family": "coal", "firstLayer": 1, "color": "#a9adb5" },
-    "An": { "name": "무연탄", "elements": "C", "family": "coal", "firstLayer": 2, "color": "#dfe3ea" },
-    "Kn": { "name": "고령토", "elements": "Al, Si", "family": "clay", "firstLayer": 0, "color": "#d9cfc0" },
-    "Ls": { "name": "석회석", "elements": "Ca", "family": "limestone", "firstLayer": 0, "color": "#c9cdb4" }
+    "Lm": { "name": "갈철석", "elements": "Fe", "family": "iron_ore", "layers": [0, 1], "color": "#c9983f", "metal": "Fe", "byproducts": ["Si", "Mn"] },
+    "Hm": { "name": "적철석", "elements": "Fe", "family": "iron_ore", "layers": [1, 2], "color": "#c8453a", "metal": "Fe", "byproducts": ["Si", "Mn"] },
+    "Mt": { "name": "자철석", "elements": "Fe", "family": "iron_ore", "layers": [2, 2], "color": "#8b93a6", "metal": "Fe", "byproducts": ["Ti", "V"] },
+    "Ml": { "name": "공작석", "elements": "Cu", "family": "copper_ore", "layers": [0, 1], "color": "#35b779", "metal": "Cu", "byproducts": ["Cg", "Zn"] },
+    "Cc": { "name": "휘동석", "elements": "Cu, S", "family": "copper_ore", "layers": [1, 2], "color": "#7f8ba8", "metal": "Cu", "byproducts": ["S", "Ag"] },
+    "Cp": { "name": "황동석", "elements": "Cu, Fe, S", "family": "copper_ore", "layers": [2, 2], "color": "#d9b93b", "metal": "Cu", "byproducts": ["S", "Au"] },
+    "Lg": { "name": "갈탄", "elements": "C", "family": "coal", "layers": [0, 1], "color": "#9a7350" },
+    "Bt": { "name": "역청탄", "elements": "C", "family": "coal", "layers": [1, 2], "color": "#a9adb5" },
+    "An": { "name": "무연탄", "elements": "C", "family": "coal", "layers": [2, 2], "color": "#dfe3ea" },
+    "Kn": { "name": "고령토", "elements": "Al, Si", "family": "clay", "layers": [0, 1], "color": "#d9cfc0" },
+    "Ls": { "name": "석회석", "elements": "Ca", "family": "limestone", "layers": [0, 1], "color": "#c9cdb4" }
   },
   "processing": {
     "byproductsPerLevel": { "1": 0, "2": 1, "3": 2 },

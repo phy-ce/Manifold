@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
 import {
   GameState, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
-  placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkTo, workMachine, workProject,
+  placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkStep, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 
@@ -113,6 +113,33 @@ describe("endless map", () => {
       expect(total).toBeGreaterThanOrEqual(12);
       expect(total).toBeLessThanOrEqual(360);
     }
+  });
+
+  it("walks one cell per key step at the same pace as a clicked walk", () => {
+    const s = createGame(5);
+    expect(walkStep(s, 1, 0)).toBe(true);
+    expect(s.path).toEqual([{ x: BASE.x + 1, y: BASE.y }]);
+    // Nothing moves before a full step's time has passed.
+    let ticks = 0;
+    while (s.player.x === BASE.x) {
+      step(s);
+      ticks += 1;
+    }
+    expect(ticks).toBe(Math.ceil(walkTime(s) / 100));
+    expect(s.player).toEqual({ x: BASE.x + 1, y: BASE.y });
+    // Two keys at once go diagonally, and a key replaces a clicked walk.
+    walkTo(s, { x: BASE.x + 20, y: BASE.y });
+    walkStep(s, -1, 1);
+    expect(s.path).toEqual([{ x: BASE.x, y: BASE.y + 1 }]);
+    expect(walkStep(s, 0, 0)).toBe(false);
+  });
+
+  it("does not walk by key while overloaded", () => {
+    const s = createGame(5);
+    addTo(s.inv, "iron", 999);
+    expect(overloaded(s)).toBe(true);
+    expect(walkStep(s, 1, 0)).toBe(false);
+    expect(s.path).toEqual([]);
   });
 
   it("keeps mined amounts after walking away and back", () => {
