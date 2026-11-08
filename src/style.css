@@ -107,8 +107,17 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .wires { position: absolute; inset: 0; width: 100%; height: 100%; }
 .wire { fill: none; stroke: var(--dim); stroke-width: 2; opacity: .75; pointer-events: none; }
 .wire-arrow { fill: var(--dim); }
+/* Wires: a casing in the board colour under each wire cuts a gap where wires cross. Widths match STRAND_W and PIPE_W in graphView.ts. */
+.wire-set { pointer-events: none; transition: opacity .15s; }
+.wire-case { fill: none; stroke: var(--panel); stroke-linejoin: round; }
+.strand { fill: none; stroke-width: 3; stroke-linejoin: round; }
+.strand.power { stroke-dasharray: 6 5; animation: wire-flow .7s linear infinite; }
+.strand.pipe { stroke-width: 7; }
+.strand.pipe-core { stroke: var(--panel); stroke-width: 3; }
+@keyframes wire-flow { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .strand.power { animation: none; } }
 .wire-hit { fill: none; stroke: transparent; stroke-width: calc(var(--gap) * 2); pointer-events: stroke; cursor: pointer; }
-.wire-hit:hover + .mover + .wire-tag { font-size: var(--text-md); }
+.wire-tag.hot { font-size: var(--text-md); }
 .mover { font: 700 var(--text-xs) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
 .wire-tag { font: 700 var(--text-sm) var(--mono); text-anchor: middle; cursor: pointer; paint-order: stroke; stroke: var(--panel); stroke-width: 6px; }
 .node { position: absolute; left: 0; top: 0; width: var(--node-w); height: var(--node-h); background: var(--bg); border: 1px solid var(--line); }
@@ -128,8 +137,8 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .node.plan { opacity: .5; }
 .node.plan:hover { opacity: .75; }
 .wire.plan-wire { opacity: .35; }
-.wire.muted, .wire-tag.muted, .mover.muted { opacity: .08; }
-.wire.lit { stroke-width: 3; opacity: 1; }
+.wire.muted, .wire-set.muted, .wire-tag.muted, .mover.muted { opacity: .08; }
+.wire-set.faded, .wire-tag.faded, .mover.faded, .node.faded { opacity: .12; }
 .marquee { position: absolute; left: 0; top: 0; z-index: 5; border: 1px dashed var(--go); pointer-events: none; }
 .tier { position: relative; }
 .tier-list { position: absolute; z-index: 16; left: 0; top: 100%; display: none; flex-direction: column; align-items: stretch; width: max-content; padding-top: var(--gap-sm); }

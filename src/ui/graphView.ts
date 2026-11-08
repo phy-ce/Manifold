@@ -1,6 +1,6 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { tr } from "../i18n";
-import { ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isFluid, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   NAME_MAX, TAR_TANK_CAP, needsModule, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
@@ -10,15 +10,103 @@ import { SIZE } from "./theme";
 const NODE_W = SIZE.nodeW;
 const NODE_H = SIZE.nodeH;
 const SVG = "http://www.w3.org/2000/svg";
-/** Gap from the centre line for each direction of a two-way route. */
-const LANE = 14;
 type Point2 = [number, number];
 /** A wire's corners. Every run is straight or at 45 degrees. */
 type Wire = Point2[];
 /** How far a wire leaves a node straight before it turns. */
 const WIRE_STUB = 14;
+/** Widest gap between wires sharing one side of a node. */
+const SLOT_GAP = 18;
+/** Gap between wires whose middle runs would share a track. */
+const TRACK_GAP = 9;
+/** Line widths, matching style.css: a plain strand, and the outside of a pipe. */
+const STRAND_W = 3;
+const PIPE_W = 7;
+/** Size of the arrowhead at a wire's end. */
+const ARROW = 10;
+/** A wire's tag width per character and padding, its height, and where along the wire it may sit. */
+const TAG_CHAR = 8;
+const TAG_PAD = 6;
+const TAG_H = 15;
+const TAG_SPOTS = [0.5, 0.38, 0.62, 0.28, 0.72, 0.2, 0.8];
 
-const wirePath = (wire: Wire): string => `M${wire.map((p) => `${p[0]} ${p[1]}`).join(" L")}`;
+const wirePath = (wire: Wire): string => `M${wire.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L")}`;
+
+type Side = "L" | "R" | "T" | "B";
+type Box = { x: number; y: number };
+/** Where a wire between two boxes leaves and arrives, before it is spread along the side. */
+interface Attach { flat: boolean; start: Point2; end: Point2; out: Side; into: Side }
+const centreOf = (b: Box): Point2 => [b.x + NODE_W / 2, b.y + NODE_H / 2];
+
+/** A wire leaves from the side facing its target. */
+function attach(a: Box, b: Box): Attach {
+  const [ax, ay] = centreOf(a);
+  const [bx, by] = centreOf(b);
+  const flat = Math.abs(bx - ax) / NODE_W >= Math.abs(by - ay) / NODE_H;
+  const sx = bx >= ax ? 1 : -1;
+  const sy = by >= ay ? 1 : -1;
+  return {
+    flat,
+    start: flat ? [ax + (sx * NODE_W) / 2, ay] : [ax, ay + (sy * NODE_H) / 2],
+    end: flat ? [bx - (sx * NODE_W) / 2, by] : [bx, by - (sy * NODE_H) / 2],
+    out: flat ? (sx > 0 ? "R" : "L") : (sy > 0 ? "B" : "T"),
+    into: flat ? (sx > 0 ? "L" : "R") : (sy > 0 ? "T" : "B"),
+  };
+}
+
+/**
+ * The corners between two attach points. With room to go straight it splits around one
+ * diagonal; otherwise two diagonals with a run between, so it still enters head on.
+ * `shift` moves that middle run sideways, keeping the corners at 45 degrees.
+ */
+function route(p0: Point2, p3: Point2, flat: boolean, shift = 0): Wire {
+  const ahead = Math.abs(flat ? p3[0] - p0[0] : p3[1] - p0[1]);
+  const side = Math.abs(flat ? p3[1] - p0[1] : p3[0] - p0[0]);
+  const signX = Math.sign(p3[0] - p0[0]) || 1;
+  const signY = Math.sign(p3[1] - p0[1]) || 1;
+  const at = (a: number, c: number): Point2 => (flat
+    ? [p0[0] + signX * a, p0[1] + signY * c]
+    : [p0[0] + signX * c, p0[1] + signY * a]);
+  if (side <= ahead) {
+    const straight = (ahead - side) / 2;
+    return [p0, at(straight, 0), at(straight + side, side), p3];
+  }
+  const stub = Math.min(WIRE_STUB, ahead / 4);
+  const room = ahead - stub * 2;
+  const first = Math.max(0, Math.min(room, room / 2 + shift * (flat ? signX : signY)));
+  return [p0, at(stub, 0), at(stub + first, first), at(stub + first, side - (room - first)), at(ahead - stub, side), p3];
+}
+
+/** A wire moved sideways by `d`, with mitred corners, for the strands of a bundle. */
+function offsetWire(wire: Wire, d: number): Wire {
+  if (!d) return wire;
+  const normal = (a: Point2, b: Point2): Point2 => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+  };
+  return wire.map((p, i) => {
+    const n1 = i > 0 ? normal(wire[i - 1], p) : undefined;
+    const n2 = i < wire.length - 1 ? normal(p, wire[i + 1]) : undefined;
+    if (!n1 || !n2) {
+      const n = (n1 ?? n2)!;
+      return [p[0] + n[0] * d, p[1] + n[1] * d];
+    }
+    const mx = n1[0] + n2[0];
+    const my = n1[1] + n2[1];
+    const len = Math.hypot(mx, my) || 1;
+    const cos = (mx / len) * n1[0] + (my / len) * n1[1];
+    return [p[0] + ((mx / len) * d) / cos, p[1] + ((my / len) * d) / cos];
+  });
+}
+
+/** The arrowhead at a wire's end, pointing the way the last run goes. */
+function arrowPoints(wire: Wire): string {
+  const end = wire[wire.length - 1];
+  const before = wire[wire.length - 2];
+  const angle = Math.atan2(end[1] - before[1], end[0] - before[0]);
+  const at = (r: number, t: number) => `${(end[0] + Math.cos(angle + t) * r).toFixed(1)},${(end[1] + Math.sin(angle + t) * r).toFixed(1)}`;
+  return `${at(0, 0)} ${at(ARROW, Math.PI - 0.5)} ${at(ARROW, Math.PI + 0.5)}`;
+}
 
 /** The spot a share of the way along a wire, by distance. */
 function alongWire(wire: Wire, share: number): Point2 {
@@ -59,8 +147,30 @@ const ZOOM_STEP = 1.1;
 /** How far a paste lands from the original when the pointer isn't over the board. */
 const PASTE_OFFSET = 40;
 
+/** A route's wire as it is laid out for one frame. */
+interface WirePlan {
+  group: Line[];
+  view: LineView;
+  /** Which box each end sits on: a node, or the card of a folded group. */
+  fromKey: string;
+  toKey: string;
+  fromBox: Box;
+  toBox: Box;
+  at: Attach;
+  p0: Point2;
+  p3: Point2;
+  wire: Wire;
+  /** Same at both ends, to break ties the same way on each side. */
+  rank: number;
+}
+/** One material's mark on a wire: a plain or dashed strand, or a pipe with its core. */
+interface Strand { paths: SVGPathElement[] }
 interface LineView {
-  path: SVGPathElement;
+  /** Holds the casing, the strands and the arrowhead, so they fade together. */
+  set: SVGGElement;
+  casing: SVGPathElement;
+  strands: Strand[];
+  arrow: SVGPolygonElement;
   hit: SVGPathElement;
   mover: SVGTextElement;
   tag: SVGTextElement;
@@ -77,6 +187,10 @@ export class GraphView {
   private readonly palette = document.createElement("div");
   private readonly board = document.createElement("div");
   private readonly svg = document.createElementNS(SVG, "svg");
+  /** Wires underneath, then their click strips, then their tags, so no wire hides another's tag. */
+  private readonly wireLayer = document.createElementNS(SVG, "g");
+  private readonly hitLayer = document.createElementNS(SVG, "g");
+  private readonly tagLayer = document.createElementNS(SVG, "g");
   private readonly nodes = new Map<number, NodeView>();
   private readonly lines = new Map<string, LineView>();
   private linkFrom: number | null = null;
@@ -97,6 +211,8 @@ export class GraphView {
   private readonly buildAll = document.createElement("button");
   private readonly ghostViews = new Map<number, GhostView>();
   private readonly ghostWires = new Map<string, SVGPathElement>();
+  /** The node under the pointer, whose wires stay while the rest fade. */
+  private tracing: number | undefined;
   private readonly marquee = document.createElement("div");
   private readonly menu = document.createElement("div");
   private readonly groupButton = document.createElement("button");
@@ -523,10 +639,11 @@ export class GraphView {
         path = document.createElementNS(SVG, "path");
         path.setAttribute("class", "wire plan-wire");
         path.setAttribute("marker-end", "url(#wire-arrow)");
-        this.svg.append(path);
+        this.wireLayer.append(path);
         this.ghostWires.set(key, path);
       }
-      path.setAttribute("d", wirePath(this.wire(a, b, false)));
+      const at = attach(a, b);
+      path.setAttribute("d", wirePath(route(at.start, at.end, at.flat)));
       path.style.stroke = itemColor(line.material);
       path.classList.toggle("muted", this.channel !== "all" && channelOf(line.material) !== this.channel);
     }
@@ -587,6 +704,7 @@ export class GraphView {
     this.board.className = "board";
     this.svg.setAttribute("class", "wires");
     this.svg.innerHTML = '<defs><marker id="wire-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="wire-arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs>';
+    this.svg.append(this.wireLayer, this.hitLayer, this.tagLayer);
     this.board.append(this.svg, this.marquee);
     this.view.append(this.board);
     this.rosterList.className = "roster-list";
@@ -691,6 +809,15 @@ export class GraphView {
       this.board.classList.add("linking");
     });
     root.append(body, link);
+    root.addEventListener("mouseenter", () => {
+      this.tracing = node.id;
+      this.draw();
+    });
+    root.addEventListener("mouseleave", () => {
+      if (this.tracing !== node.id) return;
+      this.tracing = undefined;
+      this.draw();
+    });
     body.addEventListener("pointerdown", (e) => {
       this.drag = { id: node.id, dx: e.clientX, dy: e.clientY, moved: false, copy: e.ctrlKey || e.metaKey };
     });
@@ -820,48 +947,14 @@ export class GraphView {
       `<span class="progress">[${"#".repeat(fill).padEnd(14, ".")}]</span>`;
   }
 
-  /**
-   * The wire of a route. It leaves from the side facing its target, and when traffic
-   * runs both ways each direction keeps to its own lane, like a two-way road.
-   */
-  private wire(a: { x: number; y: number }, b: { x: number; y: number }, twoWay: boolean): Wire {
-    const ax = a.x + NODE_W / 2;
-    const ay = a.y + NODE_H / 2;
-    const bx = b.x + NODE_W / 2;
-    const by = b.y + NODE_H / 2;
-    const flat = Math.abs(bx - ax) / NODE_W >= Math.abs(by - ay) / NODE_H;
-    const sx = bx >= ax ? 1 : -1;
-    const sy = by >= ay ? 1 : -1;
-    const start: Point2 = flat ? [ax + (sx * NODE_W) / 2, ay] : [ax, ay + (sy * NODE_H) / 2];
-    const end: Point2 = flat ? [bx - (sx * NODE_W) / 2, by] : [bx, by - (sy * NODE_H) / 2];
-    // Both directions shift to their own right, so they end up on opposite sides.
-    const lane = twoWay ? LANE : 0;
-    const shift: Point2 = flat ? [0, sx * lane] : [-sy * lane, 0];
-    const p0: Point2 = [start[0] + shift[0], start[1] + shift[1]];
-    const p3: Point2 = [end[0] + shift[0], end[1] + shift[1]];
-    // Worked out along the way the wire leaves ("ahead") and across it ("side").
-    const ahead = Math.abs(flat ? p3[0] - p0[0] : p3[1] - p0[1]);
-    const side = Math.abs(flat ? p3[1] - p0[1] : p3[0] - p0[0]);
-    const signX = Math.sign(p3[0] - p0[0]);
-    const signY = Math.sign(p3[1] - p0[1]);
-    const at = (a: number, c: number): Point2 => (flat
-      ? [p0[0] + signX * a, p0[1] + signY * c]
-      : [p0[0] + signX * c, p0[1] + signY * a]);
-    // Room to go straight: split it around one diagonal.
-    if (side <= ahead) {
-      const straight = (ahead - side) / 2;
-      return [p0, at(straight, 0), at(straight + side, side), p3];
-    }
-    // More sideways than ahead: two diagonals with a run between, so it still enters the node head on.
-    const stub = Math.min(WIRE_STUB, ahead / 4);
-    const run = (ahead - stub * 2) / 2;
-    return [p0, at(stub, 0), at(stub + run, run), at(stub + run, side - run), at(ahead - stub, side), p3];
-  }
-
   private makeLine(from: number, to: number): LineView {
-    const path = document.createElementNS(SVG, "path");
-    path.setAttribute("class", "wire");
-    path.setAttribute("marker-end", "url(#wire-arrow)");
+    const set = document.createElementNS(SVG, "g");
+    set.setAttribute("class", "wire-set");
+    // Drawn just under its own strands, the casing cuts a gap where a later wire crosses an earlier one.
+    const casing = document.createElementNS(SVG, "path");
+    casing.setAttribute("class", "wire-case");
+    const arrow = document.createElementNS(SVG, "polygon");
+    set.append(casing, arrow);
     // A wide invisible stroke makes the thin line easy to click.
     const hit = document.createElementNS(SVG, "path");
     hit.setAttribute("class", "wire-hit");
@@ -871,8 +964,77 @@ export class GraphView {
     const tag = document.createElementNS(SVG, "text");
     tag.setAttribute("class", "wire-tag");
     tag.addEventListener("click", () => this.openRoute(from, to));
-    this.svg.append(path, hit, mover, tag);
-    return { path, hit, mover, tag };
+    this.wireLayer.append(set);
+    this.hitLayer.append(hit);
+    this.tagLayer.append(mover, tag);
+    // Pointing at a wire enlarges its tag.
+    hit.addEventListener("mouseenter", () => tag.classList.add("hot"));
+    hit.addEventListener("mouseleave", () => tag.classList.remove("hot"));
+    return { set, casing, strands: [], arrow, hit, mover, tag };
+  }
+
+  /** Remakes a wire's strands when its materials change: power dashes, fluids run in pipes. */
+  private makeStrands(view: LineView, materials: string[]): void {
+    for (const strand of view.strands) for (const path of strand.paths) path.remove();
+    view.strands = materials.map((id) => {
+      const kind = id === POWER ? "power" : isFluid(id) ? "pipe" : "solid";
+      const paths = [document.createElementNS(SVG, "path")];
+      if (kind === "pipe") paths.push(document.createElementNS(SVG, "path"));
+      paths[0].setAttribute("class", `strand ${kind}`);
+      paths[0].style.stroke = itemColor(id);
+      paths[1]?.setAttribute("class", "strand pipe-core");
+      view.arrow.before(...paths);
+      return { paths };
+    });
+    view.arrow.style.fill = itemColor(materials[0]);
+  }
+
+  /**
+   * Spreads the wires on each side of a box along that side, ordered by where their other
+   * ends lie, so they no longer meet at one point. A wire keeps the same rank at both ends,
+   * so two wires running between the same boxes stay side by side instead of crossing.
+   */
+  private spreadEnds(plans: WirePlan[]): void {
+    const sides = new Map<string, { plan: WirePlan; end: "p0" | "p3"; along: number }[]>();
+    for (const plan of plans) {
+      for (const [box, side, other, end] of [
+        [plan.fromKey, plan.at.out, plan.toBox, "p0"],
+        [plan.toKey, plan.at.into, plan.fromBox, "p3"],
+      ] as const) {
+        const key = `${box}${side}`;
+        const across = side === "L" || side === "R" ? 1 : 0;
+        sides.set(key, [...(sides.get(key) ?? []), { plan, end, along: centreOf(other)[across] }]);
+      }
+    }
+    for (const [key, list] of sides) {
+      const upright = key.endsWith("L") || key.endsWith("R");
+      const room = upright ? NODE_H : NODE_W;
+      list.sort((p, q) => p.along - q.along || p.plan.rank - q.plan.rank);
+      const gap = list.length > 1 ? Math.min(SLOT_GAP, (room - 20) / (list.length - 1)) : 0;
+      list.forEach(({ plan, end }, i) => {
+        const shift = (i - (list.length - 1) / 2) * gap;
+        const base = end === "p0" ? plan.at.start : plan.at.end;
+        plan[end] = upright ? [base[0], base[1] + shift] : [base[0] + shift, base[1]];
+      });
+    }
+  }
+
+  /** Wires whose middle runs would lie on one track move apart onto lanes of their own. */
+  private separateTracks(plans: WirePlan[]): void {
+    const tracks = new Map<string, WirePlan[]>();
+    for (const plan of plans) {
+      if (plan.wire.length !== 6) continue;
+      const key = `${plan.at.flat ? "x" : "y"}${Math.round(plan.wire[2][plan.at.flat ? 0 : 1] / 6)}`;
+      tracks.set(key, [...(tracks.get(key) ?? []), plan]);
+    }
+    for (const group of tracks.values()) {
+      if (group.length < 2) continue;
+      const across = group[0].at.flat ? 1 : 0;
+      group.sort((p, q) => p.p0[across] - q.p0[across] || p.rank - q.rank);
+      group.forEach((plan, i) => {
+        plan.wire = route(plan.p0, plan.p3, plan.at.flat, (i - (group.length - 1) / 2) * TRACK_GAP);
+      });
+    }
   }
 
   /** One entry per kind of facility. Clicking it lists every machine of that kind. */
@@ -1027,41 +1189,79 @@ export class GraphView {
     }
     for (const [key, view] of this.lines) {
       if (!routes.has(key)) {
-        view.path.remove();
+        view.set.remove();
         view.hit.remove();
         view.mover.remove();
         view.tag.remove();
         this.lines.delete(key);
       }
     }
+    const plans: WirePlan[] = [];
     for (const [key, group] of routes) {
       let view = this.lines.get(key);
       if (!view) {
         view = this.makeLine(group[0].from, group[0].to);
         this.lines.set(key, view);
       }
-      const twoWay = routes.has(`${group[0].to}>${group[0].from}`);
       // A folded group's lines run to its card, and lines inside it disappear.
       const fromCard = this.cardOf(s, group[0].from);
       const toCard = this.cardOf(s, group[0].to);
       const inside = !!fromCard && fromCard === toCard;
-      for (const mark of [view.path, view.hit, view.tag]) mark.style.display = inside ? "none" : "";
+      for (const mark of [view.set, view.hit, view.tag]) mark.style.display = inside ? "none" : "";
       if (inside) {
         view.mover.style.display = "none";
         continue;
       }
-      const wire = this.wire(fromCard ?? nodeById(s, group[0].from)!, toCard ?? nodeById(s, group[0].to)!, twoWay);
+      const fromBox = fromCard ?? nodeById(s, group[0].from)!;
+      const toBox = toCard ?? nodeById(s, group[0].to)!;
+      const at = attach(fromBox, toBox);
+      plans.push({
+        group, view, at, fromBox, toBox,
+        fromKey: fromCard ? `g${fromCard.id}` : `n${group[0].from}`,
+        toKey: toCard ? `g${toCard.id}` : `n${group[0].to}`,
+        p0: at.start, p3: at.end, wire: [],
+        rank: group[0].from * 1e6 + group[0].to,
+      });
+    }
+    this.spreadEnds(plans);
+    for (const plan of plans) plan.wire = route(plan.p0, plan.p3, plan.at.flat);
+    this.separateTracks(plans);
+
+    const traced = this.tracing !== undefined && !!nodeById(s, this.tracing) ? this.tracing : undefined;
+    const near = new Set<number>(traced === undefined ? [] : [traced]);
+    // Tags already placed this frame, so the next one can slide clear of them.
+    const placed: { x: number; y: number; w: number }[] = [];
+    for (const { group, view, wire } of plans) {
       const shape = wirePath(wire);
-      view.path.setAttribute("d", shape);
       view.hit.setAttribute("d", shape);
-      view.path.style.stroke = group.length === 1 ? itemColor(group[0].material) : "";
+      const materials = group.map((l) => l.material);
+      const codes = materials.join();
+      if (view.set.dataset.codes !== codes) {
+        view.set.dataset.codes = codes;
+        this.makeStrands(view, materials);
+      }
+      // A bundle lays its materials side by side, so none of them loses its colour.
+      const widest = materials.some(isFluid) ? PIPE_W : STRAND_W;
+      const gap = widest + 1.5;
+      const span = (materials.length - 1) * gap;
+      view.casing.setAttribute("d", shape);
+      view.casing.style.strokeWidth = String(widest + span + 5);
+      view.strands.forEach((strand, i) => {
+        const d = wirePath(offsetWire(wire, i * gap - span / 2));
+        for (const path of strand.paths) path.setAttribute("d", d);
+      });
+      view.arrow.setAttribute("points", arrowPoints(wire));
+
       const lit = this.channel === "all" || group.some((l) => channelOf(l.material) === this.channel);
-      for (const mark of [view.path, view.tag, view.mover]) mark.classList.toggle("muted", !lit);
-      view.path.classList.toggle("lit", lit && this.channel !== "all");
+      const linked = traced === undefined || group[0].from === traced || group[0].to === traced;
+      if (traced !== undefined && linked) for (const id of [group[0].from, group[0].to]) near.add(id);
+      for (const mark of [view.set, view.tag, view.mover]) {
+        mark.classList.toggle("muted", !lit);
+        mark.classList.toggle("faded", lit && !linked);
+      }
       const names = group.map((l) => itemName(l.material)).join(", ");
       view.hit.dataset.tip = names;
       view.tag.dataset.tip = names;
-      const codes = group.map((l) => l.material).join();
       if (view.tag.dataset.codes !== codes) {
         view.tag.dataset.codes = codes;
         view.tag.replaceChildren(...group.map((l, i) => {
@@ -1071,9 +1271,18 @@ export class GraphView {
           return span;
         }));
       }
-      const [cx, cy] = alongWire(wire, 0.5);
-      view.tag.setAttribute("x", String(cx));
-      view.tag.setAttribute("y", String(cy + 4));
+      const tagW = group.map((l) => itemCode(l.material)).join(" ").length * TAG_CHAR + TAG_PAD;
+      let [cx, cy] = alongWire(wire, 0.5);
+      for (const share of TAG_SPOTS) {
+        const [x, y] = alongWire(wire, share);
+        if (!placed.some((p) => Math.abs(p.x - x) < (p.w + tagW) / 2 && Math.abs(p.y - y) < TAG_H)) {
+          [cx, cy] = [x, y];
+          break;
+        }
+      }
+      placed.push({ x: cx, y: cy, w: tagW });
+      view.tag.setAttribute("x", cx.toFixed(1));
+      view.tag.setAttribute("y", (cy + 4).toFixed(1));
       const moving = group.find((l) => l.active);
       view.mover.style.display = moving ? "" : "none";
       if (moving) {
@@ -1084,5 +1293,7 @@ export class GraphView {
         view.mover.setAttribute("y", String(my + 4));
       }
     }
+    // Pointing at a node leaves only it, its wires and the nodes at their other ends.
+    for (const [id, view] of this.nodes) view.root.classList.toggle("faded", traced !== undefined && !near.has(id));
   }
 }
