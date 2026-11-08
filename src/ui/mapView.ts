@@ -2,8 +2,8 @@
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
 import { CAVE, CAVES, WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
-import { GameState, REVEAL, SEASON_NAMES, atCaveExit, caveDoorHere, caveSeenAt, currentCave, enterCave, leaveCave, onThisMap, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, startProbe, walkTo } from "../engine/game";
-import { BASE, CELL_ASPECT, HABITAT, Point, ROCK, Site, caveCell, hash, orderSites, terrain } from "../engine/world";
+import { GameState, REVEAL, SEASON_NAMES, clearLine, mobVisible, atCaveExit, caveDoorHere, caveSeenAt, currentCave, enterCave, leaveCave, onThisMap, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, startProbe, walkTo } from "../engine/game";
+import { BASE, CELL_ASPECT, Point, ROCK, Site, caveCell, hash, orderSites, terrain } from "../engine/world";
 
 /** Size of the window onto the endless map, which stays centred on the player. */
 const VIEW_W = 60;
@@ -15,7 +15,7 @@ const MAX_RESULTS = 10;
 const COLOR: Record<string, string> = {
   "t-plain": "#3c4955", "t-hill1": "#7c8b9b", "t-hill2": "#a9b6c2", "t-hill3": "#e6ebef", "t-water": "#4d8fc4",
   player: "#8fd16f", base: "#dfe5ea", path: "#ffb238", remembered: "#3a4552", memoryBg: "#141a22", seenBg: "#1d2631",
-  cave: "#c9a27a", rock: "#2b3541", habitat: "#d0544c", probe: "#ffb238",
+  cave: "#c9a27a", rock: "#2b3541", probe: "#ffb238", wolf: "#ff5f56", spitter: "#c678dd", shot: "#ff8c5a",
 };
 
 interface VeinCell {
@@ -48,6 +48,19 @@ function buildVein(site: Site): Vein {
   return { rock, cells: found };
 }
 
+/**
+ * The ASCII stroke for a direction: - | / \. Along the direction for a spine in flight,
+ * or across it for the rim of a ring, so a ring of them reads as a circle.
+ */
+function strokeGlyph(dx: number, dy: number, across: boolean): string {
+  const [x, y] = across ? [-dy, dx] : [dx, dy];
+  const angle = Math.abs(Math.atan2(y, x) * (180 / Math.PI));
+  if (angle < 22.5 || angle > 157.5) return "-";
+  if (angle > 67.5 && angle < 112.5) return "|";
+  // Screen y runs down, so down-right is a backslash.
+  return (x > 0) === (y > 0) ? "\\" : "/";
+}
+
 const siteName = (s: GameState, site: Site): string =>
   site.ore === CAVE ? tr("자연 동굴") : site.ore === WATER ?`${tr("강가")} ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.rich ? ` ${richnessName(site.rich)}` : "") + (site.left <= 0 ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
 
@@ -69,6 +82,9 @@ export class MapView {
   private readonly enter = document.createElement("button");
   private readonly leave = document.createElement("button");
   private readonly probe = document.createElement("button");
+  /** Veins found by the last prospecting, blinking until `until`; and which were already known. */
+  private flash = { ids: new Set<number>(), until: 0 };
+  private known = { cave: null as number | null, ids: new Set<number>() };
   private readonly safe = document.createElement("button");
   private readonly straight = document.createElement("button");
   private veins = new Map<number, Vein>();
@@ -115,9 +131,6 @@ export class MapView {
     const mapBox = document.createElement("div");
     mapBox.className = "box scroll";
     this.place.className = "bar-row";
-    const legend = document.createElement("div");
-    legend.className = "card-note map-legend";
-    legend.textContent = tr("밝은 칸: 보이는 곳 · 어두운 칸: 기억 · 빈 칸: 미탐색");
     const walkMode = document.createElement("div");
     walkMode.className = "modes";
     const mode = (b: HTMLButtonElement, label: string, tip: string, on: boolean) => {
@@ -148,7 +161,7 @@ export class MapView {
     action(this.enter, tr("동굴로 들어가기"), enterCave);
     action(this.leave, tr("나가기"), leaveCave);
     action(this.probe, tr("탐사"), startProbe, tr("멈춰서 주변 바위를 두드려 광맥을 찾습니다 (P)"));
-    mapBox.append(this.place, walkMode, this.caveBar, this.canvas, legend);
+    mapBox.append(this.place, walkMode, this.caveBar, this.canvas);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -190,11 +203,12 @@ export class MapView {
     const cave = currentCave(s);
     if (cave) {
       if (!caveSeenAt(s, x, y)) return "";
+      const mob = s.mobs.find((m) => m.x === x && m.y === y && mobVisible(s, m));
+      if (mob) return tr(mob.kind === "melee" ? CAVES.creatures.melee.name : CAVES.creatures.ranged.name);
       if (x === cave.map.entry.x && y === cave.map.entry.y) return tr("출구");
       const vein = s.sites.find((v) => v.x === x && v.y === y && onThisMap(s, v));
       if (vein) return siteName(s, vein);
-      const cell = caveCell(cave.map, x, y);
-      return cell === ROCK ? tr("암반") : cell === HABITAT ? tr("동굴 생물 서식지") : "";
+      return caveCell(cave.map, x, y) === ROCK ? tr("암반") : "";
     }
     if (x === BASE.x && y === BASE.y) return tr("기지");
     if (!isRevealed(s, x, y)) return "";
@@ -218,9 +232,17 @@ export class MapView {
     const probeLabel = probing >= 0 ? `${tr("탐사 중")} ${"▮".repeat(Math.round(probing * 4)).padEnd(4, "▯")}` : tr("탐사");
     if (this.probe.textContent !== probeLabel) this.probe.textContent = probeLabel;
     this.caveBar.hidden = this.enter.hidden && this.leave.hidden && this.probe.hidden;
-    // The map only changes when the player moves, a vein empties or turns up, or prospecting ticks on.
+    // Newly found veins blink for a moment.
+    const found = new Set(s.sites.filter((site) => site.cave !== undefined && site.cave === s.cave && site.found).map((site) => site.id));
+    if (this.known.cave === s.cave) {
+      const fresh = [...found].filter((id) => !this.known.ids.has(id));
+      if (fresh.length) this.flash = { ids: new Set(fresh), until: performance.now() + 900 };
+    }
+    this.known = { cave: s.cave, ids: found };
+    // On the surface the map only changes when the player moves or a vein empties; underground creatures move every step.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0), 0);
-    const key = `${s.cave},${s.player.x},${s.player.y},${s.path.length},${s.sites.length},${emptied},${s.season},${Math.round(probing * 8)}`;
+    const live = cave ? `${s.time},${Math.floor(performance.now() / 150)}` : "";
+    const key = `${s.cave},${s.player.x},${s.player.y},${s.path.length},${s.sites.length},${emptied},${s.season},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(VIEW_W / 2);
@@ -303,8 +325,14 @@ export class MapView {
         else if (x === cave.map.entry.x && y === cave.map.entry.y) [glyph, color] = ["<", COLOR.base];
         else if (site) [glyph, color] = [site.left <= 0 ? "x" : site.rich === "rich" ? "#" : site.rich === "scarce" ? "+" : "*", itemColor(site.ore)];
         else if (path.has(`${x},${y}`)) [glyph, color] = ["-", COLOR.path];
-        else if (cell === HABITAT) [glyph, color] = ["w", COLOR.habitat];
         else if (cell !== ROCK) glyph = ".";
+        if (site && this.flash.ids.has(site.id) && performance.now() < this.flash.until) {
+          // A vein prospecting just found blinks for a moment.
+          const on = Math.floor(performance.now() / 150) % 2 === 0;
+          g.fillStyle = on ? COLOR.probe : COLOR.seenBg;
+          g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
+          if (on) color = "#10151c";
+        }
         if (glyph) {
           g.fillStyle = color;
           g.fillText(glyph, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
@@ -312,16 +340,44 @@ export class MapView {
         g.globalAlpha = 1;
       }
     }
-    if (probing >= 0) {
-      // The reach of prospecting, growing as it goes.
-      const cx = (s.player.x - this.originX) * CELL_W + CELL_W / 2;
-      const cy = (s.player.y - this.originY) * CELL_H + CELL_H / 2;
-      g.strokeStyle = COLOR.probe;
-      g.globalAlpha = 0.6;
-      g.beginPath();
-      g.ellipse(cx, cy, CAVES.probeRadius * CELL_W * probing, CAVES.probeRadius * CELL_ASPECT * CELL_H * probing, 0, 0, Math.PI * 2);
-      g.stroke();
+    const put = (x: number, y: number, glyph: string, color: string, alpha = 1) => {
+      const vx = x - this.originX;
+      const vy = y - this.originY;
+      if (vx < 0 || vy < 0 || vx >= VIEW_W || vy >= VIEW_H) return;
+      g.globalAlpha = alpha;
+      g.fillStyle = COLOR.memoryBg;
+      g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
+      g.fillStyle = color;
+      g.fillText(glyph, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
       g.globalAlpha = 1;
+    };
+    // Spines in flight, drawn as the stroke they travel along.
+    for (const shot of s.shots) {
+      const at = { x: Math.round(shot.x), y: Math.round(shot.y) };
+      if (Math.max(Math.abs(at.x - s.player.x), Math.abs(at.y - s.player.y)) > CAVES.creatures.sight || !clearLine(cave.map, at, s.player)) continue;
+      put(at.x, at.y, strokeGlyph(shot.vx, shot.vy, false), COLOR.shot);
+    }
+    // Creatures show when near enough to see or hear, with open cave between.
+    for (const mob of s.mobs) {
+      if (!mobVisible(s, mob)) continue;
+      const lit = Math.hypot(mob.x - s.player.x, (mob.y - s.player.y) / CELL_ASPECT) <= REVEAL;
+      put(mob.x, mob.y, mob.kind === "melee" ? "w" : "s", mob.kind === "melee" ? COLOR.wolf : COLOR.spitter, lit ? 1 : 0.65);
+    }
+    if (probing >= 0) {
+      // Prospecting: three rings of sound spread out through the rock, drawn as an ASCII circle.
+      const reach = CAVES.probeRadius;
+      const fronts = [probing * reach, probing * reach - 2, probing * reach - 4];
+      for (let y = s.player.y - reach; y <= s.player.y + reach; y += 1) {
+        for (let x = s.player.x - reach; x <= s.player.x + reach; x += 1) {
+          const dx = x - s.player.x;
+          const dy = (y - s.player.y) / CELL_ASPECT;
+          const d = Math.hypot(dx, dy);
+          if (d > reach || (!dx && !dy)) continue;
+          const ring = fronts.findIndex((r) => r > 0.5 && Math.abs(d - r) < 0.55);
+          if (ring < 0) continue;
+          put(x, y, strokeGlyph(dx, dy, true), COLOR.probe, [1, 0.6, 0.3][ring]);
+        }
+      }
     }
   }
 

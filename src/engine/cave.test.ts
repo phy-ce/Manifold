@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { CAVE, CAVES, LAYERS, SURFACE_ORES, familyOf, inLayer, layerOres, matches } from "../content";
 import {
   GameState, addTo, atBase, atCaveExit, caveDoorHere, createGame, currentCave, enterCave, leaveCave, loadSave, mine,
-  siteHere, startProbe, step, walkStep, walkTo,
+  clearLine, siteHere, startProbe, step, walkStep, walkTo,
 } from "./game";
-import { BASE, CELL_ASPECT, FLOOR, HABITAT, ROCK, caveCell, caveMap, caveSites, chunkSites, nearCave, terrain } from "./world";
+import { BASE, CELL_ASPECT, FLOOR, HABITAT, ROCK, caveCell, caveMap, caveSites, chunkSites, nearCave, safePath, terrain } from "./world";
 
 /** Steps until the walk is over, keeping the player fed and healthy so nothing else interferes. */
 function arrive(s: GameState): void {
@@ -244,20 +244,6 @@ describe("in a cave", () => {
     expect(startProbe(createGame(3))).toBe(false);
   });
 
-  it("hurts on creature habitat", () => {
-    const s = inside();
-    const { map } = currentCave(s)!;
-    const den = [...map.cells.keys()].find((i) => map.cells[i] === HABITAT)!;
-    const x = den % map.width;
-    const y = Math.floor(den / map.width);
-    const from = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: x + dx, y: y + dy })).find((p) => caveCell(map, p.x, p.y) === FLOOR)!;
-    s.player = from;
-    walkStep(s, x - from.x, y - from.y);
-    const hp = s.hp;
-    while (s.path.length) step(s);
-    expect(s.player).toEqual({ x, y });
-    expect(s.hp).toBe(hp - CAVES.damage);
-  });
 
   it("goes out only from the way out, back onto the entrance", () => {
     const s = inside();
@@ -274,22 +260,134 @@ describe("in a cave", () => {
     expect(s.player).toEqual({ x: door.x, y: door.y });
   });
 
-  it("collapses back to the base on the surface, losing more the further in", () => {
+});
+
+describe("cave creatures", () => {
+  const W = CAVES.creatures;
+  const span = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  /** A spot for the player deep in the cave, and one for a creature `near` cells away with open cave between. */
+  function setup(near: number[]) {
     const s = inside();
     const { map } = currentCave(s)!;
+    const open = [...map.cells.keys()].filter((i) => map.cells[i] !== ROCK).map((i) => ({ x: i % map.width, y: Math.floor(i / map.width) }));
+    for (const p of open.filter((c) => span(c, map.entry) > 12)) {
+      const m = open.find((c) => span(c, p) >= near[0] && span(c, p) <= near[1] && span(c, map.entry) > W.safeRadius && clearLine(map, c, p));
+      if (m) {
+        s.player = p;
+        s.mobs = [];
+        s.shots = [];
+        return { s, map, p, m };
+      }
+    }
+    throw new Error("no spot");
+  }
+  const keepFed = (s: GameState) => { s.hunger = 100; };
+
+  it("come out of their dens each visit, never near the way out", () => {
+    const s = inside();
+    const { map } = currentCave(s)!;
+    expect(s.mobs.length).toBeGreaterThan(0);
+    expect(s.mobs.length).toBeLessThanOrEqual(W.count[1]);
+    for (const mob of s.mobs) {
+      expect(caveCell(map, mob.x, mob.y)).not.toBe(ROCK);
+      expect(span(mob, map.entry)).toBeGreaterThan(W.safeRadius);
+    }
+    expect(s.mobs.some((m) => m.kind === "melee") || s.mobs.some((m) => m.kind === "ranged")).toBe(true);
+  });
+
+  it("a wolf bites when beside the player, then waits before biting again", () => {
+    const { s, m } = setup([1, 1]);
+    s.mobs = [{ id: 0, kind: "melee", ...m, wait: 0, cool: 0 }];
+    const hp = s.hp;
+    step(s);
+    expect(s.hp).toBe(hp - W.melee.damage);
+    step(s);
+    expect(s.hp).toBe(hp - W.melee.damage);
+    for (let i = 0; i < W.melee.attackMs / 100; i += 1) { keepFed(s); step(s); }
+    expect(s.hp).toBe(hp - W.melee.damage * 2);
+  });
+
+  it("a wolf that sees the player runs it down", () => {
+    const { s, m, p } = setup([4, 6]);
+    s.mobs = [{ id: 0, kind: "melee", ...m, wait: 0, cool: 5000 }];
+    const before = span(m, p);
+    for (let i = 0; i < (W.melee.moveMs / 100) * 2; i += 1) { keepFed(s); step(s); }
+    expect(span(s.mobs[0], s.player)).toBeLessThan(before);
+  });
+
+  it("a wolf tracks the player round rock within hunting range, without seeing it", () => {
+    const s = inside();
+    const { map } = currentCave(s)!;
+    const open = [...map.cells.keys()].filter((i) => map.cells[i] !== ROCK).map((i) => ({ x: i % map.width, y: Math.floor(i / map.width) }));
+    let pair: { p: { x: number; y: number }; m: { x: number; y: number } } | undefined;
+    for (const p of open.filter((c) => span(c, map.entry) > 12)) {
+      const m = open.find((c) => span(c, p) >= 8 && span(c, p) <= W.hunt && span(c, map.entry) > W.safeRadius && !clearLine(map, c, p));
+      if (m) { pair = { p, m }; break; }
+    }
+    expect(pair).toBeDefined();
+    s.player = pair!.p;
+    s.shots = [];
+    s.mobs = [{ id: 0, kind: "melee", ...pair!.m, wait: 0, cool: 5000 }];
+    const path = (a: { x: number; y: number }) => safePath(a, s.player, () => 0, (x, y) => caveCell(map, x, y) === ROCK).length;
+    const before = path(pair!.m);
+    for (let i = 0; i < (W.melee.moveMs / 100) * 4; i += 1) { keepFed(s); step(s); }
+    expect(path(s.mobs[0])).toBeLessThan(before);
+  });
+
+  it("a salamander shoots a spine that flies across and hurts", () => {
+    const { s, m } = setup([3, 5]);
+    s.mobs = [{ id: 0, kind: "ranged", ...m, wait: 99999, cool: 0 }];
+    const hp = s.hp;
+    step(s);
+    expect(s.shots).toHaveLength(1);
+    expect(s.hp).toBe(hp);
+    for (let i = 0; i < 30 && s.hp === hp; i += 1) { keepFed(s); step(s); }
+    expect(s.hp).toBe(hp - W.ranged.damage);
+    expect(s.shots).toHaveLength(0);
+  });
+
+  it("a spine stops at rock", () => {
+    const { s, map, p } = setup([3, 5]);
+    // Aim a spine straight at the nearest rock to the right, away from the player.
+    const start = [...map.cells.keys()].map((i) => ({ x: i % map.width, y: Math.floor(i / map.width) }))
+      .find((c) => caveCell(map, c.x, c.y) !== ROCK && caveCell(map, c.x + 1, c.y) === ROCK && span(c, p) > 8)!;
+    s.shots = [{ x: start.x, y: start.y, vx: W.ranged.shotSpeed, vy: 0, life: 30 }];
+    const hp = s.hp;
+    for (let i = 0; i < 4; i += 1) step(s);
+    expect(s.shots).toHaveLength(0);
+    expect(s.hp).toBe(hp);
+  });
+
+  it("blocks the way: the player can't walk through one", () => {
+    const { s, m, p } = setup([1, 1]);
+    s.mobs = [{ id: 0, kind: "melee", ...m, wait: 99999, cool: 99999 }];
+    walkStep(s, m.x - p.x, m.y - p.y);
+    for (let i = 0; i < 4; i += 1) step(s);
+    expect(s.player).toEqual(p);
+  });
+
+  it("knocks the player out back to the base on the surface, losing more the further in", () => {
+    const { s, m } = setup([1, 1]);
     addTo(s.inv, "iron", 10);
-    const den = [...map.cells.keys()].find((i) => map.cells[i] === HABITAT)!;
-    const x = den % map.width;
-    const y = Math.floor(den / map.width);
-    const from = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: x + dx, y: y + dy })).find((p) => caveCell(map, p.x, p.y) === FLOOR)!;
-    s.player = from;
+    s.mobs = [{ id: 0, kind: "melee", ...m, wait: 0, cool: 0 }];
     s.hp = 1;
-    walkStep(s, x - from.x, y - from.y);
-    while (s.path.length) step(s);
+    step(s);
     expect(s.cave).toBeNull();
     expect(s.player).toEqual(BASE);
     expect(atBase(s)).toBe(true);
+    expect(s.mobs).toEqual([]);
     expect(s.lost?.find((l) => l.id === "iron")?.n).toBeGreaterThan(0);
+  });
+
+  it("are gone on the way out, and back on the next visit", () => {
+    const s = inside();
+    const { map } = currentCave(s)!;
+    walkTo(s, map.entry);
+    arrive(s);
+    leaveCave(s);
+    expect(s.mobs).toEqual([]);
+    expect(enterCave(s)).toBe(true);
+    expect(s.mobs.length).toBeGreaterThan(0);
   });
 });
 

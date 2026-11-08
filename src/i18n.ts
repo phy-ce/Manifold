@@ -90,7 +90,7 @@ export const EN: Record<string, string> = {
   // Help
   "전체": "General", "이 도움말": "This help", "지도와 기지 전환, 기지 밖에서는 복귀": "Switch map and base, or return home", "지도에서 걷기 (두 키를 함께 누르면 대각선)": "Walk on the map (two keys together go diagonally)",
   "동굴에서 탐사: 멈춰서 주변 광맥 찾기": "In a cave, prospect: stand still to find veins nearby", "자연 동굴": "Natural cave", "출구": "Way out", "출구로": "To the way out",
-  "암반": "Bedrock", "동굴 생물 서식지": "Cave creature den", "동굴로 들어가기": "Enter the cave", "나가기": "Climb out", "탐사": "Prospect", "탐사 중": "Prospecting",
+  "암반": "Bedrock", "동굴 늑대": "Cave wolf", "가시 도롱뇽": "Spine salamander", "동굴로 들어가기": "Enter the cave", "나가기": "Climb out", "탐사": "Prospect", "탐사 중": "Prospecting",
   "멈춰서 주변 바위를 두드려 광맥을 찾습니다 (P)": "Stand still and tap the rock to find veins nearby (P)",
   "도감 열기": "Open the index", "이동 방식 전환: 위험 피하기, 직진": "Switch walking: avoid danger, straight",
   "창 닫기, 선택 풀기": "Close windows, clear selection", "아이템 칸": "Item slots", "왼쪽 클릭": "Left click",
@@ -119,7 +119,6 @@ export const EN: Record<string, string> = {
   "강가 미연결": "No riverbank", "동력 없음": "No power", "난이도": "Difficulty", "증기": "Steam", "폐기": "Disposal",
   // Map
   " (고갈됨)": " (empty)", " (수확 불가)": " (out of season)", "지도, 칸을 클릭해 이동": "Map, click a cell to walk",
-  "밝은 칸: 보이는 곳 · 어두운 칸: 기억 · 빈 칸: 미탐색": "Bright: in sight · Dark: remembered · Blank: unexplored",
   "위험 피하기": "Avoid danger", "아는 위험 지역을 돌아갑니다 (T)": "Walks around known danger (T)", "직진": "Straight",
   "위험을 무시하고 곧장 갑니다 (T)": "Walks straight through danger (T)", "본 적 있는 곳에서 찾기": "Search places you've seen", "지도 검색": "Map search",
   "기지": "Base", "산 고도": "Hill, height", "강": "River", "칸": " cells", "보임": "In sight", "기억": "Remembered", "본 적 있는 곳에 없습니다": "Not among places you've seen",

@@ -101,7 +101,12 @@ export const CAVE = "cave";
 /** Natural caves: one layer down, small, with veins found by prospecting. */
 export const CAVES: {
   layer: number; width: number; height: number; sites: number[]; habitats: number[];
-  damage: number; probeMs: number; probeRadius: number; chunkChance: number; near: number[];
+  probeMs: number; probeRadius: number; chunkChance: number; near: number[];
+  creatures: {
+    count: number[]; rangedShare: number; sight: number; hunt: number; safeRadius: number;
+    melee: { name: string; moveMs: number; attackMs: number; damage: number };
+    ranged: { name: string; moveMs: number; fireMs: number; damage: number; range: number; keep: number[]; shotSpeed: number };
+  };
 } = oreData.cave;
 /** What a power line carries. Not an item: it drives other lines. */
 export const POWER = "power";

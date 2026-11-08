@@ -13,7 +13,12 @@
   "river": { "reserve": 300, "regenMs": 2000 },
   "familyWeight": { "iron_ore": 35, "coal": 35, "copper_ore": 20, "clay": 10, "limestone": 15 },
   "forageChance": 0.25,
-  "cave": { "layer": 1, "width": 64, "height": 48, "sites": [4, 6], "habitats": [3, 5], "damage": 3, "probeMs": 1300, "probeRadius": 7, "chunkChance": 0.05, "near": [14, 22] },
+  "cave": { "layer": 1, "width": 64, "height": 48, "sites": [4, 6], "habitats": [3, 5], "probeMs": 1300, "probeRadius": 7, "chunkChance": 0.05, "near": [14, 22],
+    "creatures": {
+      "count": [5, 7], "rangedShare": 0.35, "sight": 7, "hunt": 12, "safeRadius": 3,
+      "melee": { "name": "동굴 늑대", "moveMs": 450, "attackMs": 1000, "damage": 7 },
+      "ranged": { "name": "가시 도롱뇽", "moveMs": 700, "fireMs": 2200, "damage": 5, "range": 6, "keep": [3, 5], "shotSpeed": 0.45 }
+    } },
   "ores": {
     "Lm": { "name": "갈철석", "elements": "Fe", "family": "iron_ore", "layers": [0, 1], "color": "#c9983f", "metal": "Fe", "byproducts": ["Si", "Mn"] },
     "Hm": { "name": "적철석", "elements": "Fe", "family": "iron_ore", "layers": [1, 2], "color": "#c8453a", "metal": "Fe", "byproducts": ["Si", "Mn"] },

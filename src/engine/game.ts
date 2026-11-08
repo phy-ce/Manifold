@@ -1,7 +1,7 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { CAVE, CAVES, layerOres, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
-import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
+import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 15;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
@@ -158,6 +158,9 @@ export interface GameState {
   caveSeen: Record<string, number[]>;
   /** When prospecting began, if it is under way. */
   probe: number | null;
+  /** Creatures in the cave the player is in, and spines in flight. Empty on the surface. */
+  mobs: Mob[];
+  shots: Shot[];
   nodes: GameNode[];
   lines: Line[];
   ghosts: Ghost[];
@@ -219,6 +222,8 @@ export function createGame(seed: number): GameState {
     cave: null,
     caveSeen: {},
     probe: null,
+    mobs: [],
+    shots: [],
     nodes: [],
     lines: [],
     ghosts: [],
@@ -296,9 +301,11 @@ export function enterCave(s: GameState): boolean {
     for (const vein of caveSites(door.seed, door.id, layerOres(CAVES.layer, s.stage))) s.sites.push({ ...vein, id: s.sites.length });
   }
   s.cave = door.id;
-  s.player = { ...caveMap(door.seed).entry };
+  const map = caveMap(door.seed);
+  s.player = { ...map.entry };
   s.path = [];
   s.probe = null;
+  spawnMobs(s, door, map);
   revealCave(s, s.player, REVEAL);
   return true;
 }
@@ -310,6 +317,8 @@ export function leaveCave(s: GameState): boolean {
   s.cave = null;
   s.player = { x: cave.door.x, y: cave.door.y };
   s.probe = null;
+  s.mobs = [];
+  s.shots = [];
   return true;
 }
 
@@ -318,6 +327,146 @@ export function startProbe(s: GameState): boolean {
   if (!inCave(s) || s.path.length || s.probe !== null) return false;
   s.probe = s.time;
   return true;
+}
+
+// ---- Cave creatures
+
+/** A wolf runs the player down and bites; a spine salamander keeps its distance and shoots. */
+export interface Mob {
+  id: number;
+  kind: "melee" | "ranged";
+  x: number;
+  y: number;
+  /** Time until it may move again, and until it may bite or shoot again. */
+  wait: number;
+  cool: number;
+}
+/** A spine in flight. It moves a fraction of a cell each step, so it can be dodged. */
+export interface Shot {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+}
+const MOBS = CAVES.creatures;
+const SHOT_LIFE = 30;
+const steps8 = (a: Point, b: Point) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+/** Whether nothing but open cave lies between two cells. */
+export function clearLine(map: CaveMap, a: Point, b: Point): boolean {
+  const n = steps8(a, b);
+  for (let i = 1; i < n; i += 1) {
+    const x = Math.round(a.x + ((b.x - a.x) * i) / n);
+    const y = Math.round(a.y + ((b.y - a.y) * i) / n);
+    if (caveCell(map, x, y) === ROCK) return false;
+  }
+  return true;
+}
+
+/** Whether the player can see or hear a creature: near enough, with open cave between. */
+export function mobVisible(s: GameState, mob: Mob): boolean {
+  const cave = currentCave(s);
+  return !!cave && steps8(mob, s.player) <= MOBS.sight && clearLine(cave.map, mob, s.player);
+}
+
+/** Creatures come out of their dens each time the player goes in, never near the way out. */
+function spawnMobs(s: GameState, door: Site, map: CaveMap): void {
+  const rng = rngFrom(Math.imul(door.seed + 3, 2654435761) ^ Math.floor(s.time / 1000));
+  const dens = [...map.cells.keys()].filter((i) => map.cells[i] === HABITAT);
+  const [fewest, most] = MOBS.count;
+  const count = fewest + Math.floor(rng() * (most - fewest + 1));
+  s.mobs = [];
+  s.shots = [];
+  for (let i = 0; i < count && dens.length; i += 1) {
+    const [cell] = dens.splice(Math.floor(rng() * dens.length), 1);
+    const at = { x: cell % map.width, y: Math.floor(cell / map.width) };
+    if (steps8(at, map.entry) <= MOBS.safeRadius + 4) continue;
+    s.mobs.push({ id: i, kind: rng() < MOBS.rangedShare ? "ranged" : "melee", ...at, wait: 0, cool: 1000 });
+  }
+}
+
+/** A cell a creature may step onto: open, free, and outside the safe ground by the way out. */
+function mobCanStand(s: GameState, map: CaveMap, mob: Mob, x: number, y: number): boolean {
+  if (caveCell(map, x, y) === ROCK || steps8({ x, y }, map.entry) <= MOBS.safeRadius) return false;
+  if (x === s.player.x && y === s.player.y) return false;
+  return !s.mobs.some((other) => other !== mob && other.x === x && other.y === y);
+}
+
+function mobStep(s: GameState, map: CaveMap, mob: Mob, way: "toward" | "away" | "wander"): void {
+  let next: Point | undefined;
+  if (way === "toward") {
+    // The first step of the way round the rock to the player.
+    next = safePath(mob, s.player, () => 0, (x, y) => caveCell(map, x, y) === ROCK)[0];
+  } else if (way === "away") {
+    const dx = s.player.x - mob.x;
+    const dy = s.player.y - mob.y;
+    next = { x: mob.x - Math.sign(dx), y: mob.y - Math.sign(dy) };
+  }
+  if (!next || !mobCanStand(s, map, mob, next.x, next.y)) {
+    // Blocked or idle: shuffle to a neighbouring cell.
+    const r = hash(mob.id * 31 + mob.x, mob.y, Math.floor(s.time / 100));
+    const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(r * 4)];
+    next = { x: mob.x + dx, y: mob.y + dy };
+    if (!mobCanStand(s, map, mob, next.x, next.y)) return;
+  }
+  mob.x = next.x;
+  mob.y = next.y;
+}
+
+/** One step of cave life: creatures move, bite and shoot, and spines fly. */
+function creatures(s: GameState): void {
+  const cave = currentCave(s);
+  if (!cave) return;
+  const { map } = cave;
+  for (const mob of s.mobs) {
+    mob.wait = Math.max(0, mob.wait - STEP_MS);
+    mob.cool = Math.max(0, mob.cool - STEP_MS);
+    // They smell the player round corners within hunting range; shooting needs a clear line.
+    const aware = mobVisible(s, mob);
+    const near = steps8(mob, s.player);
+    const hunting = near <= MOBS.hunt;
+    if (mob.kind === "melee") {
+      if (near <= 1 && mob.cool <= 0) {
+        mob.cool = MOBS.melee.attackMs;
+        hurt(s, MOBS.melee.damage);
+        if (s.cave === null) return;
+        continue;
+      }
+      if (mob.wait > 0 || near <= 1) continue;
+      mob.wait = MOBS.melee.moveMs;
+      mobStep(s, map, mob, hunting ? "toward" : "wander");
+    } else {
+      const { range, keep, fireMs, shotSpeed, moveMs } = MOBS.ranged;
+      if (aware && near <= range && mob.cool <= 0) {
+        mob.cool = fireMs;
+        const dx = s.player.x - mob.x;
+        const dy = s.player.y - mob.y;
+        const len = Math.hypot(dx, dy) || 1;
+        s.shots.push({ x: mob.x, y: mob.y, vx: (dx / len) * shotSpeed, vy: (dy / len) * shotSpeed, life: SHOT_LIFE });
+      }
+      if (mob.wait > 0) continue;
+      mob.wait = moveMs;
+      // Close in until in range with a clear shot, then hold off at a distance.
+      if (hunting && (!aware || near > keep[1])) mobStep(s, map, mob, "toward");
+      else if (aware && near < keep[0]) mobStep(s, map, mob, "away");
+      else if (!hunting) mobStep(s, map, mob, "wander");
+    }
+  }
+  // Spines fly straight until they hit rock or the player, or run out.
+  s.shots = s.shots.filter((shot) => {
+    shot.x += shot.vx;
+    shot.y += shot.vy;
+    shot.life -= 1;
+    const x = Math.round(shot.x);
+    const y = Math.round(shot.y);
+    if (shot.life <= 0 || caveCell(map, x, y) === ROCK) return false;
+    if (x === s.player.x && y === s.player.y && s.cave !== null) {
+      hurt(s, MOBS.ranged.damage);
+      return false;
+    }
+    return true;
+  });
 }
 
 /** Prospecting done: the rock around is known, and any veins in it are found. */
@@ -368,7 +517,8 @@ export const isWeak = (s: GameState): boolean => s.time < s.weakUntil;
 
 export function siteHere(s: GameState): Site | undefined {
   if (s.path.length) return undefined;
-  return s.sites.find((site) => site.x === s.player.x && site.y === s.player.y && onThisMap(s, site));
+  // A cave entrance is a place, not a vein: it has its own button, never a vein panel.
+  return s.sites.find((site) => site.x === s.player.x && site.y === s.player.y && site.ore !== CAVE && onThisMap(s, site));
 }
 
 /** Whether a site is on the map the player is on, and known there: cave veins need finding first. */
@@ -399,17 +549,13 @@ export const walkTime = (s: GameState): number =>
 
 /** What stepping on a cell would cost, as far as the player knows. Unseen ground looks safe. */
 function knownDamage(s: GameState, x: number, y: number): number {
-  const cave = currentCave(s);
-  if (cave) return caveSeenAt(s, x, y) && caveDamage(s, cave.map, x, y) ? CAVES.damage : 0;
+  // Underground the danger moves about, so no cell is known to hurt.
+  if (s.cave !== null) return 0;
   if (!isRevealed(s, x, y) || (x === BASE.x && y === BASE.y)) return 0;
   if (s.sites.some((site) => site.x === x && site.y === y)) return 0;
   const [, kind, height] = terrain(x, y, s.seed);
   return kind === "t-water" ? WATER_DAMAGE : kind === "t-hill" ? 1 + height : 0;
 }
-
-/** Creature habitats hurt, except where a found vein sits. */
-const caveDamage = (s: GameState, map: CaveMap, x: number, y: number): boolean =>
-  caveCell(map, x, y) === HABITAT && !s.sites.some((site) => site.cave === s.cave && site.found && site.x === x && site.y === y);
 
 function routeTo(s: GameState, target: Point): Point[] {
   const cave = currentCave(s);
@@ -924,6 +1070,8 @@ export function upgradeSave(s: GameState): GameState {
   s.cave ??= null;
   s.caveSeen ??= {};
   s.probe = null;
+  s.mobs ??= [];
+  s.shots ??= [];
   if (!s.sites.some((site) => site.ore === CAVE)) addNearCave(s);
   // The stove merged into the brick kiln.
   if (s.project?.type === "stove") s.project.type = "brick_kiln";
@@ -1437,13 +1585,15 @@ function walk(s: GameState): void {
   s.walkTimer += STEP_MS;
   if (s.walkTimer < walkTime(s)) return;
   s.walkTimer = 0;
+  // A creature in the way stops the walk; there's no walking through it.
+  if (s.cave !== null && s.mobs.some((mob) => mob.x === s.path[0].x && mob.y === s.path[0].y)) {
+    s.path = [];
+    return;
+  }
   s.player = s.path.shift()!;
   const cave = currentCave(s);
   if (cave) {
     revealCave(s, s.player, REVEAL);
-    const target = s.path.at(-1);
-    if (s.safeWalk && target && s.path.some((cell) => knownDamage(s, cell.x, cell.y) > 0)) s.path = routeTo(s, target);
-    if (caveDamage(s, cave.map, s.player.x, s.player.y)) hurt(s, CAVES.damage);
     return;
   }
   reveal(s, s.player, visionAt(s, s.player));
@@ -1475,6 +1625,8 @@ function collapse(s: GameState): void {
   const steps = cave ? span(cave.door, BASE) + span(s.player, cave.map.entry) : span(s.player, BASE);
   s.cave = null;
   s.probe = null;
+  s.mobs = [];
+  s.shots = [];
   const rate = Math.min(MAX_LOSS, (steps / LOSS_RANGE) * MAX_LOSS);
   const lost: Stack[] = [];
   s.inv.forEach((stack, i) => {
@@ -1737,6 +1889,7 @@ export function step(s: GameState): void {
   // Walking off cancels prospecting; standing still for long enough finishes it.
   if (s.probe !== null && s.path.length) s.probe = null;
   if (s.probe !== null && s.time - s.probe >= CAVES.probeMs) finishProbe(s);
+  if (s.cave !== null) creatures(s);
   survive(s);
   turnSeason(s);
   if (s.time % SPRING_LEAK_MS === 0) leakForce(s);
