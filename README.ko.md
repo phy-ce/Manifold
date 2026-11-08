@@ -70,4 +70,4 @@ TypeScript와 Vite를 쓰고, 기계 그림은 PixiJS로 그립니다. 게임 �
 
 ## 라이선스
 
-MIT
+[Apache License 2.0](LICENSE)을 따릅니다. 이 프로젝트나 이를 바탕으로 만든 작업물을 배포할 때는 [NOTICE](NOTICE) 파일을 함께 포함해야 합니다. 이 변경 이전에 공개된 버전은 MIT로 배포되었습니다.
