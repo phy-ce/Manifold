@@ -1,6 +1,6 @@
 // Manual save slots, on top of the automatic save.
 import { dateLocale, tr } from "../i18n";
-import { GameState, SAVE_VERSION } from "../engine/game";
+import { GameState, OLDEST_SAVE, SAVE_VERSION } from "../engine/game";
 
 const SLOTS = 3;
 const slotKey = (n: number) => `modpack-simulator-slot-${n}`;
@@ -15,7 +15,8 @@ function read(n: number): Saved | null {
     const raw = localStorage.getItem(slotKey(n));
     const saved = raw ? (JSON.parse(raw) as Saved) : null;
     // Older saves are converted when they load. Only a newer game's can't be read.
-    return (saved?.state?.version ?? Infinity) <= SAVE_VERSION ? saved : null;
+    const version = saved?.state?.version ?? Infinity;
+    return version <= SAVE_VERSION && version >= OLDEST_SAVE ? saved : null;
   } catch {
     return null;
   }

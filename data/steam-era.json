@@ -28,7 +28,8 @@
     "iron_ore": { "rate": 1 }, "coal": { "rate": 1, "drainedRate": 2 }, "clay": { "rate": 1 },
     "copper_ore": { "rate": 1 }, "water": { "rate": 4 }, "limestone": { "rate": 1 }
   },
-  "fuels": ["coal", "coke"],
+  "fuels": { "Lg": 8, "Bt": 12, "An": 16, "coke": 20 },
+  "tiers": ["spring", "low", "high"],
   "gear": {
     "iron_boots": { "slot": "feet", "walk": 0.65, "note": "걷는 시간 35% 감소" },
     "iron_pack": { "slot": "back", "carry": 40, "note": "최대 무게 +40" },
@@ -39,19 +40,19 @@
   "drum": { "empty": "iron_drum", "liters": 100, "fills": { "water": "water_drum" } },
   "machines": {
     "warehouse": { "name": "창고", "cost": { "iron": 10 }, "work": 25 },
-    "brick_kiln": { "name": "벽돌 가마", "cost": { "clay": 10 }, "work": 20 },
-    "smelter": { "name": "제련로", "byproductSlots": 2, "cost": { "brick": 8, "clay": 4 }, "work": 40 },
+    "brick_kiln": { "name": "벽돌 가마", "burn": 1, "cost": { "clay": 10 }, "work": 20 },
+    "smelter": { "name": "제련로", "burn": 1.5, "byproductSlots": 2, "cost": { "brick": 8, "clay": 4 }, "work": 40 },
     "plate_hammer": { "name": "판금 망치", "power": 2, "difficulty": 1, "manual": "click", "cost": { "iron": 4 }, "work": 15 },
     "forming_bench": { "name": "성형대", "power": 2, "difficulty": 2, "manual": "keys", "cost": { "iron": 4, "brick": 4 }, "work": 20 },
     "boiler_bench": { "name": "보일러 제작대", "power": 3, "difficulty": 3, "manual": "keys", "cost": { "iron_plate": 4, "brick": 4 }, "work": 30 },
     "engine_bench": { "name": "기관 조립대", "power": 3, "difficulty": 4, "manual": "keys", "cost": { "iron_plate": 6, "iron": 6 }, "work": 40 },
 
-    "spring_motor": { "name": "태엽 동력기", "powerOut": 5, "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
+    "spring_motor": { "name": "태엽 동력기", "powerOut": 5, "tier": "spring", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 20 },
 
-    "steam_engine": { "name": "증기기관", "powerOut": 10, "cost": { "steam_engine_unit": 1 }, "work": 30 },
+    "steam_engine": { "name": "증기기관", "powerOut": 10, "tier": "low", "burn": 1, "cost": { "steam_engine_unit": 1 }, "work": 30 },
     "steam_manifold": { "name": "증기 배분기", "cost": { "copper_tube": 6, "iron_plate": 2 }, "work": 15 },
     "item_splitter": { "name": "재료 분배기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 15 },
-    "drainage_pump": { "name": "강가 펌프", "power": 5, "steamReady": true, "cost": { "iron_cylinder": 1, "copper_tube": 8, "iron_plate": 4 }, "work": 25 },
+    "drainage_pump": { "name": "강가 펌프", "power": 3, "tier": "spring", "steamReady": true, "cost": { "iron_cylinder": 1, "copper_tube": 8, "iron_plate": 4 }, "work": 25 },
     "steam_hammer": { "name": "증기 해머", "power": 3, "steamReady": true, "cost": { "iron_cylinder": 1, "iron_plate": 8, "steam_module": 1 }, "work": 30 },
 
     "coke_oven": { "name": "코크스로", "cost": { "brick": 40 }, "work": 40 },
@@ -59,15 +60,15 @@
     "converter": { "name": "전로", "power": 6, "steamReady": true, "cost": { "brick": 20, "iron_plate": 40, "iron_cylinder": 2, "iron_fan": 1, "steam_module": 1 }, "work": 50 },
     "tar_tank": { "name": "타르 저장조", "cost": { "iron_plate": 10 }, "work": 20 },
 
-    "rolling_mill": { "name": "압연기", "power": 3, "cost": { "steel": 20, "iron_cylinder": 2 } },
-    "lathe": { "name": "증기 선반", "power": 3, "cost": { "steel": 20, "iron_plate": 10 } },
-    "gear_cutter": { "name": "기어 절삭기", "power": 2, "cost": { "steel": 20, "iron_plate": 10 } },
-    "wire_drawer": { "name": "증기 인발기", "power": 2, "cost": { "steel": 10, "copper_tube": 4 } },
+    "rolling_mill": { "name": "압연기", "power": 3, "tier": "high", "cost": { "steel": 20, "iron_cylinder": 2 } },
+    "lathe": { "name": "증기 선반", "power": 3, "tier": "high", "cost": { "steel": 20, "iron_plate": 10 } },
+    "gear_cutter": { "name": "기어 절삭기", "power": 2, "tier": "high", "cost": { "steel": 20, "iron_plate": 10 } },
+    "wire_drawer": { "name": "증기 인발기", "power": 2, "tier": "high", "cost": { "steel": 10, "copper_tube": 4 } },
 
-    "tar_still": { "name": "타르 증류기", "power": 2, "cost": { "steel_plate": 10, "copper_tube": 10 } },
-    "coil_winder": { "name": "코일 권선기", "power": 2, "cost": { "steel_plate": 10, "gear": 4 } },
-    "core_press": { "name": "철심 프레스", "power": 3, "cost": { "steel_plate": 10, "iron_cylinder": 1 } },
-    "generator_bench": { "name": "발전기 조립대", "power": 4, "cost": { "steel_plate": 20, "gear": 10 } }
+    "tar_still": { "name": "타르 증류기", "power": 2, "tier": "high", "cost": { "steel_plate": 10, "copper_tube": 10 } },
+    "coil_winder": { "name": "코일 권선기", "power": 2, "tier": "high", "cost": { "steel_plate": 10, "gear": 4 } },
+    "core_press": { "name": "철심 프레스", "power": 3, "tier": "high", "cost": { "steel_plate": 10, "iron_cylinder": 1 } },
+    "generator_bench": { "name": "발전기 조립대", "power": 4, "tier": "high", "cost": { "steel_plate": 20, "gear": 10 } }
   },
   "recipeTemplates": [
     { "form": "plate", "machine": "plate_hammer", "time": 4, "in": 2, "out": 1, "metals": ["iron", "copper", "steel"] },
@@ -81,19 +82,19 @@
     { "form": "pick", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
-    { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2, "coal": 1 }, "out": { "brick": 2 } },
-    { "id": "iron_bloom", "machine": "smelter", "time": 6, "in": { "iron_ore": 2, "coal": 1 }, "out": { "iron": 1, "slag": 1 } },
-    { "id": "copper_sulfide_smelt", "machine": "smelter", "time": 8, "in": { "copper_sulfide": 3, "coal": 1 }, "out": { "copper": 1, "slag": 2 } },
-    { "id": "copper", "machine": "smelter", "time": 6, "in": { "copper_oxide": 2, "coal": 1 }, "out": { "copper": 1, "slag": 1 } },
+    { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2 }, "out": { "brick": 2 } },
+    { "id": "iron_bloom", "machine": "smelter", "time": 6, "in": { "iron_ore": 2 }, "out": { "iron": 1, "slag": 1 } },
+    { "id": "copper_sulfide_smelt", "machine": "smelter", "time": 8, "in": { "copper_sulfide": 3 }, "out": { "copper": 1, "slag": 2 } },
+    { "id": "copper", "machine": "smelter", "time": 6, "in": { "copper_oxide": 2 }, "out": { "copper": 1, "slag": 1 } },
     { "id": "boiler", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 8, "copper_tube": 4 }, "out": { "boiler": 1 } },
     { "id": "steam_engine_unit", "machine": "engine_bench", "time": 30, "in": { "iron_cylinder": 2, "iron_plate": 4, "boiler": 1, "copper_tube": 4 }, "out": { "steam_engine_unit": 1 } },
     { "id": "steam_module", "machine": "engine_bench", "time": 20, "in": { "iron_cylinder": 1, "iron_plate": 2, "steam_engine_unit": 1, "copper_tube": 2 }, "out": { "steam_module": 2 } },
 
-    { "id": "cook_berry", "machine": "brick_kiln", "time": 5, "in": { "Be": 1, "coal": 1 }, "out": { "Bc": 1 } },
-    { "id": "cook_mushroom", "machine": "brick_kiln", "time": 5, "in": { "Mu": 1, "coal": 1 }, "out": { "Mc": 1 } },
+    { "id": "cook_berry", "machine": "brick_kiln", "time": 5, "in": { "Be": 1 }, "out": { "Bc": 1 } },
+    { "id": "cook_mushroom", "machine": "brick_kiln", "time": 5, "in": { "Mu": 1 }, "out": { "Mc": 1 } },
 
     { "id": "pump_water", "machine": "drainage_pump", "time": 0.5, "in": {}, "out": { "water": 1 } },
-    { "id": "steam", "machine": "steam_engine", "time": 10, "in": { "coal": 1, "water": 4 }, "out": {} },
+    { "id": "steam", "machine": "steam_engine", "time": 10, "in": { "water": 4 }, "out": {} },
 
     { "id": "coke", "machine": "coke_oven", "time": 10, "in": { "coal": 2 }, "out": { "coke": 1, "coal_tar": 1 } },
     { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "iron": 4, "slag": 2 } },

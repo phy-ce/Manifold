@@ -50,7 +50,7 @@ const variants = expanded.variants;
 const forms: Record<string, { label: string }> = materials.forms;
 const ores: Record<string, Ore> = oreData.ores;
 const display: Record<string, { code: string; color: string }> = displayData;
-const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean }> = era.machines;
+const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean; burn?: number; tier?: string }> = era.machines;
 
 const food: Record<string, { hunger: number; hp: number }> = era.food;
 
@@ -118,7 +118,22 @@ export const MAIN = "main";
 export const BYPRODUCT = "byproduct";
 
 /** What an input slot is for, whatever fills it. */
-export const inputRole = (key: string): string => (era.fuels.includes(key) ? tr("연료") : tr("재료"));
+export const inputRole = (_key: string): string => tr("재료");
+
+// ---- Fuel and power tiers
+
+/** Heat each fuel gives when burned. Only these can go in a fuel slot. */
+const FUEL: Record<string, number> = era.fuels;
+export const fuelValue = (id: string): number => FUEL[id] ?? 0;
+export const isFuel = (id: string): boolean => id in FUEL;
+export const FUELS: string[] = Object.keys(FUEL);
+/** Heat a machine burns per second while it works. Zero for machines without a firebox. */
+export const machineBurn = (type: string): number => machines[type]?.burn ?? 0;
+/** Power tiers, weakest first: a source drives machines of its own tier or below. */
+export const TIERS: string[] = era.tiers;
+export const tierRank = (tier: string): number => TIERS.indexOf(tier);
+/** The tier a source gives, or a machine needs. Powered machines default to low-pressure steam. */
+export const machineTier = (type: string): string => machines[type]?.tier ?? (machines[type]?.power || machines[type]?.powerOut ? "low" : TIERS[0]);
 /** What an output slot is for: the first holds the product, the rest by-products. */
 export const outputRole = (index: number): string => (index === 0 ? tr("결과") : tr("부산물"));
 

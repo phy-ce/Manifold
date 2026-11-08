@@ -409,16 +409,8 @@ describe("cave saves", () => {
     expect(siteHere(back)?.id).toBe(vein.id);
   });
 
-  it("gives an old save its cave entrance, standing on the surface", () => {
-    const s = createGame(8);
-    const old = JSON.parse(JSON.stringify(s));
-    old.version = 14;
-    // Before caves there was no entrance, and site ids ran on with no gap.
-    old.sites = old.sites.filter((site: { ore: string }) => site.ore !== CAVE).map((site: { id: number }, i: number) => ({ ...site, id: i }));
-    delete old.cave;
-    delete old.caveSeen;
-    delete old.probe;
-    const back = loadSave(old)!;
+  it("starts a new world with its cave entrance on the surface, and keeps it through a save", () => {
+    const back = loadSave(JSON.parse(JSON.stringify(createGame(8))))!;
     expect(back.cave).toBeNull();
     expect(back.sites.filter((site) => site.ore === CAVE)).toHaveLength(1);
     expect(back.sites.every((site, i) => site.id === i)).toBe(true);

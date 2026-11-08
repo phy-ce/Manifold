@@ -1,8 +1,8 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { FORM_CATEGORIES, MOTOR, formCategory, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, MODULE, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
+import { FORM_CATEGORIES, FUELS, machineBurn, MOTOR, formCategory, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, MODULE, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
@@ -28,6 +28,8 @@ export class MachineWindow {
   private readonly keys = document.createElement("div");
   private readonly keycaps: HTMLButtonElement[] = [];
   private workBox: HTMLButtonElement | null = null;
+  /** The firebox slot, for machines that burn fuel. */
+  private fuelSlot: HTMLButtonElement | null = null;
   private target = 0;
   private hitAt = 0;
   private readonly bar = document.createElement("pre");
@@ -351,6 +353,22 @@ export class MachineWindow {
       this.inputs.push([key, b]);
       left.append(b);
     }
+    // A machine with a firebox gets a fuel slot below its materials.
+    this.fuelSlot = null;
+    if (machineBurn(node.type)) {
+      const b = makeSlot(() => {
+        clickFuel(this.game(), node.id, "left");
+        this.changed();
+      }, {
+        right: () => {
+          clickFuel(this.game(), node.id, "right");
+          this.changed();
+        },
+      });
+      b.classList.add("fuel");
+      this.fuelSlot = b;
+      left.append(b);
+    }
     for (const held of outSlots) {
       const b = makeSlot((e) => {
         const item = held.find((id) => node.outs[id] > 0);
@@ -489,15 +507,19 @@ export class MachineWindow {
     const current = recipeOf(node);
     const hand = machineManual(node.type) === "keys" ? tr("키를 누르세요") : tr("그림을 클릭하세요");
     const unlinked = node.type === PUMP && !riverOf(s, node);
-    const stateText = unlinked ? tr("강가 미연결") : state === "manual" ? hand : lacksPower(node) ? tr("동력 없음") : STATE_LABEL[state];
+    // Why a loaded machine isn't running: no fuel, too weak a power tier, or cut off at the back of the queue.
+    const powerText = node.tierLow ? tr("동력 등급 부족") : node.order ? tr("동력 부족") : tr("동력 없음");
+    const stateText = unlinked ? tr("강가 미연결") : lacksFuel(node) ? tr("연료 없음") : state === "manual" ? hand : lacksPower(node) ? powerText : STATE_LABEL[state];
     const level = machineManual(node.type) ? `<span class="card-note">${tr("난이도")} ${machineDifficulty(node.type)}</span>` : "";
     const river = node.type === PUMP ? riverOf(s, node) : undefined;
     const reserve = river ? `<span class="card-note">${tr("강가")} ${river.code} ${river.left}/${river.total}L</span>` : "";
     const result = parts(current.out, (_, i) => outputRole(i)) || (node.type === ENGINE ? `St ${tr("증기")} ${Math.floor(node.energy)}/${STEAM_MAX}` : tr("폐기"));
     const load = node.type === ENGINE ? powerLoad(s, node) : null;
+    const queue = node.order ? ` · ${tr("순번")} ${node.order}` : "";
     const use = load ? `<span class="card-note">${tr("동력")} ${load.now}/${load.limit} · ${tr("연결")} ${load.connected}</span>`
-      : machinePower(node.type) ? `<span class="card-note">${tr("동력")} ${machinePower(node.type)}</span>` : "";
-    const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}${use}<span class="state ${state}">${stateText}</span>`;
+      : machinePower(node.type) ? `<span class="card-note">${tr("동력")} ${machinePower(node.type)}${queue}</span>` : "";
+    const heat = machineBurn(node.type) ? `<span class="card-note">${tr("열")} ${Math.ceil(node.heat ?? 0)}</span>` : "";
+    const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}${use}${heat}<span class="state ${state}">${stateText}</span>`;
     if (this.recipe.dataset.line !== line) {
       this.recipe.dataset.line = line;
       this.recipe.innerHTML = line;
@@ -506,6 +528,7 @@ export class MachineWindow {
     for (const [key, b] of this.inputs) {
       paintSlot(b, node.ins[key], "", undefined, { name: inputRole(key), fits: slots.find((slot) => slot.key === key)!.accepts });
     }
+    if (this.fuelSlot) paintSlot(this.fuelSlot, node.fuel ?? null, "fuel", undefined, { name: tr("연료"), fits: FUELS });
     const expected = expectedOutput(node);
     this.outputs.forEach(([held, b], i) => {
       const item = held.find((id) => node.outs[id] > 0);

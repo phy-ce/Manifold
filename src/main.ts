@@ -26,6 +26,8 @@ function load(): GameState {
     const raw = localStorage.getItem(SAVE_KEY);
     const saved = raw ? loadSave(JSON.parse(raw)) : null;
     if (saved) return saved;
+    // A save from before fuel and power networks is kept aside rather than overwritten.
+    if (raw && !localStorage.getItem(`${SAVE_KEY}-old`)) localStorage.setItem(`${SAVE_KEY}-old`, raw);
   } catch {
     // A blocked or damaged save just starts a new game.
   }

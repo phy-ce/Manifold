@@ -88,7 +88,7 @@ export const EN: Record<string, string> = {
   "에서 선 연결": ": start a line", "동력을 나눕니다": "Splits power", "연결": "Linked", "힘": "Force",
   "외부 연결 노드를 클릭": "Click the outside node", "청사진 설치": "Install blueprints",
   // Help
-  "전체": "General", "중간제작품": "Parts", "완성품": "Finished goods", "형태 찾기": "Find a shape", "이 도움말": "This help", "지도와 기지 전환, 기지 밖에서는 복귀": "Switch map and base, or return home", "지도에서 걷기 (두 키를 함께 누르면 대각선)": "Walk on the map (two keys together go diagonally)",
+  "전체": "General", "동력 등급 부족": "Power tier too low", "동력 부족": "Not enough power", "연료 없음": "No fuel", "순번": "queue", "열": "heat", "중간제작품": "Parts", "완성품": "Finished goods", "형태 찾기": "Find a shape", "이 도움말": "This help", "지도와 기지 전환, 기지 밖에서는 복귀": "Switch map and base, or return home", "지도에서 걷기 (두 키를 함께 누르면 대각선)": "Walk on the map (two keys together go diagonally)",
   "동굴에서 탐사: 멈춰서 주변 광맥 찾기": "In a cave, prospect: stand still to find veins nearby", "자연 동굴": "Natural cave", "출구": "Way out", "출구로": "To the way out",
   "암반": "Bedrock", "동굴 늑대": "Cave wolf", "가시 도롱뇽": "Spine salamander", "동굴로 들어가기": "Enter the cave", "나가기": "Climb out", "탐사": "Prospect", "탐사 중": "Prospecting",
   "멈춰서 주변 바위를 두드려 광맥을 찾습니다 (P)": "Stand still and tap the rock to find veins nearby (P)",

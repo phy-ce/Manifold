@@ -1,9 +1,11 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { CAVE, CAVES, layerOres, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
+/** Saves older than this are not converted: fuel and power networks changed too much. */
+export const OLDEST_SAVE = 16;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
 export const SPRING_MAX = 200;
 export const WIND = 5;
@@ -76,8 +78,17 @@ export interface GameNode {
   fails: number;
   /** Stored force: a spring's wind or an engine's steam. */
   energy: number;
-  /** Share of full speed from power, last step. Zero means no power reached it. */
+  /** 1 when power drives it this step, 0 when none reaches it or it was cut off. */
   speed?: number;
+  /** Whether power reaches its outgoing lines this step, so they can carry. */
+  carry?: boolean;
+  /** Its place in its power network's queue, counting from 1: later ones stop first when power runs short. */
+  order?: number;
+  /** Connected to power of too weak a tier to drive it, such as a spring for a hammer. */
+  tierLow?: boolean;
+  /** The fuel waiting in the firebox, and heat left from the last piece burned. */
+  fuel?: Stack | null;
+  heat?: number;
   /** The riverbank a pump draws from. */
   siteId?: number;
   /** A steam module is fitted, so this machine can take steam power. */
@@ -769,6 +780,7 @@ export function placeMachine(s: GameState, type: string, x: number, y: number): 
     paid: [],
     fails: 0,
     energy: 0,
+    ...(machineBurn(type) ? { fuel: null, heat: 0 } : {}),
   };
   s.nodes.push(node);
   return node;
@@ -999,7 +1011,7 @@ function dropRiverNodes(s: GameState): void {
  */
 export function loadSave(raw: unknown): GameState | null {
   const old = raw as Partial<GameState> | null;
-  if (!old || typeof old.seed !== "number" || typeof old.version !== "number" || old.version > SAVE_VERSION) return null;
+  if (!old || typeof old.seed !== "number" || typeof old.version !== "number" || old.version > SAVE_VERSION || old.version < OLDEST_SAVE) return null;
   if (!Array.isArray(old.nodes) || !Array.isArray(old.sites)) return null;
   const s = { ...createGame(old.seed), ...old } as GameState;
   // A save from before stages has to work its stage out from what it did have.
@@ -1242,7 +1254,7 @@ function roomFor(node: GameNode, item: string, viaLine = false): number {
     return node.store.reduce((room, slot) => room + (!slot ? STACK : slot.id === item ? STACK - slot.n : 0), 0);
   }
   const key = slotFor(node, item)?.key;
-  if (!key) return 0;
+  if (!key) return fuelRoom(node, item, viaLine);
   const slot = node.ins[key];
   if (slot && slot.id !== item) return 0;
   // Lines only top a machine up to two batches, so one machine can't hoard a shared material.
@@ -1258,9 +1270,53 @@ function insert(node: GameNode, item: string, n: number, viaLine = false): numbe
     return moved;
   }
   if (isStore(node.type)) return addTo(node.store, item, moved);
-  const key = slotFor(node, item)!.key;
+  const key = slotFor(node, item)?.key;
+  if (!key) {
+    node.fuel = { id: item, n: (node.fuel?.n ?? 0) + moved };
+    return moved;
+  }
   node.ins[key] = { id: item, n: (node.ins[key]?.n ?? 0) + moved };
   return moved;
+}
+
+// ---- Fuel
+
+/** How much fuel a firebox holds when filled by hand, and when topped up along a line. */
+export const FUEL_CAP = 32;
+const FUEL_LINE_CAP = 8;
+
+/** Room in a machine's firebox for a fuel. One kind at a time, like any slot. */
+function fuelRoom(node: GameNode, item: string, viaLine: boolean): number {
+  if (!machineBurn(node.type) || !isFuel(item) || (node.fuel && node.fuel.id !== item)) return 0;
+  return Math.max(0, (viaLine ? FUEL_LINE_CAP : FUEL_CAP) - (node.fuel?.n ?? 0));
+}
+
+/** Whether a machine has heat left or fuel to burn. */
+export const hasFire = (node: GameNode): boolean => (node.heat ?? 0) > 1e-9 || !!node.fuel;
+
+/** Draws heat for one step of work, burning a new piece of fuel when the last runs out. */
+function burnFuel(node: GameNode, amount: number): boolean {
+  while ((node.heat ?? 0) < amount - 1e-9) {
+    if (!node.fuel) return false;
+    node.heat = (node.heat ?? 0) + fuelValue(node.fuel.id);
+    node.fuel.n -= 1;
+    if (!node.fuel.n) node.fuel = null;
+  }
+  node.heat = (node.heat ?? 0) - amount;
+  return true;
+}
+
+/** The firebox, clicked: put fuel in from the hand, or take what's there into it. */
+export function clickFuel(s: GameState, nodeId: number, button: Button): void {
+  const node = nodeById(s, nodeId);
+  if (!atBase(s) || !node || !machineBurn(node.type)) return;
+  if (s.cursor) {
+    if (!isFuel(s.cursor.id)) return;
+    drop(s, insert(node, s.cursor.id, button === "left" ? s.cursor.n : 1));
+  } else if (node.fuel) {
+    lift(s, node.fuel, button === "left" ? node.fuel.n : Math.ceil(node.fuel.n / 2));
+    if (!node.fuel.n) node.fuel = null;
+  }
 }
 
 /** Inventory slot into a machine or the warehouse. */
@@ -1302,6 +1358,19 @@ export function fillFromBag(s: GameState, nodeId: number, recipe: Recipe, batche
       const moved = insert(node, stack.id, Math.min(left, stack.n));
       stack.n -= moved;
       left -= moved;
+      any ||= moved > 0;
+      if (!stack.n) s.inv[i] = null;
+    });
+  }
+  // A machine with a firebox also gets the fuel those batches will burn.
+  const burn = machineBurn(node.type);
+  if (burn) {
+    s.inv.forEach((stack, i) => {
+      if (!stack || !isFuel(stack.id) || (node.fuel && node.fuel.id !== stack.id)) return;
+      const have = (node.heat ?? 0) + (node.fuel ? node.fuel.n * fuelValue(node.fuel.id) : 0);
+      const need = Math.max(0, Math.ceil((burn * recipe.time * batches - have) / fuelValue(stack.id)));
+      const moved = insert(node, stack.id, Math.min(need, stack.n));
+      stack.n -= moved;
       any ||= moved > 0;
       if (!stack.n) s.inv[i] = null;
     });
@@ -1358,8 +1427,10 @@ export function status(node: GameNode): Status {
   if (isPassive(node.type)) return "idle";
   if (node.type === MOTOR) return node.energy > 0 ? "run" : "idle";
   const state = readiness(node);
-  if (node.type === ENGINE) return node.energy > 0 || state === "ready" ? "run" : "idle";
+  // A fire needs fuel: loaded but with nothing to burn, a machine waits.
+  if (node.type === ENGINE) return state === "ready" && hasFire(node) ? "run" : "idle";
   if (state !== "ready") return state;
+  if (machineBurn(node.type) && !hasFire(node)) return "idle";
   if (node.speed) return "run";
   if (machineManual(node.type)) return "manual";
   return machinePower(node.type) ? "idle" : "run";
@@ -1369,9 +1440,13 @@ export function status(node: GameNode): Status {
 export const lacksPower = (node: GameNode): boolean =>
   !!machinePower(node.type) && !machineManual(node.type) && readiness(node) === "ready" && !node.speed;
 
-/** An engine burns only while its boiler has room, so a quiet factory saves coal. */
+/** Loaded and able to work, but with nothing to burn. */
+export const lacksFuel = (node: GameNode): boolean =>
+  !!machineBurn(node.type) && readiness(node) === "ready" && !hasFire(node);
+
+/** An engine keeps its fire going whenever it has water and fuel, whether or not the steam is used. */
 function boil(s: GameState, node: GameNode): void {
-  if (node.energy >= STEAM_MAX || readiness(node) !== "ready") return;
+  if (readiness(node) !== "ready" || !burnFuel(node, (machineBurn(node.type) * STEP_MS) / 1000)) return;
   advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
   node.energy = Math.min(STEAM_MAX, node.energy + (machinePowerOut(node.type) * STEP_MS) / 1000);
 }
@@ -1383,38 +1458,77 @@ function runMachine(s: GameState, node: GameNode): void {
     return;
   }
   if (status(node) !== "run") return;
-  const pace = machinePower(node.type) ? node.speed ?? 0 : 1;
-  advance(s, node, (pace * STEP_MS) / (recipeOf(node).time * 1000));
+  // Other fires only burn while there is work to do.
+  if (machineBurn(node.type) && !burnFuel(node, (machineBurn(node.type) * STEP_MS) / 1000)) return;
+  advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
 }
 
-/** Force per second a source's lines are using to move items right now. */
-function lineLoad(s: GameState, source: GameNode): number {
-  const driven = drivenBy(s, source.id).map((node) => node.id);
-  return (s.lines.filter((l) => l.active && driven.includes(l.from)).length * 1000) / LINE_MS;
+/** Power each sending node reserves for carrying along its lines. */
+export const CARRY_POWER = 2;
+
+/** One power network: what its sources give, what is connected, and what is drawing now. */
+export interface PowerNet {
+  tier: string;
+  supply: number;
+  demand: number;
+  used: number;
 }
+/** The network of each source this step, for the screen. Not saved: it is worked out every step. */
+const networks = new Map<number, PowerNet>();
 
 /**
- * Shares each power source among the machines drawing on it. A source gives at most its
- * output, less what its lines are using, and never more than it holds. Past that limit
- * every machine on it slows down together.
+ * Power, a network at a time. Sources joined through manifolds pool their output, and the
+ * network takes the weakest tier among them. Everything connected reserves its rated power in
+ * the order it was connected; once the total passes the supply, that one and all after it stop.
+ * Nothing slows down: a machine runs at full speed or not at all.
  */
 function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
-  const users = new Map<GameNode, GameNode[]>();
-  for (const node of s.nodes) {
-    if (!machinePower(node.type)) continue;
-    node.speed = 0;
-    if (readiness(node) !== "ready") continue;
-    if (node.type === PUMP && (riverOf(s, node)?.left ?? 0) < 1) continue;
-    const source = drives.get(node.id)?.find((m) => m.energy > 0);
-    if (source) users.set(source, [...(users.get(source) ?? []), node]);
+  networks.clear();
+  const senders = new Set(s.lines.filter((l) => l.material !== POWER).map((l) => l.from));
+  // A node's place in the queue is when its first power line was laid.
+  const laid = new Map<number, number>();
+  for (const line of s.lines) {
+    if (line.material === POWER) laid.set(line.to, Math.min(laid.get(line.to) ?? Infinity, line.id));
   }
-  for (const [source, machines] of users) {
-    const perSecond = machines.reduce((sum, node) => sum + machinePower(node.type), 0);
-    const demand = perSecond * (STEP_MS / 1000);
-    const output = Math.max(0, machinePowerOut(source.type) - lineLoad(s, source));
-    const share = Math.min(1, output / perSecond, source.energy / demand);
-    source.energy -= demand * share;
-    for (const node of machines) node.speed = share;
+  const groups = new Map<string, { sources: GameNode[]; members: GameNode[] }>();
+  for (const node of s.nodes) {
+    node.speed = 0;
+    node.carry = false;
+    node.order = undefined;
+    node.tierLow = false;
+    const sources = drives.get(node.id) ?? [];
+    if (!sources.length || (!machinePower(node.type) && !senders.has(node.id))) continue;
+    const key = sources.map((m) => m.id).sort((a, b) => a - b).join(",");
+    const group = groups.get(key) ?? { sources, members: [] };
+    group.members.push(node);
+    groups.set(key, group);
+  }
+  for (const { sources, members } of groups.values()) {
+    const tier = sources.map((m) => machineTier(m.type)).reduce((a, b) => (tierRank(b) < tierRank(a) ? b : a));
+    const live = sources.filter((m) => m.energy > 0);
+    const supply = live.reduce((sum, m) => sum + machinePowerOut(m.type), 0);
+    members.sort((a, b) => (laid.get(a.id) ?? 0) - (laid.get(b.id) ?? 0));
+    let demand = 0;
+    let used = 0;
+    let cut = false;
+    members.forEach((node, i) => {
+      node.order = i + 1;
+      const drives = !!machinePower(node.type) && tierRank(machineTier(node.type)) <= tierRank(tier);
+      node.tierLow = !!machinePower(node.type) && !drives;
+      demand += (drives ? machinePower(node.type) : 0) + (senders.has(node.id) ? CARRY_POWER : 0);
+      cut ||= demand > supply + 1e-9;
+      if (cut) return;
+      node.carry = true;
+      if (!drives) return;
+      // Pumps need a linked riverbank with water left to have anything to do.
+      const dry = node.type === PUMP && (riverOf(s, node)?.left ?? 0) < 1;
+      node.speed = dry ? 0 : 1;
+      if (!dry && readiness(node) === "ready") used += machinePower(node.type);
+    });
+    // What is drawn comes out of the sources in proportion to their output.
+    for (const m of live) m.energy = Math.max(0, m.energy - (used * (machinePowerOut(m.type) / supply) * STEP_MS) / 1000);
+    const net = { tier, supply, demand, used };
+    for (const m of sources) networks.set(m.id, net);
   }
 }
 
@@ -1501,42 +1615,28 @@ function powerLines(s: GameState, nodes: Map<number, GameNode>): Map<number, Gam
   return direct;
 }
 
-/** Whether a node has working power, so it can push out along its lines. */
-export function hasDrive(s: GameState, nodeId: number): boolean {
-  const direct = powerLines(s, new Map(s.nodes.map((n) => [n.id, n])));
-  return sourcesOf(direct, nodeId).some((source) => source.energy > 0);
-}
+/** Whether power reached a node's lines last step, so it can push out along them. */
+export const hasDrive = (s: GameState, nodeId: number): boolean => !!nodeById(s, nodeId)?.carry;
 
-/** The nodes a source powers, reaching through manifolds. */
-function drivenBy(s: GameState, id: number, seen = new Set<number>()): GameNode[] {
-  return s.lines.filter((l) => l.from === id && l.material === POWER).flatMap((l) => {
-    if (seen.has(l.to)) return [];
-    seen.add(l.to);
-    const node = nodeById(s, l.to)!;
-    return node.type === MANIFOLD ? drivenBy(s, node.id, seen) : [node];
-  });
-}
 
-/** Springs always run down. An engine only loses steam sitting full, never while it is working. */
+/** Springs always run down. An engine's steam just tops out at its limit. */
 function leakForce(s: GameState): void {
   for (const node of s.nodes) {
-    if (node.type === MOTOR || (node.type === ENGINE && node.energy >= STEAM_MAX)) node.energy = Math.max(0, node.energy - 1);
+    if (node.type === MOTOR) node.energy = Math.max(0, node.energy - 1);
   }
 }
 
 /**
- * What a power source is carrying, in force per second: `now` is what its machines and lines
- * are using this moment, `connected` the most its machines could use if all of them ran at once.
+ * A source's network, in force per second: `now` is what its machines are drawing this moment,
+ * `connected` what everything connected reserves, and `limit` what the network's live sources give.
  */
-export function powerLoad(s: GameState, source: GameNode): { now: number; connected: number; limit: number } {
-  const driven = drivenBy(s, source.id);
-  const working = driven.reduce((sum, node) => sum + machinePower(node.type) * (node.speed ?? 0), 0);
-  return {
-    now: Math.round(working + lineLoad(s, source)),
-    connected: driven.reduce((sum, node) => sum + machinePower(node.type), 0),
-    limit: machinePowerOut(source.type),
-  };
+export function powerLoad(_s: GameState, source: GameNode): { now: number; connected: number; limit: number } {
+  const net = networks.get(source.id);
+  return { now: Math.round(net?.used ?? 0), connected: net?.demand ?? 0, limit: net?.supply ?? machinePowerOut(source.type) };
 }
+
+/** The network a source belongs to, as of the last step. */
+export const powerNetOf = (source: GameNode): PowerNet | undefined => networks.get(source.id);
 
 /** Lines are only passages: something at the sending end has to push. */
 function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives: Map<number, GameNode[]>): void {
@@ -1549,11 +1649,12 @@ function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives:
   const to = nodes.get(line.to)!;
   // A splitter just lets things through, so what leaves it needs no power.
   const free = from.type === SPLITTER;
-  const motor = drives.get(line.from)?.find((m) => m.energy > 0);
-  if (!motor && !free) return;
+  if (!free && !from.carry) return;
   const moved = isStore(from.type) ? sendStored(from, to) : sendOutput(from, to, line);
   if (!moved) return;
-  if (!free) motor!.energy -= 1;
+  // Each item carried costs 1 force from a source that still has some.
+  const motor = drives.get(line.from)?.find((m) => m.energy > 0);
+  if (!free && motor) motor.energy = Math.max(0, motor.energy - 1);
   line.active = true;
   line.lastMoved = s.time;
 }
