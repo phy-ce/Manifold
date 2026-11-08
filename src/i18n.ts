@@ -143,7 +143,7 @@ export const EN: Record<string, string> = {
   // Game data: machines
   "창고": "Warehouse", "벽돌 가마": "Brick kiln", "제련로": "Smelter", "판금 망치": "Plate hammer", "성형대": "Forming bench", "보일러 제작대": "Boiler bench", "기관 조립대": "Engine bench",
   "태엽 동력기": "Spring motor", "증기 배분기": "Steam manifold", "재료 분배기": "Item splitter", "강가 펌프": "Riverbank pump", "증기 해머": "Steam hammer", "코크스로": "Coke oven", "고로": "Blast furnace",
-  "베세머 전로": "Bessemer converter", "타르 저장조": "Tar tank", "압연기": "Rolling mill", "증기 선반": "Steam lathe", "기어 절삭기": "Gear cutter", "증기 인발기": "Wire drawer", "타르 증류기": "Tar still",
+  "전로": "Converter", "산화 구리광": "Copper oxide ore", "황화 구리광": "Copper sulfide ore", "구리 매트": "Copper matte", "타르 저장조": "Tar tank", "압연기": "Rolling mill", "증기 선반": "Steam lathe", "기어 절삭기": "Gear cutter", "증기 인발기": "Wire drawer", "타르 증류기": "Tar still",
   "코일 권선기": "Coil winder", "철심 프레스": "Core press", "발전기 조립대": "Generator bench",
   // Game data: stages, layers and grades
   "증기기관 + 구리 배관": "Steam engine + copper piping", "증기 동력 보급": "Steam power", "코크스와 고로": "Coke and blast furnaces", "증기 공작기계": "Steam machine tools",

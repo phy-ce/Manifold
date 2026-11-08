@@ -1,6 +1,6 @@
 // Item icons. Most items map to a stored shape; metal parts take their form's shape in the metal's colour.
 // Ores and slag are drawn fresh instead: their rough, speckled look comes from printing shaded pixels by brightness.
-import { familyMembers, formOf, isMachine, itemColor } from "../content";
+import { familyMembers, formOf, groupMembers, isMachine, itemColor } from "../content";
 import { hash } from "../engine/world";
 import { machineIcon, printCanvas } from "./art";
 import { METAL_CHARS, SHAPES, SOLID_CHARS, printShape, rampOf } from "./iconSprites";
@@ -147,7 +147,7 @@ export function itemIcon(id: string): string {
   let html = cache.get(id);
   if (html === undefined) {
     // An ore family shows the ore that fills it.
-    const item = familyMembers(id)[0] ?? id;
+    const item = familyMembers(id)[0] ?? groupMembers(id)[0] ?? id;
     const lump = LUMPS[item];
     const shape = formOf(item) ?? SHAPE_OF[item];
     if (isMachine(item)) html = machineIcon(item, COLS, ROWS);

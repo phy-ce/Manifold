@@ -2,7 +2,7 @@
 // It docks beside the game so it can stay open next to a machine window.
 import { tr } from "../i18n";
 import {
-  Recipe, machinePower, buildUses, familyMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
+  Recipe, machinePower, buildUses, familyMembers, groupMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
 } from "../content";
 import { GameState, bagHolds, countOf, fillFromBag, nodeById, runsRecipe } from "../engine/game";
 import { makeSlot, paintSlot } from "./slots";
@@ -87,7 +87,7 @@ export class ItemIndex {
 
   /** A family like "coal" isn't an item you hold, so jump to the ore that fills it. */
   private resolve(id: string): string {
-    return familyMembers(id)[0] ?? id;
+    return familyMembers(id)[0] ?? groupMembers(id)[0] ?? id;
   }
 
   show(id: string, tab: Tab = "recipes", remember = true): void {

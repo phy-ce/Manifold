@@ -5,7 +5,7 @@
   },
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
-    "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "water": "물", "limestone": "석회석",
+    "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
     "brick": "벽돌", "iron": "철 주괴", "copper": "구리 주괴", "slag": "슬래그",
     "boiler": "보일러", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
@@ -56,7 +56,7 @@
 
     "coke_oven": { "name": "코크스로", "cost": { "brick": 40 }, "work": 40 },
     "blast_furnace": { "name": "고로", "power": 4, "steamReady": true, "cost": { "brick": 60, "iron_plate": 30, "copper_tube": 10, "iron_fan": 2, "steam_module": 1 }, "work": 60 },
-    "converter": { "name": "베세머 전로", "power": 6, "steamReady": true, "cost": { "brick": 20, "iron_plate": 40, "iron_cylinder": 2, "iron_fan": 1, "steam_module": 1 }, "work": 50 },
+    "converter": { "name": "전로", "power": 6, "steamReady": true, "cost": { "brick": 20, "iron_plate": 40, "iron_cylinder": 2, "iron_fan": 1, "steam_module": 1 }, "work": 50 },
     "tar_tank": { "name": "타르 저장조", "cost": { "iron_plate": 10 }, "work": 20 },
 
     "rolling_mill": { "name": "압연기", "power": 3, "cost": { "steel": 20, "iron_cylinder": 2 } },
@@ -83,7 +83,8 @@
   "recipes": [
     { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2, "coal": 1 }, "out": { "brick": 2 } },
     { "id": "iron_bloom", "machine": "smelter", "time": 6, "in": { "iron_ore": 2, "coal": 1 }, "out": { "iron": 1, "slag": 1 } },
-    { "id": "copper", "machine": "smelter", "time": 6, "in": { "copper_ore": 2, "coal": 1 }, "out": { "copper": 1, "slag": 1 } },
+    { "id": "copper_sulfide_smelt", "machine": "smelter", "time": 8, "in": { "copper_sulfide": 3, "coal": 1 }, "out": { "copper": 1, "slag": 2 } },
+    { "id": "copper", "machine": "smelter", "time": 6, "in": { "copper_oxide": 2, "coal": 1 }, "out": { "copper": 1, "slag": 1 } },
     { "id": "boiler", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 8, "copper_tube": 4 }, "out": { "boiler": 1 } },
     { "id": "steam_engine_unit", "machine": "engine_bench", "time": 30, "in": { "iron_cylinder": 2, "iron_plate": 4, "boiler": 1, "copper_tube": 4 }, "out": { "steam_engine_unit": 1 } },
     { "id": "steam_module", "machine": "engine_bench", "time": 20, "in": { "iron_cylinder": 1, "iron_plate": 2, "steam_engine_unit": 1, "copper_tube": 2 }, "out": { "steam_module": 2 } },
@@ -96,7 +97,9 @@
 
     { "id": "coke", "machine": "coke_oven", "time": 10, "in": { "coal": 2 }, "out": { "coke": 1, "coal_tar": 1 } },
     { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "iron": 4, "slag": 2 } },
+    { "id": "copper_matte", "machine": "blast_furnace", "time": 6, "in": { "copper_sulfide": 4, "coke": 2, "limestone": 1 }, "out": { "copper_matte": 3, "slag": 2 } },
     { "id": "steel", "machine": "converter", "time": 10, "in": { "iron": 4 }, "out": { "steel": 3, "slag": 1 } },
+    { "id": "copper_converted", "machine": "converter", "time": 8, "in": { "copper_matte": 2 }, "out": { "copper": 2, "slag": 1 } },
     { "id": "steel_scrap", "machine": "converter", "time": 10, "in": { "iron": 3, "scrap": 2 }, "out": { "steel": 3, "slag": 1 }, "alt": true },
 
     { "id": "steel_plate", "machine": "rolling_mill", "time": 3, "in": { "steel": 1 }, "out": { "steel_plate": 1 } },

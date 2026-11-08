@@ -14,6 +14,16 @@ const { rules, sources, machines, milestones } = data;
 const errors = [];
 const name = (id) => items[id] ?? id;
 
+// Recipes can ask for a finer group than a family, such as sulfide copper ore. A group is
+// at hand once its family is, if one of its ores can be dug without drilling (layers 0 and 1).
+const ores = JSON.parse(readFileSync(resolve(root, "data/ores.json"), "utf8")).ores;
+const groupFamily = {};
+for (const ore of Object.values(ores)) {
+  if (ore.layers[0] > 1) continue;
+  for (const group of ore.groups ?? []) groupFamily[group] = ore.family;
+}
+const withGroups = (ids) => new Set([...ids, ...Object.keys(groupFamily).filter((g) => ids.has(groupFamily[g]))]);
+
 function recipePorts(recipe) {
   const machine = machines[recipe.machine];
   const usesPower = machine.power || machine.powerOut ? 1 : 0;
@@ -35,7 +45,7 @@ for (const [id, machine] of Object.entries(machines)) {
 
 // Items reachable from a set of sources and machines.
 function reachable(sourceIds, machineIds) {
-  const found = new Set(sourceIds);
+  const found = withGroups(new Set(sourceIds));
   let changed = true;
   while (changed) {
     changed = false;
@@ -97,6 +107,12 @@ function solve(goal, activeMachines, drained) {
     for (const [id, qty] of Object.entries(recipe.out)) balance[id] = (balance[id] ?? 0) + rate * qty;
   }
   balance[goal.item] = (balance[goal.item] ?? 0) - goal.perMinute / 60;
+  // A group is dug from its family's veins.
+  for (const [group, family] of Object.entries(groupFamily)) {
+    if (!balance[group]) continue;
+    balance[family] = (balance[family] ?? 0) + balance[group];
+    delete balance[group];
+  }
 
   const counts = {};
   for (const [id, rate] of Object.entries(rates)) {
@@ -145,7 +161,7 @@ for (const milestone of milestones) {
 
   // Bootstrapping: each machine built may pay for the next one.
   const buildable = new Set();
-  available = new Set(seenSources);
+  available = withGroups(new Set(seenSources));
   let grew = true;
   while (grew) {
     grew = false;
@@ -186,7 +202,9 @@ for (const milestone of milestones) {
 
 // Every produced item must be used by something.
 for (const id of Object.keys(items)) {
-  const used = recipes.some((r) => r.in[id]) || Object.values(machines).some((m) => m.cost?.[id]);
+  const asked = (key) => recipes.some((r) => r.in[key]) || Object.values(machines).some((m) => m.cost?.[key]);
+  // A family is used when a recipe asks for it or for one of its groups.
+  const used = asked(id) || Object.entries(groupFamily).some(([group, family]) => family === id && asked(group));
   const isGoal = milestones.some((m) => m.goal.item === id);
   if (!used && !isGoal && !variants[id] && !data.food?.[id] && !data.stockpiled?.includes(id) && !data.ruleItems?.includes(id) && !["power", "all", "main", "byproduct"].includes(id)) errors.push(`쓰이지 않는 재료: ${name(id)}`);
 }

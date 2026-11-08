@@ -28,6 +28,8 @@ interface Ore {
   family: string;
   /** The shallowest and deepest layers this ore turns up in. */
   layers: number[];
+  /** Finer groups a recipe can ask for, such as oxide or sulfide copper ore. */
+  groups?: string[];
   color: string;
 }
 
@@ -265,7 +267,10 @@ export function itemWeight(id: string): number {
 
 /** True when an item can fill a recipe ingredient, directly or through its ore family. */
 export const matches = (item: string, ingredient: string): boolean =>
-  item === ingredient || ores[item]?.family === ingredient;
+  item === ingredient || ores[item]?.family === ingredient || !!ores[item]?.groups?.includes(ingredient);
+/** Every ore a family or group takes in, shallowest first. */
+export const groupMembers = (id: string): string[] =>
+  Object.keys(ores).filter((ore) => ores[ore].family === id || ores[ore].groups?.includes(id)).sort((a, b) => ores[a].layers[0] - ores[b].layers[0]);
 
 // ---- Item order
 
@@ -318,7 +323,8 @@ function knownRecipes(stage: number): Recipe[] {
   const cached = knownCache.get(stage);
   if (cached) return cached;
   const open = machinesAt(stage).flatMap(machineRecipes).filter((r) => !r.disposal);
-  const have = new Set<string>([...stageOres(stage), ...FORAGE]);
+  // Caves are open from the start, so their layer counts too.
+  const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE]);
   const obtainable = (key: string) => [...have].some((id) => matches(id, key));
   const known: Recipe[] = [];
   for (let grew = true; grew;) {
@@ -341,10 +347,10 @@ export const familyMembers = (id: string): string[] => allSurfaceOres.filter((or
 
 /** Every item the player can meet right now, so later tiers stay a surprise. */
 export function indexItems(stage = 0): string[] {
-  const seen = new Set<string>([...stageOres(stage), ...FORAGE]);
+  const seen = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE]);
   for (const recipe of knownRecipes(stage)) {
     for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
-      if (!familyMembers(id).length) seen.add(id);
+      if (!groupMembers(id).length) seen.add(id);
     }
   }
   if (seen.has(WATER)) Object.values(DRUM.fills).forEach((id) => seen.add(id));

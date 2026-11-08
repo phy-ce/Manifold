@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, matches, processOf } from "../content";
+import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import {
   GameState, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
-  placeMachine, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkStep, walkTo, workMachine, workProject,
+  placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkStep, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 
@@ -594,6 +594,29 @@ describe("item index", () => {
     // Steel plate only shows once steel can be made.
     expect(recipesFor("steel_plate", 1)).toEqual([]);
     expect(recipesFor("steel_plate", 2).map((r) => r.machine)).toEqual(expect.arrayContaining(["plate_hammer", "steam_hammer"]));
+  });
+
+  it("smelts oxide copper ore simply, and sulfide copper ore poorly unless through the blast furnace and converter", () => {
+    const s = createGame(3);
+    s.stage = 2;
+    const run = (type: string, inputs: [string, number][]) => {
+      const node = placeMachine(s, type, 0, 0)!;
+      const slots = nodeProcess(node).slots;
+      inputs.forEach(([id, n], i) => { node.ins[slots[i].key] = { id, n }; });
+      return recipeOf(node);
+    };
+    // Slots keep the names of each machine's first recipe, so old saves still fit.
+    expect(nodeProcess(placeMachine(s, "smelter", 0, 0)!).slots[0].key).toBe("iron_ore");
+    expect(run("smelter", [["Ml", 2], ["Lg", 1]])).toMatchObject({ id: "copper", out: { copper: 1 } });
+    expect(run("smelter", [["Cc", 3], ["Lg", 1]])).toMatchObject({ id: "copper_sulfide_smelt", in: { copper_sulfide: 3 }, out: { copper: 1 } });
+    expect(run("blast_furnace", [["Cc", 4], ["coke", 2], ["Ls", 1]])).toMatchObject({ id: "copper_matte", out: { copper_matte: 3 } });
+    expect(run("blast_furnace", [["Hm", 4], ["coke", 2], ["Ls", 1]])).toMatchObject({ id: "iron_blast" });
+    expect(run("converter", [["copper_matte", 2]])).toMatchObject({ id: "copper_converted", out: { copper: 2 } });
+    expect(run("converter", [["iron", 4]])).toMatchObject({ id: "steel" });
+    expect(machineName("converter")).toBe("전로");
+    // Oxide ore isn't sulfide, so it never goes down the matte route.
+    expect(matches("Ml", "copper_sulfide")).toBe(false);
+    expect(matches("Cc", "copper_oxide")).toBe(false);
   });
 
   it("lists current items and hides later tiers", () => {
