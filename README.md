@@ -70,4 +70,4 @@ The recipes are designed by hand, based on real industrial processes.
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE). If you redistribute this project or a work based on it, keep the [NOTICE](NOTICE) file with it. Versions published before this change were released under MIT.
