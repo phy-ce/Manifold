@@ -1,4 +1,6 @@
-# 동력과 물류 재설계 (설계만, 미구현)
+# 동력과 물류 재설계
+
+> 상태 (2026-11-08): 동력 등급, 동력망 합산, 순번 정지, 연료는 구현했다(`4c2ed3e`). 부착부·애드온·선 재료·인벤토리 반환은 아직이다. 남은 작업과 순서는 `next-costs-parts-io.md`에 있다.
 
 2026-11-08에 정한 내용. 목업: 부착부 https://claude.ai/artifact/U1J4DdfMeNkKHXnnL49dX4, 동력 연결 표시 https://claude.ai/artifact/3wJp5XH6ubLZWujjZF2JtA
 
