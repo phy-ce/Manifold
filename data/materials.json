@@ -4,14 +4,15 @@
     "copper": { "name": "구리", "code": "Cu", "color": "#e58a55", "hardness": 0.75, "weight": 4 },
     "steel": { "name": "강철", "code": "Stl", "color": "#cfd9e2", "hardness": 1.5, "weight": 4 }
   },
+  "categories": { "part": "중간제작품", "gear": "장비", "product": "완성품" },
   "forms": {
-    "plate": { "name": "판", "label": "판", "code": "p", "weight": 2 },
-    "tube": { "name": "관", "label": "관", "code": "t", "weight": 0.5 },
-    "cylinder": { "name": " 실린더", "label": "실린더", "code": "c", "weight": 4 },
-    "drum": { "name": " 드럼통", "label": "드럼통", "code": "d", "weight": 1.5 },
-    "fan": { "name": " 송풍기", "label": "송풍기", "code": "f", "weight": 1 },
-    "boots": { "name": " 장화", "label": "장화", "code": "b", "weight": 0.5 },
-    "pack": { "name": " 틀 배낭", "label": "틀 배낭", "code": "k", "weight": 1 },
-    "pick": { "name": " 곡괭이", "label": "곡괭이", "code": "x", "weight": 0.5 }
+    "plate": { "name": "판", "label": "판", "code": "p", "weight": 2, "category": "part" },
+    "tube": { "name": "관", "label": "관", "code": "t", "weight": 0.5, "category": "part" },
+    "cylinder": { "name": " 실린더", "label": "실린더", "code": "c", "weight": 4, "category": "part" },
+    "fan": { "name": " 송풍기", "label": "송풍기", "code": "f", "weight": 1, "category": "part" },
+    "drum": { "name": " 드럼통", "label": "드럼통", "code": "d", "weight": 1.5, "category": "product" },
+    "boots": { "name": " 장화", "label": "장화", "code": "b", "weight": 0.5, "category": "gear" },
+    "pack": { "name": " 틀 배낭", "label": "틀 배낭", "code": "k", "weight": 1, "category": "gear" },
+    "pick": { "name": " 곡괭이", "label": "곡괭이", "code": "x", "weight": 0.5, "category": "gear" }
   }
 }

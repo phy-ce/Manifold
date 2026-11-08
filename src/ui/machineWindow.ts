@@ -1,6 +1,6 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { MOTOR, formLabel, itemName, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, MODULE, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
+import { FORM_CATEGORIES, MOTOR, formCategory, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, MODULE, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
 import {
   GameNode, GameState, INV_SLOTS, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -219,20 +219,63 @@ export class MachineWindow {
     const forms = isStore(node.type) ? [] : machineForms(node.type);
     this.modes.replaceChildren();
     this.modes.hidden = forms.length < 2;
-    for (const form of forms) {
+    if (forms.length >= 2) this.buildFormPicker(node, forms);
+    if (node.type === PUMP) this.buildRivers(node);
+    if (node.type === TANK) this.buildOverflow(node);
+  }
+
+  /**
+   * Shapes grouped like the stage list on the base: pointing at a category drops down its
+   * shapes. A search box finds a shape by its name or by what it makes, such as "철관".
+   */
+  private buildFormPicker(node: GameNode, forms: string[]): void {
+    const pick = (form: string) => {
+      setForm(this.game(), node.id, form);
+      this.open(node.id);
+      this.changed();
+    };
+    const button = (form: string) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = `tech ${form === node.form ? "selected" : ""}`;
       b.textContent = formLabel(form);
-      b.addEventListener("click", () => {
-        setForm(this.game(), node.id, form);
-        this.open(node.id);
-        this.changed();
-      });
-      this.modes.append(b);
+      b.addEventListener("click", () => pick(form));
+      return b;
+    };
+    for (const [category, label] of FORM_CATEGORIES) {
+      const inCategory = forms.filter((form) => formCategory(form) === category);
+      if (!inCategory.length) continue;
+      const group = document.createElement("div");
+      group.className = "tier";
+      const head = document.createElement("button");
+      head.type = "button";
+      head.className = `tech ${inCategory.includes(node.form) ? "selected" : ""}`;
+      head.textContent = inCategory.includes(node.form) ? `${label}: ${formLabel(node.form)}` : label;
+      const list = document.createElement("div");
+      list.className = "tier-list";
+      list.append(...inCategory.map(button));
+      group.append(head, list);
+      this.modes.append(group);
     }
-    if (node.type === PUMP) this.buildRivers(node);
-    if (node.type === TANK) this.buildOverflow(node);
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "form-search";
+    search.placeholder = tr("형태 찾기");
+    search.setAttribute("aria-label", tr("형태 찾기"));
+    const results = document.createElement("div");
+    results.className = "form-results";
+    // A shape matches by its own name or by any item it turns out.
+    const names = (form: string) => [formLabel(form), ...processOf(node.type, form).outputs.map(itemName)].map((t) => t.toLowerCase());
+    const found = () => {
+      const query = search.value.trim().toLowerCase();
+      return query ? forms.filter((form) => names(form).some((t) => t.includes(query))) : [];
+    };
+    search.addEventListener("input", () => results.replaceChildren(...found().map(button)));
+    search.addEventListener("keydown", (e) => {
+      const first = found()[0];
+      if (e.key === "Enter" && first) pick(first);
+    });
+    this.modes.append(search, results);
   }
 
   /** What a tar tank does when it is full. */

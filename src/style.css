@@ -185,6 +185,10 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .recipe .state.blocked { color: var(--alert); font-weight: 700; }
 .top .modes .tech { min-width: var(--control); }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+/* The shape picker: category drop-downs, a search box, and what the search finds. */
+.form-search { width: calc(var(--slot) * 2.5); min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
+.form-results { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+.form-results:empty { display: none; }
 .tech.selected { color: var(--bg); background: var(--go); border-color: var(--go); }
 .demolish { color: var(--dim); }
 .demolish:hover, .demolish.armed { color: var(--alert); border-color: var(--alert); }
