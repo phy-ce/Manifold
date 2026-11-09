@@ -564,7 +564,67 @@ function itemSplitter(mode: Status, f: number) {
   blocked(mode);
 }
 
+function beltDrive(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A drive pulley on a low frame, with the belt running off to the right over a small idler.
+  rect("#4c5560", 8, 58, 44, 6);
+  rect("#8f9aa6", 8, 58, 44, 2);
+  rect("#3c444e", 12, 64, 5, 8);
+  rect("#3c444e", 43, 64, 5, 8);
+  oval("#5e6b78", 28, 38, 17, 17);
+  oval("#a9b5c1", 28, 38, 13, 13);
+  oval("#3a4550", 28, 38, 4, 4);
+  // Spokes turn with the pose so the pulley reads as spinning.
+  for (let i = 0; i < 3; i += 1) {
+    const a = (i * Math.PI * 2) / 3 + p * 0.5;
+    line("#dbe3e9", 2, 28, 38, 28 + Math.cos(a) * 12, 38 + Math.sin(a) * 12);
+  }
+  oval("#6f7b87", 62, 46, 6, 6);
+  oval("#3a4550", 62, 46, 2, 2);
+  line("#2a2f36", 4, 28, 21, 62, 40);
+  line("#2a2f36", 4, 28, 55, 62, 52);
+  if (mode === "run") for (let i = 0; i < 3; i += 1) rect("#c9983f", 34 + ((p * 4 + i * 9) % 26), 24 + ((p * 4 + i * 9) % 26) * 0.5, 3, 2);
+  blocked(mode);
+}
+
+function constructionBench(mode: Status, f: number) {
+  const p = pose(mode, f);
+  // A heavy timber bench under a hoist, with a machine frame half put together on it.
+  rect("#6b4a33", 6, 50, 62, 7);
+  rect("#a87c52", 6, 50, 62, 2);
+  rect("#57402d", 10, 57, 6, 15);
+  rect("#57402d", 58, 57, 6, 15);
+  rect("#4c5560", 4, 6, 4, 44);
+  rect("#4c5560", 4, 6, 50, 4);
+  rect("#8f9aa6", 4, 6, 50, 1);
+  const drop = [0, 3, 6, 3][p];
+  line("#c7ced6", 1, 44, 10, 44, 22 + drop);
+  rect("#9ca8b7", 40, 22 + drop, 9, 4);
+  // The part being lowered into the frame.
+  rect("#b9c6d2", 38, 26 + drop, 13, 8);
+  rect("#727f8c", 16, 30, 4, 20);
+  rect("#727f8c", 30, 30, 4, 20);
+  rect("#727f8c", 16, 30, 18, 4);
+  rect("#b9c6d2", 16, 30, 18, 1);
+  if (mode === "run" && p === 2) {
+    line("#ffcd72", 1, 36, 36, 33, 40);
+    line("#ffcd72", 1, 53, 36, 56, 40);
+  }
+  blocked(mode);
+}
+
+/** A plain crate, for any machine without a scene of its own yet. */
+function crate(mode: Status) {
+  rect("#6b4a33", 14, 24, 46, 46);
+  rect("#a87c52", 14, 24, 46, 3);
+  line("#4a3324", 2, 14, 24, 60, 70);
+  line("#4a3324", 2, 60, 24, 14, 70);
+  blocked(mode);
+}
+
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
+  construction_bench: constructionBench,
+  belt_drive: beltDrive,
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
   smelter: (m, f) => furnace(m, f, [172, 92, 62]),
   plate_hammer: plateHammer,
@@ -588,7 +648,7 @@ function drawScene(type: string, mode: Status, frame: number): void {
   g.clearRect(0, 0, COLS, ROWS);
   g.save();
   g.scale(1, 0.62); // characters are taller than wide
-  SCENES[type](mode, frame);
+  (SCENES[type] ?? crate)(mode, frame);
   g.restore();
 }
 
