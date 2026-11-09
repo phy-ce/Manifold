@@ -50,6 +50,7 @@
   "Mc": { "code": "Mc", "color": "#d9a55a" },
   "power": { "code": "Pw", "color": "#ffd24a" },
   "drive": { "code": "Dr", "color": "#a9bacb" },
+  "press": { "code": "Pr", "color": "#4d8fc4" },
   "all": { "code": "All", "color": "#dfe5ea" },
   "main": { "code": "Out", "color": "#8fd16f" },
   "byproduct": { "code": "By", "color": "#e0764c" }

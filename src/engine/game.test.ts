@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BELT_DRIVE, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
+import { BELT_DRIVE, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
 import {
-  GameState, GameNode, lineLayer, bagCount, beltNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
+  GameState, GameNode, lineLayer, bagCount, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
   placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -37,6 +37,8 @@ const createGame = (seed: number): GameState => {
   return s;
 };
 const warehouse = (s: GameState) => s.nodes.find((n) => n.type === WAREHOUSE)!;
+/** Enough tubes in the bag to pipe out to either riverbank, twice over. */
+const tubes = (s: GameState) => addTo(s.inv, "iron_tube", 160);
 /** Gives a node a fully wound motor, for tests that aren't about power. */
 /**
  * Powers a node with a source that never runs dry. A spring carries and drives pumps;
@@ -1146,7 +1148,9 @@ describe("costly routes", () => {
     const s = createGame(1);
     const furnace = placeMachine(s, "smelter", 0, 0)!;
     const store = warehouse(s).id;
-    expect(routeCost(s, store, "all")).toEqual({ iron_belt: 1 });
+    // Any belt will do, or the kind picked.
+    expect(routeCost(s, store, "all")).toEqual({ belt: 1 });
+    expect(routeCost(s, store, "all", "iron_belt")).toEqual({ iron_belt: 1 });
     s.inv[0] = { id: "iron_belt", n: 1 };
     expect(toggleRoute(s, store, furnace.id, "all")).toBe(true);
     expect(s.inv[0]).toBeNull();
@@ -1807,6 +1811,7 @@ describe("riverbanks", () => {
     const motor = placeMachine(s, MOTOR, 0, 0)!;
     motor.energy = SPRING_MAX;
     const pump = placeMachine(s, "drainage_pump", 0, 0)!;
+    tubes(s);
     expect(linkRiver(s, pump.id, foundRivers(s)[0].id)).toBe(true);
     return { s, motor, pump, river: riverOf(s, pump)! };
   };
@@ -1878,6 +1883,35 @@ describe("riverbanks", () => {
     expect(loaded.nodes.some((n) => n.type === "riverbank")).toBe(false);
     expect(loaded.lines).toEqual([]);
     expect(nodeById(loaded, pump.id)!.siteId).toBe(river.id);
+  });
+
+  it("lays one tube for every cell between the base and the riverbank", () => {
+    const s = createTestGame(1);
+    const pump = placeMachine(s, PUMP, 0, 0)!;
+    const [near, far] = [...foundRivers(s)].sort((a, b) => riverPipeCost(a) - riverPipeCost(b));
+    expect(riverPipeCost(near)).toBe(Math.max(1, Math.abs(near.x - BASE.x)));
+    expect(riverPipeCost(far)).toBeGreaterThan(riverPipeCost(near));
+    // Too few tubes in the bag: nothing is spent and the pump stays unlinked. A warehouse doesn't count.
+    s.inv = s.inv.map((slot) => (slot && formOf(slot.id) === "tube" ? null : slot));
+    s.inv[0] = { id: "iron_tube", n: riverPipeCost(near) - 1 };
+    addTo(warehouse(s).store, "copper_tube", 200);
+    expect(linkRiver(s, pump.id, near.id)).toBe(false);
+    expect(pump.siteId).toBeUndefined();
+    expect(bagCount(s, "tube")).toBe(riverPipeCost(near) - 1);
+    // Copper picked: the pipe takes exactly its length, all copper, and the iron is left alone.
+    addTo(s.inv, "copper_tube", 150);
+    expect(linkRiver(s, pump.id, near.id, "copper_tube")).toBe(true);
+    expect(bagCount(s, "copper_tube")).toBe(150 - riverPipeCost(near));
+    expect(bagCount(s, "iron_tube")).toBe(riverPipeCost(near) - 1);
+    // Moving to the far bank lays the longer pipe and takes the short one back up.
+    expect(linkRiver(s, pump.id, far.id, "copper_tube")).toBe(true);
+    expect(bagCount(s, "copper_tube")).toBe(150 - riverPipeCost(far));
+    // Unlinking, or taking the pump down, gives every tube back.
+    expect(linkRiver(s, pump.id, far.id)).toBe(true);
+    expect(bagCount(s, "copper_tube")).toBe(150);
+    linkRiver(s, pump.id, near.id, "copper_tube");
+    removeNode(s, pump.id);
+    expect(bagCount(s, "copper_tube")).toBe(150);
   });
 
   it("stops pumping when dry", () => {
@@ -2177,6 +2211,7 @@ describe("blueprints", () => {
   it("copies a pump's riverbank", () => {
     const s = createTestGame(1);
     const pump = placeMachine(s, "drainage_pump", 0, 0)!;
+    tubes(s);
     const [bank] = foundRivers(s);
     linkRiver(s, pump.id, bank.id);
     const [ghost] = copyToGhosts(s, [pump.id], 0, 0);
@@ -2536,7 +2571,10 @@ describe("S1-3", () => {
     const { s, motor } = stage3();
     const oven = placeMachine(s, "coke_oven", 0, 0)!;
     const tank = placeMachine(s, "tar_tank", 0, 0)!;
-    connect(s, motor.id, oven.id, POWER);
+    // Tar moves on a pressure pump, which the motor runs.
+    const press = placeMachine(s, PRESSURE_PUMP, 0, 0)!;
+    connect(s, motor.id, press.id, POWER);
+    connect(s, press.id, oven.id, PRESS);
     expect(connect(s, oven.id, tank.id, "byproduct")).toBeTruthy();
     return { s, oven, tank };
   };
@@ -2855,6 +2893,83 @@ describe("stage goals", () => {
     expect(s.stage).toBe(2);
     expect(s.made.steam_engine_unit).toBe(1);
     expect(s.sites.some((site) => site.ore === "water")).toBe(true);
+  });
+});
+
+describe("pressure pumps", () => {
+  /** A coke oven with tar waiting to go down a pipe to a tank, and a wound motor nearby. */
+  const tar = () => {
+    const s = createTestGame(1);
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = SPRING_MAX;
+    const oven = placeMachine(s, "coke_oven", 0, 0)!;
+    const tank = placeMachine(s, "tar_tank", 0, 0)!;
+    connect(s, oven.id, tank.id, "byproduct");
+    oven.outs.coal_tar = 6;
+    return { s, motor, oven, tank };
+  };
+
+  it("leaves tar standing in its pipe without one, and gives the oven no power line", () => {
+    const { s, motor, oven } = tar();
+    expect(routeMaterials(s, motor.id, oven.id)).toEqual([]);
+    run(s, 3);
+    expect(oven.outs.coal_tar).toBe(6);
+    expect(pipeNetOf(oven.id)).toMatchObject({ drives: 0, belts: 1, rate: 0 });
+  });
+
+  it("moves a whole fluid network, joined by a link on the power layer", () => {
+    const { s, motor, oven, tank } = tar();
+    const press = placeMachine(s, PRESSURE_PUMP, 0, 0)!;
+    expect(routeMaterials(s, press.id, oven.id)).toEqual([PRESS]);
+    expect(lineLayer(s, press.id, PRESS)).toBe("power");
+    expect(routeCost(s, press.id, PRESS)).toEqual({ iron_rod: 1 });
+    connect(s, motor.id, press.id, POWER);
+    // Any machine on the network will do: here the link goes to the tank at the far end.
+    connect(s, press.id, tank.id, PRESS);
+    run(s, 4);
+    // One pump gives 4 L/s to its one pipe; the pipe, laid with iron, takes 2 of it.
+    expect(pipeNetOf(oven.id)).toMatchObject({ drives: 1, running: 1, belts: 1, rate: 4 });
+    expect(oven.outs.coal_tar).toBe(0);
+    expect(tank.ins.coal_tar?.n).toBe(6);
+    expect(powerLoad(s, motor)).toEqual({ now: 2, connected: 2, limit: 5 });
+  });
+
+  it("lays a pipe with the tube picked, and a copper pipe carries twice what iron does", () => {
+    const flow = (tube: string) => {
+      const { s, motor, oven, tank } = tar();
+      s.lines = s.lines.filter((l) => !(l.from === oven.id && l.to === tank.id));
+      s.inv = s.inv.map((slot) => (slot && formOf(slot.id) === "tube" ? null : slot));
+      addTo(s.inv, "iron_tube", 4);
+      addTo(s.inv, "copper_tube", 4);
+      expect(toggleRoute(s, oven.id, tank.id, "byproduct", tube)).toBe(true);
+      const line = s.lines.find((l) => l.from === oven.id && l.to === tank.id)!;
+      expect(line.kind).toBe(tube);
+      expect(bagCount(s, tube)).toBe(3);
+      const press = placeMachine(s, PRESSURE_PUMP, 0, 0)!;
+      connect(s, motor.id, press.id, POWER);
+      connect(s, press.id, oven.id, PRESS);
+      oven.outs.coal_tar = 16;
+      run(s, 2);
+      return 16 - oven.outs.coal_tar;
+    };
+    const iron = flow("iron_tube");
+    const copper = flow("copper_tube");
+    expect(iron).toBeGreaterThanOrEqual(3);
+    expect(copper).toBeGreaterThanOrEqual(iron * 2 - 1);
+  });
+
+  it("leaves a riverbank pump's pipes out: the pump pushes its own water", () => {
+    const s = createTestGame(1);
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = SPRING_MAX;
+    const pump = placeMachine(s, PUMP, 0, 0)!;
+    const engine = placeMachine(s, "steam_engine", 0, 0)!;
+    pump.outs.water = 10;
+    connect(s, motor.id, pump.id, POWER);
+    connect(s, pump.id, engine.id, "main");
+    run(s, 2);
+    expect(engine.ins.water?.n).toBeGreaterThan(0);
+    expect(pipeNetOf(pump.id)).toMatchObject({ drives: 0, belts: 0 });
   });
 });
 

@@ -1,8 +1,8 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
+import { isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { beltSummary } from "./graphView";
 import { MachineArt } from "./machineArt";
@@ -44,6 +44,8 @@ export class MachineWindow {
   private readonly invSlots: HTMLButtonElement[] = [];
   private inputs: [string, HTMLButtonElement][] = [];
   private outputs: [string[], HTMLButtonElement][] = [];
+  /** A riverbank picked on a pump but not linked yet, and the tube its pipe would be laid with. */
+  private riverPick: { pump: number; bank: number; tube: string } | null = null;
   private stored: HTMLButtonElement[] = [];
   private readonly art = new MachineArt();
   private nodeId: number | null = null;
@@ -211,7 +213,7 @@ export class MachineWindow {
     this.stored = [];
     delete this.art.root.dataset.scene;
     if (isStore(node.type)) this.buildWarehouse(node);
-    else if (node.type === MANIFOLD || node.type === BELT_DRIVE) this.top.className = "machine";
+    else if (node.type === MANIFOLD || node.type === BELT_DRIVE || node.type === PRESSURE_PUMP) this.top.className = "machine";
     else if (node.type === TANK) {
       this.top.className = "machine";
       this.top.append(this.art.root);
@@ -219,7 +221,7 @@ export class MachineWindow {
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
     // Nothing goes in or out of these by hand, so the player's inventory would only confuse.
-    this.invBox.hidden = node.type === MANIFOLD || node.type === BELT_DRIVE || node.type === MOTOR || node.type === TANK;
+    this.invBox.hidden = node.type === MANIFOLD || node.type === BELT_DRIVE || node.type === PRESSURE_PUMP || node.type === MOTOR || node.type === TANK;
     this.topLabel.hidden = !isStore(node.type);
     this.topLabel.textContent = `${nodeLabel(this.game(), node)} ${tr("안")}`;
     this.top.classList.toggle("store-grid", isStore(node.type));
@@ -365,20 +367,71 @@ export class MachineWindow {
       this.modes.append(note);
       return;
     }
+    // A pick belongs to the pump it was made on.
+    if (this.riverPick?.pump !== node.id) this.riverPick = null;
+    const redraw = () => {
+      this.open(node.id);
+      this.changed();
+    };
+    // The pipe out to a bank takes one tube a cell, from the bag. Picking a bank only asks; nothing is spent yet.
     for (const bank of banks) {
       const on = linked?.id === bank.id;
       const b = document.createElement("button");
       b.type = "button";
-      b.className = `tech ${on ? "selected" : ""}`;
-      b.textContent = `${tr("강가")} ${bank.code}`;
-      b.dataset.tip = on ? tr("다시 누르면 연결을 끊습니다") : tr("이 강가에서 물을 끌어옵니다");
+      b.className = `tech ${on || this.riverPick?.bank === bank.id ? "selected" : ""}`;
+      b.textContent = `${tr("강가")} ${bank.code} · ${tr("배관")} ${riverPipeCost(bank)}`;
+      b.dataset.tip = on ? tr("다시 누르면 연결을 끊고 관을 돌려받습니다") : tr("이 강가에서 물을 끌어옵니다");
       b.addEventListener("click", () => {
-        linkRiver(s, node.id, bank.id);
-        this.open(node.id);
-        this.changed();
+        if (on) {
+          linkRiver(s, node.id, bank.id);
+          this.riverPick = null;
+        } else this.riverPick = { pump: node.id, bank: bank.id, tube: this.riverPick?.tube ?? lineKinds("fluid")[0] };
+        redraw();
       });
       this.modes.append(b);
     }
+    const pick = this.riverPick;
+    const bank = pick && banks.find((b) => b.id === pick.bank);
+    if (!pick || !bank) return;
+    // The pipe is laid all of one tube, picked here. Only names and counts: how tubes perform is in the index.
+    const cost = riverPipeCost(bank);
+    const ask = document.createElement("div");
+    ask.className = "river-ask";
+    const say = document.createElement("span");
+    say.textContent = `${tr("강가")} ${bank.code}${tr("까지 관")} ${cost}${tr("개를 놓습니다")}`;
+    ask.append(say);
+    for (const tube of lineKinds("fluid")) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `tech ${tube === pick.tube ? "selected" : ""}`;
+      b.textContent = `${itemName(tube)} ${bagCount(s, tube)}`;
+      b.setAttribute("aria-pressed", String(tube === pick.tube));
+      b.addEventListener("click", () => {
+        pick.tube = tube;
+        redraw();
+      });
+      ask.append(b);
+    }
+    const lay = document.createElement("button");
+    lay.type = "button";
+    lay.className = "tech";
+    lay.textContent = tr("연결");
+    lay.disabled = bagCount(s, pick.tube) < cost;
+    lay.dataset.tip = lay.disabled ? `${tr("인벤토리에")} ${itemName(pick.tube)} ${bagCount(s, pick.tube)}/${cost}` : "";
+    lay.addEventListener("click", () => {
+      if (linkRiver(s, node.id, bank.id, pick.tube)) this.riverPick = null;
+      redraw();
+    });
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "tech";
+    cancel.textContent = tr("취소");
+    cancel.addEventListener("click", () => {
+      this.riverPick = null;
+      redraw();
+    });
+    ask.append(lay, cancel);
+    this.modes.append(ask);
   }
 
   private buildMachine(node: GameNode): void {
@@ -524,9 +577,11 @@ export class MachineWindow {
       this.bar.textContent = "";
       return;
     }
-    if (node.type === MANIFOLD || node.type === BELT_DRIVE) {
+    if (node.type === MANIFOLD || node.type === BELT_DRIVE || node.type === PRESSURE_PUMP) {
       const line = node.type === BELT_DRIVE
         ? `${tr("받은 동력으로 연결된 물류망의 벨트를 모두 같은 속도로 돌립니다")} · ${beltSummary(node, true)}`
+        : node.type === PRESSURE_PUMP
+        ? `${tr("받은 동력으로 연결된 유체망의 관을 모두 같은 속도로 밀어 보냅니다")} · ${beltSummary(node, true)}`
         : tr("들어온 동력을 연결된 곳으로 나눕니다");
       if (this.recipe.dataset.line !== line) {
         this.recipe.dataset.line = line;

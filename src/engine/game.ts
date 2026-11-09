@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { BELT_DRIVE, CONSTRUCTION, WORKBENCH, isBuilder, stageOpening, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { BELT_DRIVE, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, stageOpening, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 17;
@@ -52,13 +52,37 @@ const LOSS_RANGE = 120;
 export type LineLayer = "item" | "fluid" | "power";
 export const LINE_LAYERS: LineLayer[] = ["item", "fluid", "power"];
 /**
- * What one line costs, by the layer it runs on. A fluid line takes any tube, iron or copper;
- * power runs along a rod as a shaft, since tubes are for fluids.
+ * What one line costs, by the layer it runs on, when no kind is named: any belt, any tube, or a rod
+ * as a shaft for power, since tubes are for fluids.
  */
 export const TUBE = "tube";
-const LINE_COST: Record<LineLayer, Record<string, number>> = { item: { iron_belt: 1 }, fluid: { [TUBE]: 1 }, power: { iron_rod: 1 } };
+export const BELT = "belt";
+const LINE_COST: Record<LineLayer, Record<string, number>> = { item: { [BELT]: 1 }, fluid: { [TUBE]: 1 }, power: { iron_rod: 1 } };
 /** A line material fits a cost key by its id, or by its shape when the key is a shape such as any tube. */
 const lineFits = (id: string, key: string): boolean => id === key || formOf(id) === key;
+
+/**
+ * Items or litres per second one line carries, by the belt or tube it is laid with. Copper tube costs
+ * more and carries twice what iron does. Better belts join here when they come.
+ */
+export const LINE_RATE: Record<string, number> = { iron_belt: 2, iron_tube: 2, copper_tube: 4 };
+/** The belts or tubes a layer's lines can be laid with, the plainest first. Power lines are always a rod. */
+export const lineKinds = (layer: LineLayer): string[] =>
+  layer === "power" ? [] : Object.keys(LINE_RATE).filter((id) => lineFits(id, Object.keys(LINE_COST[layer])[0]));
+/** What a line is laid with. Lines from before the choice go by what they were paid with, else the plainest kind. */
+export const kindOf = (line: Line, layer: LineLayer): string | undefined =>
+  line.kind ?? line.paid.find((stack) => LINE_RATE[stack.id])?.id ?? lineKinds(layer)[0];
+
+/**
+ * How an item performs, as [what, how much] rows for the index's detail. Pickers show only names and
+ * counts, so the numbers live here. Temperatures and the like will join these as items gain them.
+ */
+export function itemStats(id: string): [string, string][] {
+  const rate = LINE_RATE[id];
+  if (rate && formOf(id) === TUBE) return [[tr("관 하나가 나르는 최대 유량"), `${rate} ${tr("L/초")}`]];
+  if (rate && formOf(id) === BELT) return [[tr("벨트 하나가 나르는 최대 양"), `${rate} ${tr("개/초")}`]];
+  return [];
+}
 
 export interface Stack {
   id: string;
@@ -101,6 +125,8 @@ export interface GameNode {
   heatFull?: number;
   /** The riverbank a pump draws from. */
   siteId?: number;
+  /** The tubes laid from the base to that riverbank, given back when the pump lets go of it. */
+  riverPaid?: Stack[];
   /** A steam module is fitted, so this machine can take steam power. */
   module?: boolean;
   /** What a full tar tank does with more: refuse it, or take it and throw it away. */
@@ -152,6 +178,8 @@ export interface Line {
   timer: number;
   active: boolean;
   lastMoved: number;
+  /** The belt or tube a line is laid with, which sets how much it can carry. Power lines have none. */
+  kind?: string;
   /** What this line cost to build, returned when it is removed. */
   paid: Stack[];
 }
@@ -689,12 +717,41 @@ function nameRivers(s: GameState): void {
 export const foundRivers = (s: GameState): Site[] =>
   s.sites.filter((site) => site.ore === WATER && isRevealed(s, site.x, site.y));
 
-/** Points a pump at a riverbank. Choosing the one it already uses unlinks it. */
-export function linkRiver(s: GameState, pumpId: number, siteId: number): boolean {
+/** Tubes a pipe from the base out to a riverbank takes: one for every cell between them. */
+export const riverPipeCost = (site: Point): number => Math.max(1, Math.abs(site.x - BASE.x), Math.abs(site.y - BASE.y));
+
+/** Gives back what was laid or built, into the bag first and a warehouse for what doesn't fit. */
+function giveBack(s: GameState, stacks: Stack[]): void {
+  for (const stack of stacks) bank(s, stack.id, stack.n - addTo(s.inv, stack.id, stack.n));
+}
+
+/** Lets go of a pump's riverbank and takes its pipe back up. */
+function unlinkRiver(s: GameState, pump: GameNode): void {
+  giveBack(s, pump.riverPaid ?? []);
+  delete pump.riverPaid;
+  delete pump.siteId;
+}
+
+/**
+ * Points a pump at a riverbank, laying a pipe out to it from tubes in the bag. Choosing the one
+ * it already uses unlinks it and gives the tubes back. A farther bank needs a longer pipe.
+ */
+export function linkRiver(s: GameState, pumpId: number, siteId: number, tube = lineKinds("fluid")[0]): boolean {
   const pump = nodeById(s, pumpId);
-  if (!atBase(s) || pump?.type !== PUMP || !foundRivers(s).some((site) => site.id === siteId)) return false;
-  if (pump.siteId === siteId) delete pump.siteId;
-  else pump.siteId = siteId;
+  const site = foundRivers(s).find((bank) => bank.id === siteId);
+  if (!atBase(s) || pump?.type !== PUMP || !site) return false;
+  if (pump.siteId === siteId) {
+    unlinkRiver(s, pump);
+    return true;
+  }
+  // The new pipe is paid before the old one comes up, so a failed switch leaves the pump as it was.
+  // It is laid all of the one tube picked, never a mix.
+  const cost = riverPipeCost(site);
+  if (!lineKinds("fluid").includes(tube) || bagCount(s, tube) < cost) return false;
+  const paid = spend(s, tube, cost, true);
+  unlinkRiver(s, pump);
+  pump.siteId = siteId;
+  pump.riverPaid = paid;
   return true;
 }
 
@@ -775,7 +832,7 @@ function addNode(s: GameState, type: string, x: number, y: number): GameNode {
     s.nodes.push(store);
     return store;
   }
-  if (type === MOTOR || type === MANIFOLD || type === SPLITTER || type === TANK || type === BELT_DRIVE) {
+  if (type === MOTOR || type === MANIFOLD || type === SPLITTER || type === TANK || type === BELT_DRIVE || type === PRESSURE_PUMP) {
     const node: GameNode = { ...newWarehouse(s, x, y), type, store: emptySlots(type === SPLITTER ? 1 : 0) };
     if (type === TANK) node.ins = { [TAR]: null };
     s.nodes.push(node);
@@ -971,7 +1028,8 @@ export function buildGhost(s: GameState, id: number): GameNode | null {
   const node = installMachine(s, ghost.type, ghost.x, ghost.y);
   if (!node) return null;
   if (ghost.form) setForm(s, node.id, ghost.form);
-  if (ghost.siteId !== undefined) node.siteId = ghost.siteId;
+  // The plan names a riverbank; the pipe out to it is laid now, if the bag has the tubes.
+  if (ghost.siteId !== undefined) linkRiver(s, node.id, ghost.siteId);
   s.ghosts = s.ghosts.filter((g) => g !== ghost);
   for (const line of s.ghostLines) {
     if (line.from === id) line.from = node.id;
@@ -1125,6 +1183,7 @@ export function removeNode(s: GameState, id: number): boolean {
   for (const [item, n] of Object.entries(node.outs)) if (n && !isFluid(item)) bank(s, item, n);
   s.nodes = s.nodes.filter((n) => n !== node);
   if (node.module) giveItem(s, MODULE);
+  giveBack(s, node.riverPaid ?? []);
   // Older saves built nodes straight from materials, and get those back instead.
   if (node.paid.length) refund(s, node.paid);
   else if (!giveItem(s, node.type)) s.cursor ??= { id: node.type, n: 1 };
@@ -1176,9 +1235,11 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
   if (from.type === MOTOR) return to.type !== ENGINE && usesPower(to) ? [POWER] : [];
   if (from.type === ENGINE || from.type === MANIFOLD) return to.type !== ENGINE && usesPower(to) && takesSteam(to) ? [POWER] : [];
   if (to.type === MANIFOLD) return [];
-  // A belt drive joins one machine's belt network. Nothing is carried to or from it.
-  if (from.type === BELT_DRIVE) return to.type === ENGINE || to.type === TANK || to.type === BELT_DRIVE ? [] : [DRIVE];
-  if (to.type === BELT_DRIVE) return [];
+  // A belt drive joins one machine's belt network, and a pressure pump its pipe network. Nothing is carried to or from either.
+  const driver = (n: GameNode) => n.type === BELT_DRIVE || n.type === PRESSURE_PUMP;
+  if (from.type === BELT_DRIVE) return to.type === ENGINE || to.type === TANK || driver(to) ? [] : [DRIVE];
+  if (from.type === PRESSURE_PUMP) return isStore(to.type) || driver(to) ? [] : [PRESS];
+  if (driver(to)) return [];
   // Nothing can use stored tar yet, so a tank has no lines out.
   if (from.type === TANK) return [];
   // A warehouse has no filter: it can only send what it holds, in turn.
@@ -1190,14 +1251,10 @@ export function routeMaterials(s: GameState, fromId: number, toId: number): stri
 }
 
 /**
- * Whether a power line to this node does anything: it drives a machine, or pushes fluid out
- * along its pipes. Belts move on a belt drive's power, so warehouses take none.
+ * Whether a power line to this node does anything: it drives a machine. Belts and pipes move on
+ * belt drives and pressure pumps, so warehouses and fluid senders like the coke oven take none.
  */
-function usesPower(node: GameNode): boolean {
-  if (machinePower(node.type) > 0 || node.type === MANIFOLD) return true;
-  if (isPassive(node.type)) return false;
-  return nodeProcess(node).outSlots.flat().some(isFluid);
-}
+const usesPower = (node: GameNode): boolean => machinePower(node.type) > 0 || node.type === MANIFOLD;
 
 function outputChannels(node: GameNode): { main: string[]; byproducts: string[] } {
   const [main = [], ...rest] = nodeProcess(node).outSlots;
@@ -1219,7 +1276,7 @@ export function connectOptions(s: GameState, fromId: number, toId: number): stri
  */
 export function lineLayer(s: GameState, fromId: number, material: string): LineLayer {
   // A belt drive hands its power on to a belt network, so its link is a power line.
-  if (material === POWER || material === DRIVE) return "power";
+  if (material === POWER || material === DRIVE || material === PRESS) return "power";
   const from = nodeById(s, fromId);
   if (!from || material === ALL) return "item";
   const { main, byproducts } = isPassive(from.type) ? { main: [], byproducts: [] } : outputChannels(from);
@@ -1227,22 +1284,26 @@ export function lineLayer(s: GameState, fromId: number, material: string): LineL
   return items.length && items.every(isFluid) ? "fluid" : "item";
 }
 
-/** What a new line costs. */
-export const routeCost = (s: GameState, fromId: number, material: string): Record<string, number> => LINE_COST[lineLayer(s, fromId, material)];
+/** What a new line costs. A belt or pipe can name the kind to lay it with; otherwise any of its kind will do. */
+export function routeCost(s: GameState, fromId: number, material: string, kind?: string): Record<string, number> {
+  const layer = lineLayer(s, fromId, material);
+  return kind && lineKinds(layer).includes(kind) ? { [kind]: 1 } : LINE_COST[layer];
+}
 
 /** Line materials come out of the bag, never a warehouse. */
-export const canAffordRoute = (s: GameState, fromId: number, material: string): boolean =>
-  Object.entries(routeCost(s, fromId, material)).every(([id, n]) => bagCount(s, id) >= n);
+export const canAffordRoute = (s: GameState, fromId: number, material: string, kind?: string): boolean =>
+  Object.entries(routeCost(s, fromId, material, kind)).every(([id, n]) => bagCount(s, id) >= n);
 
-/** Switches one channel on a route on or off. Switching off gives the parts back. */
-export function toggleRoute(s: GameState, fromId: number, toId: number, material: string): boolean {
+/** Switches one channel on a route on or off. Switching off gives the parts back. A belt or pipe is laid with the kind named, if any. */
+export function toggleRoute(s: GameState, fromId: number, toId: number, material: string, kind?: string): boolean {
   const line = s.lines.find((l) => l.from === fromId && l.to === toId && l.material === material);
   if (line) return removeLine(s, line.id);
-  if (!canAffordRoute(s, fromId, material)) return false;
-  const cost = routeCost(s, fromId, material);
+  if (!canAffordRoute(s, fromId, material, kind)) return false;
+  const cost = routeCost(s, fromId, material, kind);
   const added = connect(s, fromId, toId, material);
   if (!added) return false;
   added.paid = Object.entries(cost).flatMap(([id, n]) => spend(s, id, n, true));
+  if (lineLayer(s, fromId, material) !== "power") added.kind = added.paid[0]?.id;
   return true;
 }
 
@@ -1511,9 +1572,6 @@ function runMachine(s: GameState, node: GameNode): void {
   if (node.type === ENGINE) node.energy = Math.min(STEAM_MAX, node.energy + (machinePowerOut(node.type) * STEP_MS) / 1000);
 }
 
-/** Power each sending node reserves for carrying along its lines. */
-export const CARRY_POWER = 2;
-
 /** One power network: what its sources give, what is connected, and what is drawing now. */
 export interface PowerNet {
   tier: string;
@@ -1532,9 +1590,7 @@ const networks = new Map<number, PowerNet>();
  */
 function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
   networks.clear();
-  // Fluids are pushed by their sender's power. Belts move on a belt drive's, so their senders reserve none.
-  // A riverbank pump pushes its own water: its rated power already covers it.
-  const senders = new Set(s.lines.filter((l) => lineLayer(s, l.from, l.material) === "fluid" && nodeById(s, l.from)?.type !== PUMP).map((l) => l.from));
+  // Lines move on belt drives and pressure pumps, so nothing reserves power just to send.
   // A node's place in the queue is when its first power line was laid.
   const laid = new Map<number, number>();
   for (const line of s.lines) {
@@ -1547,7 +1603,7 @@ function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
     node.order = undefined;
     node.tierLow = false;
     const sources = drives.get(node.id) ?? [];
-    if (!sources.length || (!machinePower(node.type) && !senders.has(node.id))) continue;
+    if (!sources.length || !machinePower(node.type)) continue;
     const key = sources.map((m) => m.id).sort((a, b) => a - b).join(",");
     const group = groups.get(key) ?? { sources, members: [] };
     group.members.push(node);
@@ -1565,7 +1621,7 @@ function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
       node.order = i + 1;
       const drives = !!machinePower(node.type) && tierRank(machineTier(node.type)) <= tierRank(tier);
       node.tierLow = !!machinePower(node.type) && !drives;
-      demand += (drives ? machinePower(node.type) : 0) + (senders.has(node.id) ? CARRY_POWER : 0);
+      demand += drives ? machinePower(node.type) : 0;
       cut ||= demand > supply + 1e-9;
       if (cut) return;
       node.carry = true;
@@ -1573,8 +1629,9 @@ function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
       // Pumps need a linked riverbank with water left to have anything to do.
       const dry = node.type === PUMP && (riverOf(s, node)?.left ?? 0) < 1;
       node.speed = dry ? 0 : 1;
-      // A belt drive draws its power whenever it is joined to belts, carrying or not.
-      const busy = node.type === BELT_DRIVE ? s.lines.some((l) => l.from === node.id && l.material === DRIVE) : !dry && readiness(node) === "ready";
+      // A belt drive or pressure pump draws its power whenever it is joined to a network, carrying or not.
+      const link = node.type === BELT_DRIVE ? DRIVE : node.type === PRESSURE_PUMP ? PRESS : "";
+      const busy = link ? s.lines.some((l) => l.from === node.id && l.material === link) : !dry && readiness(node) === "ready";
       if (busy) used += machinePower(node.type);
     });
     // What is drawn comes out of the sources in proportion to their output.
@@ -1667,41 +1724,43 @@ function powerLines(s: GameState, nodes: Map<number, GameNode>): Map<number, Gam
   return direct;
 }
 
-/** Whether power reached a node's lines last step, so it can push fluid out along them. */
+/** Whether power reached a node last step. A riverbank pump needs it to push its water out. */
 export const hasDrive = (s: GameState, nodeId: number): boolean => !!nodeById(s, nodeId)?.carry;
 
-/** Items per second one running belt drive moves, shared by every belt in its network. */
+/** Items or litres per second one running belt drive or pressure pump moves, shared by every line in its network. */
 export const DRIVE_RATE = 4;
-/** No belt runs faster than one item per line pass, however many drives push it. */
+/** No line runs faster than one item per line pass, however many drivers push it. */
 export const BELT_MAX = 1000 / LINE_MS;
 
-/** One belt network: machines joined by item lines, the drives on it, and the pace of each belt. */
+/** One belt or pipe network: machines joined by lines of one layer, the drivers on it, and the pace of each line. */
 export interface BeltNet {
   drives: number;
   running: number;
+  /** Lines that move on the network's power. */
   belts: number;
-  /** Items per second on every belt of the network. */
+  /** Items or litres per second on every one of those lines. */
   rate: number;
 }
-/** The network of each node and the pace of each belt, as of the last step. Worked out every step, not saved. */
+/** The networks of each node and the pace of each line, as of the last step. Worked out every step, not saved. */
 const beltNets = new Map<number, BeltNet>();
-const beltRates = new Map<number, number>();
+const pipeNets = new Map<number, BeltNet>();
+const lineRates = new Map<number, number>();
 
 /**
- * Belt networks: everything joined by item lines, a belt drive's line included, is one network.
- * Its running drives' rates add up and every belt in it shares them at the same pace.
+ * Networks of one layer: everything joined by its lines, a driver's link included, is one network.
+ * Its running drivers' rates add up and every line in it shares them at the same pace. A riverbank
+ * pump pushes its own water, so its pipes join the network but take none of its share.
  */
-function runBelts(s: GameState): void {
-  beltNets.clear();
-  beltRates.clear();
-  // Drive links sit on the power layer but still join their drive to the network.
-  const belts = s.lines.filter((l) => l.material === DRIVE || lineLayer(s, l.from, l.material) === "item");
+function runNetworks(s: GameState, layer: LineLayer, driver: string, link: string, nets: Map<number, BeltNet>): void {
+  nets.clear();
+  // Driver links sit on the power layer but still join their driver to the network.
+  const lines = s.lines.filter((l) => l.material === link || lineLayer(s, l.from, l.material) === layer);
   const parent = new Map<number, number>();
   const root = (id: number): number => {
     while (parent.has(id) && parent.get(id) !== id) id = parent.get(id)!;
     return id;
   };
-  for (const line of belts) {
+  for (const line of lines) {
     const a = root(line.from);
     const b = root(line.to);
     parent.set(a, a);
@@ -1712,18 +1771,34 @@ function runBelts(s: GameState): void {
   for (const id of parent.keys()) groups.set(root(id), [...(groups.get(root(id)) ?? []), id]);
   for (const members of groups.values()) {
     const inside = new Set(members);
-    const drives = members.map((id) => nodeById(s, id)).filter((n): n is GameNode => n?.type === BELT_DRIVE);
-    const running = drives.filter((n) => (n.speed ?? 0) > 0).length;
-    const carrying = belts.filter((l) => inside.has(l.from) && l.material !== DRIVE);
-    const rate = carrying.length ? Math.min(BELT_MAX, (running * DRIVE_RATE) / carrying.length) : 0;
-    const net = { drives: drives.length, running, belts: carrying.length, rate };
-    for (const id of members) beltNets.set(id, net);
-    for (const line of carrying) beltRates.set(line.id, rate);
+    const drivers = members.map((id) => nodeById(s, id)).filter((n): n is GameNode => n?.type === driver);
+    const running = drivers.filter((n) => (n.speed ?? 0) > 0).length;
+    const carrying = lines.filter((l) => inside.has(l.from) && l.material !== link && nodeById(s, l.from)?.type !== PUMP);
+    // Each line tops out at what its belt or tube carries, so the network shows the best a line can do.
+    const top = Math.max(...lineKinds(layer).map((id) => LINE_RATE[id]));
+    const rate = carrying.length ? Math.min(top, (running * DRIVE_RATE) / carrying.length) : 0;
+    const net = { drives: drivers.length, running, belts: carrying.length, rate };
+    for (const id of members) nets.set(id, net);
+    for (const line of carrying) lineRates.set(line.id, Math.min(rate, lineCap(s, line)));
   }
+}
+
+function runBelts(s: GameState): void {
+  lineRates.clear();
+  runNetworks(s, "item", BELT_DRIVE, DRIVE, beltNets);
+  runNetworks(s, "fluid", PRESSURE_PUMP, PRESS, pipeNets);
+}
+
+/** The most a line can carry per second: what its belt or tube carries. */
+export function lineCap(s: GameState, line: Line): number {
+  const kind = kindOf(line, lineLayer(s, line.from, line.material));
+  return (kind && LINE_RATE[kind]) || BELT_MAX;
 }
 
 /** The belt network a node is on, as of the last step. */
 export const beltNetOf = (nodeId: number): BeltNet | undefined => beltNets.get(nodeId);
+/** The pipe network a node is on, as of the last step. */
+export const pipeNetOf = (nodeId: number): BeltNet | undefined => pipeNets.get(nodeId);
 
 
 /** Springs always run down. An engine's steam just tops out at its limit. */
@@ -1746,29 +1821,31 @@ export function powerLoad(_s: GameState, source: GameNode): { now: number; conne
 export const powerNetOf = (source: GameNode): PowerNet | undefined => networks.get(source.id);
 
 /** Lines are only passages: something at the sending end has to push. */
-function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives: Map<number, GameNode[]>): void {
-  if (line.material === POWER || line.material === DRIVE) return;
+function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>): void {
+  if (line.material === POWER || line.material === DRIVE || line.material === PRESS) return;
   const from = nodes.get(line.from)!;
   const to = nodes.get(line.to)!;
-  // A belt moves at its network's pace. A pipe runs at full pace while its sender has power.
-  const belt = lineLayer(s, line.from, line.material) === "item";
-  const pace = belt ? (beltRates.get(line.id) ?? 0) / BELT_MAX : from.carry ? 1 : 0;
+  // A line moves at its network's pace. A riverbank pump pushes its own water while it has power.
+  const self = from.type === PUMP;
+  const pace = (self ? (from.carry ? lineCap(s, line) : 0) : lineRates.get(line.id) ?? 0) / BELT_MAX;
   if (!pace) {
     line.active = false;
     return;
   }
   line.timer += STEP_MS * pace;
   if (line.timer < LINE_MS) return;
-  line.timer = 0;
   line.active = false;
-  const moved = isStore(from.type) ? sendStored(from, to) : sendOutput(from, to, line);
-  if (!moved) return;
-  // Each item piped costs 1 force from a source that still has some. A belt drive pays as it runs,
-  // and a riverbank pump's water comes free.
-  const motor = drives.get(line.from)?.find((m) => m.energy > 0);
-  if (!belt && motor && from.type !== PUMP) motor.energy = Math.max(0, motor.energy - 1);
-  line.active = true;
-  line.lastMoved = s.time;
+  // A pipe faster than one pass a step makes as many passes as its time allows.
+  while (line.timer >= LINE_MS) {
+    line.timer -= LINE_MS;
+    const moved = isStore(from.type) ? sendStored(from, to) : sendOutput(from, to, line);
+    if (!moved) {
+      line.timer = 0;
+      return;
+    }
+    line.active = true;
+    line.lastMoved = s.time;
+  }
 }
 
 /**
@@ -2152,6 +2229,6 @@ export function step(s: GameState): void {
   runBelts(s);
   s.nodes.forEach((node) => runMachine(s, node));
   // Least recently served first, so lines leaving one machine share its output evenly.
-  [...s.lines].sort((a, b) => a.lastMoved - b.lastMoved).forEach((line) => runLine(s, line, nodes, drives));
+  [...s.lines].sort((a, b) => a.lastMoved - b.lastMoved).forEach((line) => runLine(s, line, nodes));
 }
 

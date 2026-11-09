@@ -86,6 +86,10 @@ export const SPLITTER = "item_splitter";
 export const BELT_DRIVE = "belt_drive";
 /** The line that joins a belt drive to a network. It carries nothing. */
 export const DRIVE = "drive";
+/** Runs a fluid network the same way: every pipe joined to it through machines moves on its power. */
+export const PRESSURE_PUMP = "pressure_pump";
+/** The line that joins a pressure pump to a fluid network. It carries nothing. */
+export const PRESS = "press";
 export const PUMP = "drainage_pump";
 export const WATER = "water";
 /** The empty drum, what it holds, and the full item for each fluid. */
@@ -187,7 +191,7 @@ export const isSteamReady = (type: string): boolean => machines[type]?.steamRead
 /** Nodes that hold items in slots and send them on without a recipe. */
 export const isStore = (type: string): boolean => type === WAREHOUSE || type === SPLITTER;
 /** Nodes with no recipe of their own. */
-export const isPassive = (type: string): boolean => isStore(type) || type === MANIFOLD || type === TANK || type === BELT_DRIVE;
+export const isPassive = (type: string): boolean => isStore(type) || type === MANIFOLD || type === TANK || type === BELT_DRIVE || type === PRESSURE_PUMP;
 
 /** Parts of later milestones that share a machine with this one. */
 const LATER_ITEMS = new Set(["port_flange"]);
@@ -287,7 +291,7 @@ export const machineName = (type: string): string => machines[type].name;
 /** How harshly a machine punishes mistakes, from 1 upward. */
 export const machineDifficulty = (type: string): number => machines[type]?.difficulty ?? 1;
 export const itemName = (id: string): string =>
-  ores[id] ? `${ores[id].name} (${ores[id].elements})` : id === FUEL_GROUP ? tr("연료") : id === DRIVE ? tr("구동") : itemNames[id] ?? machines[id]?.name ?? id;
+  ores[id] ? `${ores[id].name} (${ores[id].elements})` : id === FUEL_GROUP ? tr("연료") : id === DRIVE ? tr("구동") : id === PRESS ? tr("압송") : itemNames[id] ?? machines[id]?.name ?? id;
 /** A finished machine is an item until it is installed. */
 export const isMachine = (id: string): boolean => id in machines;
 export const itemCode = (id: string): string => variants[id]?.code ?? display[id]?.code ?? id.slice(0, 2);

@@ -115,7 +115,7 @@ export const EN: Record<string, string> = {
   "얻는 법": "Recipes", "사용처": "Uses", "아직 없습니다": "Nothing yet",
   // Machine window
   "키": "key", "정말 철거?": "Really remove?", "철거": "Remove", "지도에서 강가를 먼저 찾아야 합니다": "Find a riverbank on the map first",
-  "다시 누르면 연결을 끊습니다": "Click again to unlink", "철판 1, 구리관 1이 필요합니다": "Needs 1 iron plate and 1 copper tube",
+  "다시 누르면 연결을 끊고 관을 돌려받습니다": "Click again to unlink and take the tubes back", "철판 1, 구리관 1이 필요합니다": "Needs 1 iron plate and 1 copper tube",
   "이 강가에서 물을 끌어옵니다": "Draws water from this riverbank", "태엽 감기": "Wind the spring", "창고를 비워야 철거할 수 있습니다": "Empty the warehouse to remove it",
   "들어온 동력을 연결된 곳으로 나눕니다": "Splits incoming power between its lines", "비축": "Reserve", "강가 펌프로 선을 이어야 쓸 수 있습니다": "Link it to a riverbank pump to use it",
   "그림을 클릭해서 감으세요": "Click the picture to wind", "키를 누르세요": "Press the keys", "그림을 클릭하세요": "Click the picture",
@@ -145,6 +145,11 @@ export const EN: Record<string, string> = {
   "절연 코일": "Insulated coil", "철심": "Iron core", "증기 발전기": "Steam generator",
   // Game data: machines
   "창고": "Warehouse", "벽돌 가마": "Brick kiln", "제련로": "Smelter", "판금 망치": "Plate hammer", "성형대": "Forming bench", "보일러 제작대": "Boiler bench", "기관 조립대": "Engine bench",
+  "관 하나가 나르는 최대 유량": "Most one pipe carries", "성능": "Stats", "새 선을 이것으로 놓습니다. 성능은 도감에서 볼 수 있습니다": "Lays new lines with this. Its stats are in the index", "벨트 하나가 나르는 최대 양": "Most one belt carries",
+  "까지 관": " needs", "개를 놓습니다": " tubes laid", "인벤토리에": "In the bag:", "취소": "Cancel",
+  "압송 펌프": "Pressure pump", "배관": "Pipes", "압송": "Pressure", "L/초": " L/s", "관당": "Per pipe", "연결된 관 없음": "No pipes connected",
+  "받은 동력으로 연결된 유체망의 관을 모두 같은 속도로 밀어 보냅니다": "Pushes every pipe of the joined fluid network at one pace, on the power it gets",
+  "이 유체망에 돌아가는 압송 펌프가 없어 멈춰 있습니다": "Stopped: no running pressure pump on this fluid network",
   "철 덩이": "Iron bloom", "작업대": "Workbench", "노천 가마": "Open kiln", "괴철로": "Bloomery", "손 단조대": "Hand forge", "손작업": "Hand work",
   "태엽 동력기": "Spring motor", "증기 배분기": "Steam manifold", "벨트 구동기": "Belt drive", "건설대": "Construction bench", "기계 찾기": "Find a machine", "청사진을 놓습니다. 기계는 작업대나 건설대에서 만듭니다": "Places a blueprint. Machines are made on a workbench or construction bench", "완성된 기계는 아이템으로 인벤토리에 들어갑니다. 손에 들고 보드를 클릭하면 설치됩니다": "A finished machine goes in the inventory as an item. Hold it and click the board to install it", "공급": "Supplies", "구동기": "Drives", "대": "", "줄": "", "벨트당": "per belt", "최대": "max", "이 기계로 만드는 것을 도감에서 봅니다": "See what this machine makes in the codex", "내 인벤토리": "My inventory", "안": "contents", "구동": "Drive", "벨트": "Belts", "개/초": "/s", "연결된 벨트 없음": "No belts joined", "받은 동력으로 연결된 물류망의 벨트를 모두 같은 속도로 돌립니다": "Runs every belt of its network at one pace on the power it gets", "이 물류망에 돌아가는 벨트 구동기가 없어 멈춰 있습니다": "No belt drive is running this network, so it stands", "관 (철관, 구리관)": "Tube (iron or copper)", "재료 분배기": "Item splitter", "강가 펌프": "Riverbank pump", "증기 해머": "Steam hammer", "코크스로": "Coke oven", "고로": "Blast furnace",
   "전로": "Converter", "산화 구리광": "Copper oxide ore", "황화 구리광": "Copper sulfide ore", "구리 매트": "Copper matte", "타르 저장조": "Tar tank", "압연기": "Rolling mill", "증기 선반": "Steam lathe", "기어 절삭기": "Gear cutter", "증기 인발기": "Wire drawer", "타르 증류기": "Tar still",

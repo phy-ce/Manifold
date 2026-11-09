@@ -118,6 +118,10 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .strand.power { stroke-dasharray: 6 5; animation: wire-flow .7s linear infinite; }
 .strand.pipe { stroke-width: 7; }
 .strand.pipe-core { stroke: var(--panel); stroke-width: 3; }
+/* A better belt or tube is drawn thicker than the plain one. Widths match STRAND_WIDE, PIPE_W and PIPE_WIDE in graphView.ts. */
+.strand.pipe.wide { stroke-width: 11; }
+.strand.pipe-core.wide { stroke-width: 5; }
+.strand.solid.wide { stroke-width: 5; }
 @keyframes wire-flow { to { stroke-dashoffset: -22; } }
 @media (prefers-reduced-motion: reduce) { .strand.power { animation: none; } }
 .wire-hit { fill: none; stroke: transparent; stroke-width: calc(var(--gap) * 2); pointer-events: stroke; cursor: pointer; }
@@ -192,6 +196,8 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .top-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 1 1 auto; min-width: 0; }
 .top-actions { display: flex; align-items: center; gap: var(--gap); flex: none; margin-left: auto; }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+/* The riverbank pump's "lay the pipe?" row: its own line under the banks. */
+.river-ask { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-top: var(--gap-sm); }
 /* The shape picker: category drop-downs, a search box, and what the search finds. */
 .form-search { width: calc(var(--slot) * 2.5); min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .form-results { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }

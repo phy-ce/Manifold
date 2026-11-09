@@ -1,9 +1,9 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { tr } from "../i18n";
-import { BELT_DRIVE, ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, isMachine, unitOf, itemCode, itemColor, itemName, machineName } from "../content";
+import { BELT_DRIVE, PRESSURE_PUMP, ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, isMachine, unitOf, itemCode, itemColor, itemName, machineName } from "../content";
 import {
   NAME_MAX, TAR_TANK_CAP, addGhost, nextSpot, needsModule, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
-  Ghost, Group, GameNode, GameState, LINE_LAYERS, LINE_MS, Line, LineLayer, SPRING_MAX, BELT_MAX, DRIVE_RATE, beltNetOf, lineLayer, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
+  lineKinds, kindOf, Ghost, Group, GameNode, GameState, LINE_LAYERS, LINE_MS, Line, LineLayer, SPRING_MAX, BELT_MAX, DRIVE_RATE, beltNetOf, pipeNetOf, lineLayer, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
 
@@ -22,6 +22,9 @@ const TRACK_GAP = 9;
 /** Line widths, matching style.css: a plain strand, and the outside of a pipe. */
 const STRAND_W = 3;
 const PIPE_W = 7;
+/** A better belt or tube is drawn thicker than the plain one, so what a line is laid with shows at a glance. */
+const STRAND_WIDE = 5;
+const PIPE_WIDE = 11;
 /** Size of the arrowhead at a wire's end. */
 const ARROW = 10;
 /** A wire's tag width per character and padding, its height, and where along the wire it may sit. */
@@ -136,16 +139,20 @@ interface GhostView {
   body: HTMLButtonElement;
   key: string;
 }
-/** What a belt drive is doing: how many belts it runs and how fast, or why it stands. */
+/** What a belt drive or pressure pump is doing: how many lines it runs and how fast, or why it stands. */
 export function beltSummary(node: GameNode, detail = false): string {
-  const net = beltNetOf(node.id);
-  if (!net?.belts) return tr("연결된 벨트 없음");
-  // What this drive alone puts in, then, in the window, how the whole network shares it out.
-  const own = `${tr("공급")} ${node.speed ? DRIVE_RATE : 0}${tr("개/초")}`;
+  const pipes = node.type === PRESSURE_PUMP;
+  const net = pipes ? pipeNetOf(node.id) : beltNetOf(node.id);
+  const [line, perSecond, drivers, perLine] = pipes
+    ? [tr("배관"), tr("L/초"), tr("압송 펌프"), tr("관당")]
+    : [tr("벨트"), tr("개/초"), tr("구동기"), tr("벨트당")];
+  if (!net?.belts) return pipes ? tr("연결된 관 없음") : tr("연결된 벨트 없음");
+  // What this driver alone puts in, then, in the window, how the whole network shares it out.
+  const own = `${tr("공급")} ${node.speed ? DRIVE_RATE : 0}${perSecond}`;
   if (!node.speed) return `${own} · ${tr("동력 없음")}`;
   const short = (n: number) => Math.round(n * 100) / 100;
-  const whole = `${tr("구동기")} ${net.running}${tr("대")} · ${tr("벨트")} ${net.belts}${tr("줄")} · ${tr("벨트당")} ${short(net.rate)}${tr("개/초")}${net.rate >= BELT_MAX ? ` (${tr("최대")})` : ""}`;
-  return detail ? `${own} · ${whole}` : `${own} · ${tr("벨트")} ${net.belts}${tr("줄")}`;
+  const whole = `${drivers} ${net.running}${tr("대")} · ${line} ${net.belts}${tr("줄")} · ${perLine} ${short(net.rate)}${perSecond}${net.rate >= BELT_MAX ? ` (${tr("최대")})` : ""}`;
+  return detail ? `${own} · ${whole}` : `${own} · ${line} ${net.belts}${tr("줄")}`;
 }
 
 /** The layers the board shows one at a time. Lines on the other layers are not drawn at all. */
@@ -963,7 +970,7 @@ export class GraphView {
     if (node.type === MANIFOLD) {
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tr("동력을 나눕니다")}</span>`;
     }
-    if (node.type === BELT_DRIVE) {
+    if (node.type === BELT_DRIVE || node.type === PRESSURE_PUMP) {
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${beltSummary(node)}</span>`;
     }
     if (isStore(node.type)) {
@@ -1017,20 +1024,22 @@ export class GraphView {
     return { set, casing, strands: [], arrow, hit, mover, tag };
   }
 
-  /** Remakes a wire's strands when its materials change: power dashes, fluids run in pipes. */
-  private makeStrands(view: LineView, materials: string[], layer: LineLayer): void {
+  /** Remakes a wire's strands when its materials change: power dashes, fluids run in pipes, thicker for a better belt or tube. */
+  private makeStrands(view: LineView, lines: Line[], layer: LineLayer): void {
     for (const strand of view.strands) for (const path of strand.paths) path.remove();
-    view.strands = materials.map((id) => {
+    view.strands = lines.map((line) => {
+      const id = line.material;
       const kind = layer === "power" ? "power" : layer === "fluid" ? "pipe" : "solid";
       const paths = [document.createElementNS(SVG, "path")];
       if (kind === "pipe") paths.push(document.createElementNS(SVG, "path"));
-      paths[0].setAttribute("class", `strand ${kind}`);
+      const wide = layer !== "power" && kindOf(line, layer) !== lineKinds(layer)[0] ? " wide" : "";
+      paths[0].setAttribute("class", `strand ${kind}${wide}`);
       paths[0].style.stroke = itemColor(id);
-      paths[1]?.setAttribute("class", "strand pipe-core");
+      paths[1]?.setAttribute("class", `strand pipe-core${wide}`);
       view.arrow.before(...paths);
       return { paths };
     });
-    view.arrow.style.fill = itemColor(materials[0]);
+    view.arrow.style.fill = itemColor(lines[0].material);
   }
 
   /**
@@ -1277,13 +1286,14 @@ export class GraphView {
       const shape = wirePath(wire);
       view.hit.setAttribute("d", shape);
       const materials = group.map((l) => l.material);
-      const codes = materials.join();
+      const codes = group.map((l) => `${l.material}:${kindOf(l, this.layer) ?? ""}`).join();
       if (view.set.dataset.codes !== codes) {
         view.set.dataset.codes = codes;
-        this.makeStrands(view, materials, this.layer);
+        this.makeStrands(view, group, this.layer);
       }
       // A bundle lays its materials side by side, so none of them loses its colour.
-      const widest = this.layer === "fluid" ? PIPE_W : STRAND_W;
+      const wide = this.layer !== "power" && group.some((l) => kindOf(l, this.layer) !== lineKinds(this.layer)[0]);
+      const widest = this.layer === "fluid" ? (wide ? PIPE_WIDE : PIPE_W) : wide ? STRAND_WIDE : STRAND_W;
       const gap = widest + 1.5;
       const span = (materials.length - 1) * gap;
       view.casing.setAttribute("d", shape);
@@ -1297,7 +1307,7 @@ export class GraphView {
       const linked = traced === undefined || group[0].from === traced || group[0].to === traced;
       if (traced !== undefined && linked) for (const id of [group[0].from, group[0].to]) near.add(id);
       for (const mark of [view.set, view.tag, view.mover]) mark.classList.toggle("faded", !linked);
-      const names = group.map((l) => itemName(l.material)).join(", ");
+      const names = group.map((l) => (this.layer === "power" ? itemName(l.material) : `${itemName(l.material)} (${itemName(kindOf(l, this.layer)!)})`)).join(", ");
       view.hit.dataset.tip = names;
       view.tag.dataset.tip = names;
       if (view.tag.dataset.codes !== codes) {

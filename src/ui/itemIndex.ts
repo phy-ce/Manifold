@@ -5,11 +5,11 @@ import {
   FUEL_GROUP, Recipe, burners, buildUses, compareItems, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
   machinePower, machinePowerOut, recipesFor, usesOf,
 } from "../content";
-import { GameState, bagHolds, countOf, fillFromBag, nodeById, runsRecipe } from "../engine/game";
+import { GameState, bagHolds, countOf, itemStats, fillFromBag, nodeById, runsRecipe } from "../engine/game";
 import { knownMembers, makeSlot, paintSlot } from "./slots";
 
-/** A group such as coal has members instead of recipes. */
-type Tab = "recipes" | "uses" | "members";
+/** A group such as coal has members instead of recipes. Items with numbers to them also have a stats tab. */
+type Tab = "recipes" | "uses" | "members" | "stats";
 
 /** Short numbers: whole when they are, otherwise up to two decimals. */
 const short = (n: number) => String(Math.round(n * 100) / 100);
@@ -286,6 +286,9 @@ export class ItemIndex {
     const uses = usesOf(id, stage);
     const builds = buildUses(id, stage);
     const burns = isFuel(id) || id === FUEL_GROUP ? burners(stage) : [];
+    const stats = group ? [] : itemStats(id);
+    // Another item may have no stats tab, so it falls back to how it is made.
+    if (this.tab === "stats" && !stats.length) this.tab = "recipes";
 
     const tabs = document.createElement("div");
     tabs.className = "modes";
@@ -302,10 +305,13 @@ export class ItemIndex {
         ? tabButton("members", `${tr("구성원")} ${members.length}`)
         : tabButton("recipes", `${tr("얻는 법")} ${recipes.length + (source ? 1 : 0)}`),
       tabButton("uses", `${tr("사용처")} ${burns.length + uses.length + builds.length}`),
+      ...(stats.length ? [tabButton("stats", tr("성능"))] : []),
     );
 
     const cards: HTMLElement[] = [];
-    if (this.tab === "members") {
+    if (this.tab === "stats") {
+      cards.push(...stats.map(([what, much]) => this.textCard(`${what}: ${much}`)));
+    } else if (this.tab === "members") {
       if (members.length) cards.push(this.membersCard(members));
     } else if (this.tab === "recipes") {
       if (source) cards.push(this.textCard(source));

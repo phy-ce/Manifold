@@ -56,6 +56,7 @@
 
     "steam_engine": { "name": "증기기관", "powerOut": 10, "tier": "low", "burn": 1, "cost": { "steam_engine_unit": 1, "iron_plate": 4, "iron_rivet": 8 }, "work": 30 },
     "belt_drive": { "name": "벨트 구동기", "power": 2, "tier": "spring", "cost": { "iron_plate": 4, "iron_gear": 2, "iron_rod": 4, "iron_belt": 2 }, "work": 15 },
+    "pressure_pump": { "name": "압송 펌프", "power": 2, "tier": "spring", "cost": { "iron_cylinder": 1, "iron_plate": 4, "iron_gear": 2, "copper_tube": 4 }, "work": 20 },
     "steam_manifold": { "name": "증기 배분기", "cost": { "copper_tube": 6, "iron_plate": 2 }, "work": 15 },
     "item_splitter": { "name": "재료 분배기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 15 },
     "drainage_pump": { "name": "강가 펌프", "power": 3, "tier": "spring", "steamReady": true, "cost": { "iron_cylinder": 1, "copper_tube": 8, "iron_plate": 4, "iron_gear": 2, "iron_rivet": 8 }, "work": 25 },
@@ -147,7 +148,7 @@
     {
       "id": "S1-2", "name": "증기 동력 보급",
       "unlockSources": ["water"],
-      "unlockMachines": ["steam_engine", "drainage_pump", "steam_hammer"],
+      "unlockMachines": ["steam_engine", "drainage_pump", "pressure_pump", "steam_hammer"],
       "goal": { "item": "iron_plate", "amount": 120, "perMinute": 30 }
     },
     {

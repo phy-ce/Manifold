@@ -751,6 +751,47 @@ function handForge(mode: Status, f: number) {
   blocked(mode);
 }
 
+function pressurePump(mode: Status, f: number) {
+  // Horizontal force pump on a heavy bed: left crank, tall air dome, flanged outlet right.
+  const p = pose(mode, f), a = p * Math.PI / 2;
+  const cx = 18 + Math.cos(a) * 5, cy = 49 + Math.sin(a) * 5;
+  rect("#43515e", 6, 65, 62, 7);
+  rect("#a5b2bd", 6, 65, 62, 3);
+  for (const x of [13, 35, 50]) rect("#526775", x, 57, 7, 8);
+  rect("#845535", 0, 58, 40, 6);
+  rect("#c98a55", 0, 58, 40, 2);
+  oval("#435966", 47, 21, 10, 13);
+  rect("#617d8c", 37, 21, 20, 24);
+  oval("#b8ccd5", 44, 20, 5, 9);
+  rect("#b8ccd5", 39, 21, 3, 20);
+  rect("#354b59", 53, 22, 4, 23);
+  rect("#d8b276", 35, 40, 24, 4);
+  rect("#845535", 55, 43, 21, 12);
+  rect("#e0bd75", 55, 43, 21, 3);
+  rect("#263c48", 57, 47, 19, 5);
+  if (mode === "run") {
+    for (let i = 0; i < 2; i += 1) rect("#a8d5df", 58 + (i * 8 + p * 2) % 16, 48, 3, 3);
+  }
+  rect("#d8b276", 67, 40, 5, 18);
+  for (const y of [41, 55]) rect("#eef0dc", 68, y, 3, 2);
+  rect("#718896", 32, 43, 25, 17);
+  rect("#c5d6de", 32, 43, 25, 3);
+  rect("#354956", 32, 56, 25, 4);
+  for (const x of [32, 53]) rect("#d8b276", x, 42, 3, 19);
+  // A pressure gauge on a short copper stem.
+  line("#c98a55", 4, 29, 33, 39, 39);
+  oval("#e0bd75", 28, 27, 8, 9);
+  oval("#e4e8dc", 28, 27, 5, 6);
+  line("#263440", 2, 28, 29, 31, 23);
+  rect("#a5b9c5", 0, 46, 18, 6);
+  // The input shaft turns a crank that drives the piston rod.
+  oval("#293943", 18, 49, 10, 12);
+  oval("#849daa", 18, 49, 7, 9);
+  line("#e0bd75", 4, 18, 49, cx, cy);
+  line("#d4dfe3", 3, cx, cy, 38, 51);
+  blocked(mode);
+}
+
 /** A plain crate, for any machine without a scene of its own yet. */
 function crate(mode: Status) {
   rect("#6b4a33", 14, 24, 46, 46);
@@ -767,6 +808,7 @@ const SCENES: Record<string, (mode: Status, f: number) => void> = {
   hand_forge: handForge,
   construction_bench: constructionBench,
   belt_drive: beltDrive,
+  pressure_pump: pressurePump,
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
   smelter: (m, f) => furnace(m, f, [172, 92, 62]),
   plate_hammer: plateHammer,
