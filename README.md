@@ -8,13 +8,9 @@ A text-art factory game that keeps the best part of tech modpacks, designing pro
 
 ![A 30-second tour: digging clay on the map, striking on the beat at the workbench, working the bloomery's bellows, exploring a cave, a first smelter and brick kiln on belts, and the item index](docs/media/manifold-teaser.gif)
 
-![One power line wakes the whole factory: the warehouse feeds the smelters, iron flows to the steam hammers, and plates pile up](docs/media/manifold-demo.gif)
-
 ## How it plays
 
 Find veins on the map and mine them, build machines, place them on your base board and link them with lines. At first you hammer plates and wind springs by hand. Once a steam engine is up, the factory starts running on its own.
-
-![Walking to an iron vein, mining it, heading home and wiring up the factory](docs/media/manifold-explore.gif)
 
 - **Production design:** each node is one machine with six ports. The game is how you wire materials, power and by-products.
 - **Power:** springs store force, and steam engines share their output among machines up to a limit. Go past it and everything slows down together. Moving items along a line also uses power.
