@@ -9,6 +9,7 @@ import { MachineWindow } from "./ui/machineWindow";
 import { RouteWindow } from "./ui/routeWindow";
 import { HelpWindow } from "./ui/helpWindow";
 import { SaveWindow } from "./ui/saveWindow";
+import { MenuWindow } from "./ui/menuWindow";
 import { MapView } from "./ui/mapView";
 import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
 import { applyTheme } from "./ui/theme";
@@ -61,7 +62,7 @@ travel.type = "button";
 travel.className = "tech";
 const reset = document.createElement("button");
 reset.type = "button";
-reset.className = "tech push";
+reset.className = "tech";
 reset.textContent = tr("새 게임");
 const vitals = document.createElement("div");
 vitals.className = "vitals";
@@ -119,7 +120,22 @@ helpButton.textContent = "?";
 helpButton.dataset.tip = tr("조작 도움말 (단축키 ?)");
 helpButton.setAttribute("aria-label", tr("조작 도움말"));
 helpButton.addEventListener("click", () => help.toggle(true));
-top.append(goal, vitals, travel, indexButton, speedBar, saveButton, helpButton, testStart, reset);
+// Status on the left may wrap; the buttons stay in one fixed row at the right, so nothing pushes them.
+const topStatus = document.createElement("div");
+topStatus.className = "top-status";
+topStatus.append(goal, vitals);
+const topActions = document.createElement("div");
+topActions.className = "top-actions";
+// New game and test start live in the Escape menu, away from everyday buttons.
+const menuButton = document.createElement("button");
+menuButton.type = "button";
+menuButton.className = "tech";
+menuButton.textContent = tr("메뉴");
+menuButton.dataset.tip = tr("메뉴 (Esc)");
+const menu = new MenuWindow([testStart, reset]);
+menuButton.addEventListener("click", () => menu.open());
+topActions.append(travel, indexButton, speedBar, saveButton, helpButton, menuButton);
+top.append(topStatus, topActions);
 
 // A small number shows the damage taken. No full-screen flash: it was hard on the eyes.
 const hurtFlash = document.createElement("div");
@@ -153,11 +169,11 @@ let noticeUntil = 0;
 const NOTICE_MS = 6000;
 const LOW_VITAL = 25;
 
-function meter(label: string, value: number): string {
+function meter(label: string, value: number, kind = ""): string {
   const cells = 10;
   const fill = Math.ceil((value / MAX_VITAL) * cells);
   const low = value <= LOW_VITAL ? " low" : "";
-  return `<span class="meter${low}">${label} [${"#".repeat(fill).padEnd(cells, ".")}] ${value}</span>`;
+  return `<span class="meter${low}${kind ? ` ${kind}` : ""}">${label} [${"#".repeat(fill).padEnd(cells, ".")}] ${String(value).padStart(String(MAX_VITAL).length)}</span>`;
 }
 
 const windowView = new MachineWindow(game, redraw);
@@ -356,7 +372,16 @@ keepPlaying.addEventListener("click", () => {
 win.firstElementChild!.append(keepPlaying);
 
 document.body.append(itemIndex.root);
-app.append(top, notice, graph.root, map.root, invBox, windowView.root, routeView.root, saveView.root, help.root, win);
+app.append(top, notice, graph.root, map.root, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
+
+// Escape first closes whatever is open; only with nothing to cancel does it open the menu.
+// This runs in the capture phase, before the windows' own Escape handlers close them.
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.target instanceof HTMLInputElement) return;
+  if (menu.isOpen) return menu.close();
+  const busy = windowView.isOpen || routeView.isOpen || !saveView.root.hidden || !help.root.hidden || graph.busy;
+  if (!busy) menu.open();
+}, true);
 
 travel.addEventListener("click", () => {
   const cave = currentCave(state);
@@ -411,8 +436,15 @@ function redraw(): void {
   }
   const seasonLeft = Math.ceil((SEASON_MS - (state.time % SEASON_MS)) / 1000);
   const clock = `${Math.floor(seasonLeft / 60)}:${String(seasonLeft % 60).padStart(2, "0")}`;
-  const shown = `<span class="meter">${yearAt(state.time)}${tr("년차")} ${SEASON_NAMES[state.season]} ${clock}</span>${isWeak(state) ? `<span class="meter low">${tr("쇠약")} ${Math.ceil((state.weakUntil - state.time) / 1000)}${tr("초")}</span>` : ""}` + meter(tr("체력"), state.hp) + meter(tr("허기"), state.hunger) +
-    `<span class="meter${overloaded(state) ? " low" : ""}">${tr("무게")} ${carried(state)}/${carryLimit(state)}${overloaded(state) ? tr(" 초과, 이동 불가") : ""}</span>`;
+  // Every part keeps its width, so warnings and changing numbers never push the bar about.
+  const limit = String(carryLimit(state));
+  const over = overloaded(state);
+  const weak = isWeak(state);
+  const weakLeft = weak ? Math.ceil((state.weakUntil - state.time) / 1000) : 0;
+  const shown = `<span class="meter">${yearAt(state.time)}${tr("년차")} ${SEASON_NAMES[state.season]} ${clock}</span>` +
+    meter(tr("체력"), state.hp, "hp") + meter(tr("허기"), state.hunger) +
+    `<span class="meter${over ? " low" : ""}">${tr("무게")} ${String(carried(state)).padStart(limit.length)}/${limit}<span class="${over ? "" : "reserve"}">${tr(" 초과, 이동 불가")}</span></span>` +
+    `<span class="meter low${weak ? "" : " reserve"}">${tr("쇠약")} ${String(weakLeft).padStart(2)}${tr("초")}</span>`;
   if (vitals.innerHTML !== shown) vitals.innerHTML = shown;
   // A collapse jumps health back up, so it counts as a hit even though the number rises.
   if (state.hp < lastHp) showHurt(lastHp - state.hp);

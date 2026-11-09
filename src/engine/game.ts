@@ -1214,7 +1214,8 @@ export function connectOptions(s: GameState, fromId: number, toId: number): stri
  * it holds now, so an empty line keeps its layer.
  */
 export function lineLayer(s: GameState, fromId: number, material: string): LineLayer {
-  if (material === POWER) return "power";
+  // A belt drive hands its power on to a belt network, so its link is a power line.
+  if (material === POWER || material === DRIVE) return "power";
   const from = nodeById(s, fromId);
   if (!from || material === ALL) return "item";
   const { main, byproducts } = isPassive(from.type) ? { main: [], byproducts: [] } : outputChannels(from);
@@ -1688,7 +1689,8 @@ const beltRates = new Map<number, number>();
 function runBelts(s: GameState): void {
   beltNets.clear();
   beltRates.clear();
-  const belts = s.lines.filter((l) => l.material !== POWER && lineLayer(s, l.from, l.material) === "item");
+  // Drive links sit on the power layer but still join their drive to the network.
+  const belts = s.lines.filter((l) => l.material === DRIVE || lineLayer(s, l.from, l.material) === "item");
   const parent = new Map<number, number>();
   const root = (id: number): number => {
     while (parent.has(id) && parent.get(id) !== id) id = parent.get(id)!;

@@ -47,7 +47,9 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 /* Vitals */
 .vitals { display: flex; flex-wrap: wrap; gap: var(--gap-lg); color: var(--dim); font-size: var(--text-sm); }
 .meter { white-space: pre; }
-.meter.low { color: var(--alert); font-weight: 700; }
+.meter.low { color: var(--alert); }
+/* Holds the room of a warning that is not showing, so the bar keeps its width. */
+.reserve { visibility: hidden; }
 .notice { padding: var(--gap); border: 1px solid var(--alert); color: var(--alert); font-weight: 700; }
 
 /* Controls */
@@ -186,6 +188,9 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .recipe .state.run { color: var(--fire); }
 .recipe .state.blocked { color: var(--alert); font-weight: 700; }
 .top .modes .tech { min-width: var(--control); }
+.top { flex-wrap: nowrap; align-items: flex-start; }
+.top-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 1 1 auto; min-width: 0; }
+.top-actions { display: flex; align-items: center; gap: var(--gap); flex: none; margin-left: auto; }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
 /* The shape picker: category drop-downs, a search box, and what the search finds. */
 .form-search { width: calc(var(--slot) * 2.5); min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
@@ -257,6 +262,9 @@ body.dock-open .window-back { right: var(--dock); }
 
 /* Route settings */
 .route-window { min-width: calc(var(--node-w) * 2.4); max-width: 100%; }
+.menu-window { min-width: calc(var(--node-w) * 1.6); max-width: 100%; }
+.menu-list { display: grid; gap: var(--gap); }
+.menu-list .tech { min-height: var(--control); text-align: left; }
 .route-window input { width: 100%; min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .route-list { display: grid; grid-template-rows: repeat(10, auto); grid-auto-flow: column; grid-auto-columns: calc(var(--node-w) * 1.6); gap: var(--gap-sm); }
 .route-row { display: flex; align-items: center; gap: var(--gap); min-height: var(--control); padding: 0 var(--gap); text-align: left; border: 1px solid var(--line); background: var(--bg); }
@@ -271,10 +279,9 @@ body.dock-open .window-back { right: var(--dock); }
 /* Taking damage */
 .hurt { position: fixed; top: calc(var(--gap) * 6); left: 50%; z-index: 35; color: var(--alert); font-size: var(--text-md); font-weight: 700; pointer-events: none; opacity: 0; }
 .hurt.hit { animation: hurt-flash .6s ease-out; }
-.vitals.hit .meter:nth-child(2) { color: var(--alert); font-weight: 700; animation: hurt-shake .3s steps(4); }
+/* Only the colour changes on a hit: moving or bolding the text would shift the bar. */
+.vitals.hit .meter.hp { color: var(--alert); }
 @keyframes hurt-flash { from { opacity: 1; } to { opacity: 0; } }
-@keyframes hurt-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-@media (prefers-reduced-motion: reduce) { .vitals.hit .meter:nth-child(2) { animation: none; } }
 
 /* Tooltip */
 .tip { position: fixed; left: 0; top: 0; z-index: 50; padding: var(--gap-sm) var(--gap); background: var(--bg); border: 1px solid var(--dim); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }

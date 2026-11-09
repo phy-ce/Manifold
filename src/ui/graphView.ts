@@ -806,6 +806,11 @@ export class GraphView {
     this.changed();
   }
 
+  /** Whether Escape has something on the board to cancel first. */
+  get busy(): boolean {
+    return this.linkFrom !== null || this.selected.size > 0 || this.pickingPort || !this.menu.hidden || !this.rosterList.hidden;
+  }
+
   private cancelLink(): void {
     this.linkFrom = null;
     this.board.classList.remove("linking");
