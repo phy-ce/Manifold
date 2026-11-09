@@ -16,7 +16,7 @@ const SHAPE_OF: Record<string, string> = {
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
 };
 
-const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "drum", "fan", "boots", "pack", "pick"]);
+const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "drum", "fan", "boots", "pack", "pick"]);
 
 interface Lump {
   /** Gives each lump its own outline. */
