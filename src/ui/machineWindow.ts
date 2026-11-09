@@ -1,6 +1,6 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { CONSTRUCTION, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
+import { isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
 import {
   GameNode, GameState, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -235,9 +235,9 @@ export class MachineWindow {
   /** The player sets the shape; the metal that goes in decides the rest. */
   private buildForms(node: GameNode): void {
     const all = isStore(node.type) ? [] : machineForms(node.type);
-    // The construction bench offers only the machines open so far.
+    // A bench offers only the machines open so far.
     const open = machinesAt(this.game().stage);
-    const forms = node.type === CONSTRUCTION ? all.filter((type) => open.includes(type)) : all;
+    const forms = isBuilder(node.type) ? all.filter((type) => open.includes(type)) : all;
     this.modes.replaceChildren();
     this.modes.hidden = forms.length < 2;
     if (forms.length >= 2) this.buildFormPicker(node, forms);
@@ -280,7 +280,7 @@ export class MachineWindow {
     const search = document.createElement("input");
     search.type = "search";
     search.className = "form-search";
-    const hint = node.type === CONSTRUCTION ? tr("기계 찾기") : tr("형태 찾기");
+    const hint = isBuilder(node.type) ? tr("기계 찾기") : tr("형태 찾기");
     search.placeholder = hint;
     search.setAttribute("aria-label", hint);
     const results = document.createElement("div");
@@ -503,7 +503,7 @@ export class MachineWindow {
     this.demolish.disabled = !canRemove(s, node);
     this.demolish.dataset.tip = this.demolish.disabled ? tr("창고를 비워야 철거할 수 있습니다") : "";
     this.recipe.hidden = isStore(node.type);
-    this.moduleButton.hidden = s.stage < 1 || !needsModule(node);
+    this.moduleButton.hidden = s.stage < stageOpening(WATER) || !needsModule(node);
     if (!this.moduleButton.hidden) {
       const owned = countOf(s, MODULE);
       const label = node.module ? tr("증기 모듈 빼기") : `${tr("증기 모듈 장착")} (${owned})`;

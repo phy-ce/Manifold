@@ -40,6 +40,8 @@ const LUMPS: Record<string, Lump> = {
   Bt: { seed: 25, grain: 0.55, mineral: "bituminous" },
   An: { seed: 26, grain: 0.2, mineral: "anthracite" },
   slag: { seed: 41, holes: 9 },
+  // A bloom is spongy iron straight from the bloomery, still full of slag pockets.
+  bloom: { seed: 44, grain: 0.6, holes: 12, mineral: "magnetite" },
   // Matte is a cooled copper sulphide melt: a dense lump with a metallic sheen and a few gas pockets.
   copper_matte: { seed: 43, grain: 0.45, holes: 4, mineral: "chalcocite" },
 };

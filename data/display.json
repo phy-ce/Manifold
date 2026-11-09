@@ -9,6 +9,7 @@
   "coal": { "code": "co", "color": "#9a7350" },
   "clay": { "code": "cy", "color": "#d9cfc0" },
   "brick": { "code": "Br", "color": "#c8694a" },
+  "bloom": { "code": "Bl", "color": "#8d8a86" },
   "iron": { "code": "Fe", "color": "#a9bacb" },
   "copper": { "code": "Cu", "color": "#e58a55" },
   "slag": { "code": "Sl", "color": "#e0764c" },

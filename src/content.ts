@@ -4,9 +4,11 @@ import eraData from "../data/steam-era.json";
 import oreJson from "../data/ores.json";
 import displayData from "../data/display.json";
 import materialData from "../data/materials.json";
-import { CONSTRUCTION, expandRecipes } from "./expandRecipes.mjs";
+import { BUILDERS, CONSTRUCTION, WORKBENCH, expandRecipes } from "./expandRecipes.mjs";
 
-export { CONSTRUCTION };
+export { CONSTRUCTION, WORKBENCH };
+/** Whether a machine's forms are other machines: the workbench and the construction bench. */
+export const isBuilder = (type: string): boolean => BUILDERS.includes(type);
 
 // The language is set before this file loads, so all data can be translated once here.
 const era = localize(eraData);
@@ -145,7 +147,9 @@ export const outputRole = (index: number): string => (index === 0 ? tr("결과")
 
 export const STAGES = era.milestones;
 /** Stages with their content built so far. */
-export const PLAYABLE_STAGES = 3;
+export const PLAYABLE_STAGES = 4;
+/** The stage that opens a raw source, such as water and its riverbanks. */
+export const stageOpening = (source: string): number => STAGES.findIndex((s) => s.unlockSources.includes(source));
 
 /** Machines open at a stage, counting every stage before it. */
 export const machinesAt = (stage: number): string[] =>
@@ -203,10 +207,10 @@ export const formCategory = (form: string): string =>
 
 /**
  * How a machine's forms are grouped in its picker, as [label, forms]. Shapes go by category;
- * the construction bench's machines go by the stage that opens them, up to the stage reached.
+ * a bench's machines go by the stage that opens them, up to the stage reached.
  */
 export function formGroups(type: string, forms: string[], stage: number): [string, string[]][] {
-  if (type === CONSTRUCTION) {
+  if (isBuilder(type)) {
     return STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1)
       .map((s): [string, string[]] => [s.id, s.unlockMachines.filter((m: string) => forms.includes(m))])
       .filter(([, list]) => list.length);
@@ -370,9 +374,9 @@ const knownCache = new Map<number, Recipe[]>();
 function knownRecipes(stage: number): Recipe[] {
   const cached = knownCache.get(stage);
   if (cached) return cached;
-  // The construction bench only makes machines that are open by this stage.
+  // A bench only makes machines that are open by this stage.
   const opened = machinesAt(stage);
-  const open = opened.flatMap(machineRecipes).filter((r) => !r.disposal && (r.machine !== CONSTRUCTION || opened.includes(r.form!)));
+  const open = opened.flatMap(machineRecipes).filter((r) => !r.disposal && (!isBuilder(r.machine) || opened.includes(r.form!)));
   // Caves are open from the start, so their layer counts too.
   const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE]);
   const obtainable = (key: string) => [...have].some((id) => matches(id, key));

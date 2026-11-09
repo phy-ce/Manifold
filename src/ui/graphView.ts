@@ -268,7 +268,7 @@ export class GraphView {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "tech";
-        b.dataset.tip = tr("청사진을 놓습니다. 기계는 건설대에서 만듭니다");
+        b.dataset.tip = tr("청사진을 놓습니다. 기계는 작업대나 건설대에서 만듭니다");
         b.addEventListener("click", () => this.plan(type));
         this.paletteItems.set(type, b);
         list.append(b);

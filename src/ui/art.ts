@@ -631,6 +631,126 @@ function constructionBench(mode: Status, f: number) {
   blocked(mode);
 }
 
+function workbench(mode: Status, f: number) {
+  // Rough plank top, splayed timber trestles and hand tools; only the mallet moves.
+  const p = pose(mode, f);
+  for (const x of [17, 53]) {
+    polygon("#68482f", [[x, 47], [x + 6, 47], [x + 12, 71], [x + 6, 71], [x + 3, 57], [x - 3, 71], [x - 9, 71]]);
+    line("#bc9160", 3, x + 1, 51, x - 5, 69);
+  }
+  rect("#8b623d", 14, 61, 45, 5);
+  rect("#c49a68", 14, 61, 45, 2);
+  polygon("#93683f", [[6, 39], [65, 38], [70, 43], [69, 51], [6, 51]]);
+  polygon("#c9a06b", [[6, 39], [65, 38], [70, 43], [7, 44]]);
+  rect("#493325", 7, 48, 62, 4);
+  line("#735035", 2, 11, 42, 61, 41);
+  rect("#d8b276", 12, 44, 4, 3);
+  rect("#d8b276", 57, 44, 4, 3);
+  // A coarse saw lies across the left end; a chisel stands in a small offcut.
+  polygon("#9baab2", [[9, 34], [28, 32], [28, 36], [24, 39], [21, 37], [17, 40], [14, 38], [9, 40]]);
+  rect("#765035", 26, 30, 9, 8);
+  rect("#d3a66c", 28, 32, 5, 3);
+  rect("#ad7d49", 39, 35, 17, 5);
+  rect("#c1cdd2", 44, 29, 3, 7);
+  rect("#a77b4d", 42, 22, 7, 8);
+  const headY = [8, 13, 18, 13][p];
+  line("#b98c56", 4, 47, headY + 4, 62, headY + 15);
+  rect("#805533", 37, headY, 17, 8);
+  rect("#d5ac76", 37, headY, 17, 3);
+  rect("#503727", 50, headY + 3, 4, 5);
+  blocked(mode);
+}
+
+function openKiln(mode: Status, f: number) {
+  // Low, uncovered clay clamp in an earthen pit, with exposed fuel at its foot.
+  const p = pose(mode, f);
+  polygon("#584638", [[4, 63], [13, 57], [60, 57], [72, 65], [67, 72], [8, 72]]);
+  oval("#302923", 38, 62, 28, 7);
+  polygon("#866047", [[12, 59], [18, 43], [29, 34], [46, 33], [58, 44], [64, 60]]);
+  polygon("#b58a60", [[12, 57], [18, 43], [29, 34], [35, 34], [26, 46], [22, 58]]);
+  polygon("#503b30", [[46, 34], [58, 44], [64, 60], [53, 60], [49, 45]]);
+  for (const [x, y, w] of [[24, 35, 13], [39, 34, 11], [18, 43, 16], [36, 42, 17], [14, 51, 15], [47, 51, 14]]) {
+    rect("#a87350", x, y, w, 7);
+    rect("#d0a178", x, y, w, 2);
+    rect("#614333", x + w - 3, y + 2, 3, 5);
+  }
+  polygon("#211e1b", [[28, 62], [30, 49], [42, 47], [48, 62]]);
+  line("#795136", 5, 23, 63, 49, 57);
+  line("#a0784c", 3, 25, 61, 48, 58);
+  fire(30, 46, 61, mode === "blocked" ? "idle" : mode, p * 2);
+  for (const [x, y] of [[9, 62], [19, 66], [51, 65], [61, 61]]) {
+    polygon("#827b68", [[x, y], [x + 7, y - 2], [x + 10, y + 4], [x + 1, y + 5]]);
+    line("#b9ad90", 2, x + 1, y, x + 6, y - 1);
+  }
+  if (mode === "run") {
+    oval("#68625a", 37, 29, 5, 5);
+    oval("#827d73", 35, 21, 6, 5);
+    oval("#9c9990", 34, 13, 5, 4);
+    smoke(34, p * 2);
+  }
+  blocked(mode);
+}
+
+function bloomery(mode: Status, f: number) {
+  // Short tapering clay shaft beside a leather bellows hinged at its clay nozzle.
+  const p = pose(mode, f);
+  const top = [43, 48, 54, 48][p];
+  polygon("#635345", [[5, 66], [17, 61], [63, 62], [72, 68], [68, 72], [7, 72]]);
+  polygon("#a57551", [[13, 64], [17, 37], [22, 17], [40, 17], [46, 40], [48, 65]]);
+  polygon("#d1a576", [[13, 62], [17, 37], [22, 17], [27, 18], [22, 39], [20, 63]]);
+  polygon("#674634", [[37, 19], [40, 17], [46, 40], [48, 65], [38, 65], [39, 40]]);
+  oval("#c6996e", 31, 18, 10, 4);
+  oval("#302821", 31, 18, 7, 2);
+  line("#79523b", 2, 25, 32, 31, 36);
+  line("#79523b", 2, 31, 36, 28, 43);
+  line("#79523b", 2, 19, 51, 25, 48);
+  oval("#4d352a", 40, 57, 7, 8);
+  oval(mode === "run" ? "#e87932" : "#302720", 40, 57, 5, 5);
+  oval(mode === "run" ? "#ffd18a" : "#554032", 40, 57, 3, 3);
+  polygon("#ac8057", [[42, 55], [51, 55], [51, 61], [42, 59]]);
+  line("#d8b276", 2, 44, 55, 51, 55);
+  rect("#59402c", 53, 64, 5, 5);
+  rect("#59402c", 66, 64, 5, 5);
+  polygon("#724735", [[49, 58], [67, top], [71, top + 5], [70, 62], [64, 65], [49, 61]]);
+  polygon("#ac7650", [[51, 58], [66, top + 3], [68, top + 6], [63, 60], [51, 61]]);
+  line("#412d25", 2, 54, 59, 67, top + 7);
+  line("#68462e", 5, 49, 63, 71, 63);
+  line("#c49a68", 4, 49, 57, 70, top);
+  line("#e0bd75", 2, 50, 56, 69, top - 1);
+  line("#997044", 4, 68, top, 71, top - 7);
+  blocked(mode);
+}
+
+function handForge(mode: Status, f: number) {
+  // A squat horned anvil on a bark-covered stump; a free hand hammer strikes the bloom.
+  const p = pose(mode, f);
+  const headY = [10, 20, 31, 20][p];
+  oval("#42382d", 37, 69, 27, 4);
+  polygon("#805535", [[22, 48], [49, 48], [51, 63], [56, 71], [18, 71], [21, 62]]);
+  polygon("#b18350", [[22, 49], [28, 50], [27, 65], [23, 70], [19, 70]]);
+  polygon("#513a29", [[44, 50], [49, 48], [51, 63], [56, 71], [45, 71]]);
+  line("#513a29", 3, 33, 55, 31, 69);
+  line("#c0935e", 2, 38, 54, 39, 66);
+  oval("#c49b68", 35, 49, 15, 4);
+  oval("#805b39", 35, 49, 8, 2);
+  polygon("#718593", [[9, 41], [22, 36], [53, 36], [53, 42], [43, 45], [41, 49], [47, 52], [25, 52], [30, 48], [29, 44], [20, 44]]);
+  line("#cbd9df", 3, 12, 40, 24, 38);
+  rect("#cbd9df", 24, 36, 29, 3);
+  polygon("#3e505c", [[43, 42], [53, 40], [53, 42], [43, 45], [41, 49], [47, 52], [38, 52]]);
+  polygon(mode === "run" ? "#f39b45" : "#895c40", [[30, 35], [32, 31], [39, 30], [44, 33], [43, 36], [32, 37]]);
+  line(mode === "run" ? "#ffe1a0" : "#b18b63", 2, 33, 32, 39, 32);
+  line("#b58a57", 4, 39, headY + 3, 61, 29);
+  rect("#667985", 29, headY, 17, 7);
+  rect("#ced9de", 29, headY, 17, 2);
+  rect("#394c58", 42, headY + 2, 4, 5);
+  if (mode === "run" && p === 2) {
+    line("#ffd181", 2, 26, 32, 20, 27);
+    line("#ffd181", 2, 48, 32, 55, 26);
+    rect("#ffe4a7", 22, 23, 3, 3);
+  }
+  blocked(mode);
+}
+
 /** A plain crate, for any machine without a scene of its own yet. */
 function crate(mode: Status) {
   rect("#6b4a33", 14, 24, 46, 46);
@@ -641,6 +761,10 @@ function crate(mode: Status) {
 }
 
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
+  workbench,
+  open_kiln: openKiln,
+  bloomery,
+  hand_forge: handForge,
   construction_bench: constructionBench,
   belt_drive: beltDrive,
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),

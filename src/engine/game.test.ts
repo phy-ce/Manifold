@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BELT_DRIVE, CONSTRUCTION, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
+import { BELT_DRIVE, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
 import {
-  GameState, GameNode, lineLayer, bagCount, beltNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, GameNode, lineLayer, bagCount, beltNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
   placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -26,6 +26,16 @@ const arrive = (s: GameState) => {
 const age = (s: GameState, seconds: number) => {
   for (let i = 0; i < seconds * 10; i += 1) step(s);
 };
+/**
+ * Most tests are about S1-1 and later, so they start a game already past S0: the construction bench
+ * is made and stands beside the workbench. Tests about S0 itself use newGame.
+ */
+const createGame = (seed: number): GameState => {
+  const s = newGame(seed);
+  s.stage = 1;
+  placeMachine(s, CONSTRUCTION, 300, 40);
+  return s;
+};
 const warehouse = (s: GameState) => s.nodes.find((n) => n.type === WAREHOUSE)!;
 /** Gives a node a fully wound motor, for tests that aren't about power. */
 /**
@@ -43,7 +53,7 @@ const power = (s: GameState, id: number) => {
     return;
   }
   const stage = s.stage;
-  s.stage = Math.max(1, stage);
+  s.stage = Math.max(2, stage);
   const engine = placeMachine(s, "steam_engine", 0, 0)!;
   s.stage = stage;
   Object.assign(engine, { fuel: { id: "An", n: 99999 }, energy: STEAM_MAX });
@@ -629,18 +639,18 @@ describe("item index", () => {
 
   it("makes every metal's plate on both hammers, the steam hammer with the better yield", () => {
     for (const metal of ["iron", "copper"]) {
-      const ways = recipesFor(`${metal}_plate`, 1);
+      const ways = recipesFor(`${metal}_plate`, 2);
       expect(ways.find((r) => r.machine === "plate_hammer")).toMatchObject({ in: { [metal]: 2 }, out: { [`${metal}_plate`]: 1 } });
       expect(ways.find((r) => r.machine === "steam_hammer")).toMatchObject({ in: { [metal]: 3 }, out: { [`${metal}_plate`]: 2 } });
     }
     // Steel plate only shows once steel can be made.
-    expect(recipesFor("steel_plate", 1)).toEqual([]);
-    expect(recipesFor("steel_plate", 2).map((r) => r.machine)).toEqual(expect.arrayContaining(["plate_hammer", "steam_hammer"]));
+    expect(recipesFor("steel_plate", 2)).toEqual([]);
+    expect(recipesFor("steel_plate", 3).map((r) => r.machine)).toEqual(expect.arrayContaining(["plate_hammer", "steam_hammer"]));
   });
 
   it("smelts oxide copper ore simply, and sulfide copper ore poorly unless through the blast furnace and converter", () => {
     const s = createGame(3);
-    s.stage = 2;
+    s.stage = 3;
     const run = (type: string, inputs: [string, number][]) => {
       const node = placeMachine(s, type, 0, 0)!;
       const slots = nodeProcess(node).slots;
@@ -662,7 +672,7 @@ describe("item index", () => {
   });
 
   it("lists current items and hides later tiers", () => {
-    const items = indexItems();
+    const items = indexItems(1);
     for (const id of ["Lm", "Lg", "Kn", "Ml", "Be", "iron", "copper_plate", "iron_cylinder", "steam_engine_unit", "Bc"]) {
       expect(items).toContain(id);
     }
@@ -675,14 +685,16 @@ describe("item index", () => {
   });
 
   it("shows how an item is made", () => {
-    expect(ids(recipesFor("iron"))).toEqual(["iron_bloom"]);
-    expect(ids(recipesFor("copper_tube"))).toEqual(["tube_copper"]);
+    // By hand in S0, and on the smelter from S1-1.
+    expect(ids(recipesFor("iron"))).toEqual(["forge_iron"]);
+    expect(ids(recipesFor("iron", 1))).toEqual(expect.arrayContaining(["forge_iron", "iron_bloom"]));
+    expect(ids(recipesFor("copper_tube", 1))).toEqual(["tube_copper"]);
   });
 
   it("shows what an item is used for, through its ore family too", () => {
-    expect(ids(usesOf("iron"))).toEqual(expect.arrayContaining(["plate_iron", "tube_iron", "cylinder_iron"]));
+    expect(ids(usesOf("iron", 1))).toEqual(expect.arrayContaining(["plate_iron", "tube_iron", "cylinder_iron"]));
     // Coal burns as fuel, which isn't a recipe; as a material it goes into coke.
-    expect(ids(usesOf("Lg", 2))).toEqual(expect.arrayContaining(["coke"]));
+    expect(ids(usesOf("Lg", 3))).toEqual(expect.arrayContaining(["coke"]));
     expect(usesOf("slag")).toEqual([]);
   });
 
@@ -700,8 +712,8 @@ describe("item index", () => {
   });
 
   it("shows which buildings need an item", () => {
-    expect(buildUses("iron_rivet").map(([type]) => type)).toContain("warehouse");
-    expect(buildUses("Kn").map(([type]) => type)).toContain("brick_kiln");
+    expect(buildUses("iron_rivet", 1).map(([type]) => type)).toContain("warehouse");
+    expect(buildUses("Kn", 1).map(([type]) => type)).toContain("brick_kiln");
   });
 
   it("says where raw items come from", () => {
@@ -1014,7 +1026,7 @@ describe("spring power", () => {
 
   it("runs a belt drive but can't drive a machine: a spring is too weak a tier for a hammer", () => {
     const { s, furnace, store } = setup();
-    s.stage = 1;
+    s.stage = 2;
     const { motor } = driven(s, store, SPRING_MAX);
     const hammer = placeMachine(s, "steam_hammer", 0, 0)!;
     hammer.module = true;
@@ -1099,6 +1111,20 @@ describe("test preset", () => {
     run(s, 3);
     expect(beltNetOf(smelter.id)).toMatchObject({ running: 1, belts: 3 });
     expect(Object.values(smelter.ins).some((slot) => slot) || !!smelter.fuel).toBe(true);
+  });
+
+  it("runs a belt drive and a piping riverbank pump off one spring motor", () => {
+    // 2 for the drive and 3 for the pump fill the motor's 5: the pump's water carries free.
+    const s = createTestGame(1);
+    const motor = s.nodes.find((n) => n.type === MOTOR)!;
+    const drive = s.nodes.find((n) => n.type === BELT_DRIVE)!;
+    const pump = placeMachine(s, PUMP, 0, 0)!;
+    const engine = placeMachine(s, "steam_engine", 0, 0)!;
+    expect(toggleRoute(s, motor.id, pump.id, POWER)).toBe(true);
+    expect(toggleRoute(s, pump.id, engine.id, "main")).toBe(true);
+    run(s, 1);
+    expect(drive.speed).toBe(1);
+    expect(pump.carry).toBe(true);
   });
 
   it("carries line materials for every layer in the bag", () => {
@@ -1578,7 +1604,7 @@ describe("steam power", () => {
   it("opens new machines only at the steam stage", () => {
     const s = createGame(1);
     expect(placeMachine(s, "steam_hammer", 0, 0)).toBeNull();
-    s.stage = 1;
+    s.stage = 2;
     expect(placeMachine(s, "steam_hammer", 0, 0)).toBeTruthy();
   });
 
@@ -1652,7 +1678,7 @@ describe("steam power", () => {
 
   it("pools engines through a manifold", () => {
     const s = steamStage();
-    s.stage = 2;
+    s.stage = 3;
     const engines = [engineAt(s), engineAt(s)];
     const manifold = placeMachine(s, "steam_manifold", 0, 0)!;
     for (const engine of engines) connect(s, engine.id, manifold.id, POWER);
@@ -1883,7 +1909,7 @@ describe("riverbanks", () => {
 });
 
 describe("filling a machine from the index", () => {
-  const kilnRecipe = () => recipesFor("brick")[0];
+  const kilnRecipe = () => recipesFor("brick", 1).find((r) => r.machine === "brick_kiln")!;
   const setup = () => {
     const s = createGame(1);
     return { s, kiln: placeMachine(s, "brick_kiln", 0, 0)! };
@@ -1929,8 +1955,8 @@ describe("filling a machine from the index", () => {
   it("only offers recipes the machine is set to", () => {
     const s = createGame(1);
     const bench = placeMachine(s, "forming_bench", 0, 0)!;
-    const tube = recipesFor("iron_tube")[0];
-    const cylinder = recipesFor("iron_cylinder")[0];
+    const tube = recipesFor("iron_tube", 1)[0];
+    const cylinder = recipesFor("iron_cylinder", 1)[0];
     setForm(s, bench.id, "tube");
     expect(runsRecipe(bench, tube)).toBe(true);
     expect(runsRecipe(bench, cylinder)).toBe(false);
@@ -2074,8 +2100,8 @@ describe("blueprints", () => {
     const copies = copyToGhosts(s, [motor.id, kiln.id], 50, 60);
     expect(copies.map((g) => [g.type, g.x, g.y])).toEqual([[MOTOR, 60, 70], [BELT_DRIVE, 150, 70]]);
     expect(s.ghostLines).toEqual([{ from: copies[0].id, to: copies[1].id, material: POWER }]);
-    // The warehouse and construction bench every game starts with, and the two copied.
-    expect(s.nodes).toHaveLength(4);
+    // The warehouse and workbench every game starts with, the construction bench made in S0, and the two copied.
+    expect(s.nodes).toHaveLength(5);
     run(s, 2);
     expect(s.lines).toHaveLength(1);
   });
@@ -2445,18 +2471,18 @@ describe("S1-3", () => {
   it("adds limestone veins when the stage opens", () => {
     const s = createGame(1);
     expect(s.sites.some((v) => v.ore === "Ls")).toBe(false);
-    s.stage = 1;
+    s.stage = 2;
     s.made.iron_plate = 119;
     const hammer = (() => {
-      s.stage = 0;
-      const h = placeMachine(s, "plate_hammer", 0, 0)!;
       s.stage = 1;
+      const h = placeMachine(s, "plate_hammer", 0, 0)!;
+      s.stage = 2;
       return h;
     })();
     hammer.ins.iron = { id: "iron", n: 2 };
     power(s, hammer.id);
     run(s, 6);
-    expect(s.stage).toBe(2);
+    expect(s.stage).toBe(3);
     expect(s.sites.filter((v) => v.ore === "Ls").length).toBeGreaterThan(0);
   });
 
@@ -2813,7 +2839,7 @@ describe("stage goals", () => {
   it("counts what is made and leaves it in place", () => {
     const s = createGame(1);
     const hammer = placeMachine(s, "plate_hammer", 0, 0)!;
-    s.stage = 1;
+    s.stage = 2;
     s.made.iron_plate = 119;
     hammer.ins.iron = { id: "iron", n: 4 };
     power(s, hammer.id);
@@ -2824,11 +2850,105 @@ describe("stage goals", () => {
 
   it("carries an old save over without losing progress", () => {
     const s = createGame(1) as GameState & { delivered?: number; won?: boolean };
-    Object.assign(s, { stage: undefined, made: undefined, announced: undefined, delivered: 1, won: true });
+    Object.assign(s, { stage: undefined, made: undefined, announced: undefined, delivered: 1, won: true, version: 16 });
     upgradeSave(s);
-    expect(s.stage).toBe(1);
+    expect(s.stage).toBe(2);
     expect(s.made.steam_engine_unit).toBe(1);
     expect(s.sites.some((site) => site.ore === "water")).toBe(true);
+  });
+});
+
+describe("S0 hand work", () => {
+  /** Makes a machine on a bench as a player does: picks it, loads its cost from the bag, works it and takes it. */
+  const build = (s: GameState, benchId: number, type: string): boolean => {
+    const bench = nodeById(s, benchId)!;
+    setForm(s, benchId, type);
+    fillFromBag(s, benchId, recipeOf(bench), 1);
+    press(s, benchId, recipeOf(bench).time);
+    return takeOutput(s, benchId, type);
+  };
+
+  it("starts on a workbench in S0, with nothing from S1-1 open yet", () => {
+    const s = newGame(1);
+    expect(STAGES[0].id).toBe("S0");
+    expect(s.stage).toBe(0);
+    expect(s.nodes.map((n) => n.type)).toEqual([WAREHOUSE, WORKBENCH]);
+    expect(placeMachine(s, "smelter", 0, 0)).toBeNull();
+    expect(placeMachine(s, "bloomery", 0, 0)).toBeTruthy();
+  });
+
+  it("makes S0's machines on the workbench, and everything after on the construction bench", () => {
+    for (const type of ["open_kiln", "bloomery", "hand_forge", CONSTRUCTION]) expect(recipesFor(type)[0].machine).toBe(WORKBENCH);
+    expect(recipesFor("smelter", 1)[0].machine).toBe(CONSTRUCTION);
+    // The workbench can't make what isn't open yet.
+    const s = newGame(1);
+    const bench = s.nodes.find((n) => n.type === WORKBENCH)!;
+    expect(machineForms(WORKBENCH)).not.toContain("smelter");
+    expect(setForm(s, bench.id, "bloomery")).toBe(true);
+  });
+
+  it("goes from clay and ore to a construction bench by hand, which finishes S0", () => {
+    const s = newGame(1);
+    const workbench = s.nodes.find((n) => n.type === WORKBENCH)!.id;
+    s.inv[0] = { id: "Kn", n: 12 };
+    expect(build(s, workbench, "open_kiln")).toBe(true);
+
+    // Bricks for the bloomery, the forge and the bench, fired slowly in the open.
+    const kiln = placeMachine(s, "open_kiln", 0, 0)!;
+    for (let i = 0; i < 600 && bagCount(s, "brick") < 18; i += 1) {
+      if (!kiln.ins.clay) kiln.ins.clay = { id: "Kn", n: 16 };
+      if (!kiln.fuel) kiln.fuel = { id: "Lg", n: 8 };
+      run(s, 1);
+      takeOutput(s, kiln.id, "brick");
+    }
+    expect(bagCount(s, "brick")).toBeGreaterThanOrEqual(18);
+    addTo(s.inv, "Kn", 10);
+    expect(build(s, workbench, "bloomery")).toBe(true);
+
+    // The bloomery burns fuel and is worked by the bellows: six blooms, two for the forge and four for iron.
+    const bloomery = placeMachine(s, "bloomery", 0, 0)!;
+    for (let i = 0; i < 600 && bagCount(s, "bloom") < 6; i += 1) {
+      if (!bloomery.ins.iron_ore) bloomery.ins.iron_ore = { id: "Lm", n: 15 };
+      if (!bloomery.fuel) bloomery.fuel = { id: "Lg", n: 8 };
+      run(s, 1);
+      press(s, bloomery.id, 1);
+      takeOutput(s, bloomery.id, "bloom");
+      takeOutput(s, bloomery.id, "slag");
+    }
+    expect(bagCount(s, "bloom")).toBeGreaterThanOrEqual(6);
+    expect(build(s, workbench, "hand_forge")).toBe(true);
+
+    // The forge hammers blooms into iron by hand.
+    const forge = placeMachine(s, "hand_forge", 0, 0)!;
+    forge.ins.bloom = { id: "bloom", n: 4 };
+    for (let i = 0; i < 100 && bagCount(s, "iron") < 4; i += 1) {
+      press(s, forge.id, 1);
+      takeOutput(s, forge.id, "iron");
+    }
+    expect(bagCount(s, "iron")).toBe(4);
+
+    expect(build(s, workbench, CONSTRUCTION)).toBe(true);
+    run(s, 1);
+    expect(s.announced).toBe("S0");
+    expect(s.stage).toBe(1);
+    expect(placeMachine(s, "smelter", 0, 0)).toBeTruthy();
+    console.log(`S0 finished at ${Math.round(s.time / 1000)}s of game time`);
+  });
+
+  it("moves an older save one stage on, and gives it a workbench", () => {
+    const s = createGame(1);
+    s.nodes = s.nodes.filter((n) => n.type !== WORKBENCH);
+    Object.assign(s, { version: 16, stage: 0 });
+    upgradeSave(s);
+    expect(s.stage).toBe(1);
+    expect(s.nodes.filter((n) => n.type === WORKBENCH)).toHaveLength(1);
+    expect(s.nodes.filter((n) => n.type === CONSTRUCTION)).toHaveLength(1);
+  });
+
+  it("keeps the last workbench, like the last construction bench", () => {
+    const s = newGame(1);
+    const bench = s.nodes.find((n) => n.type === WORKBENCH)!;
+    expect(removeNode(s, bench.id)).toBe(false);
   });
 });
 
@@ -2884,7 +3004,7 @@ describe("S1-1 playthrough", () => {
     expect(bench.outs.steam_engine_unit).toBeGreaterThanOrEqual(1);
 
     expect(s.announced).toBe("S1-1");
-    expect(s.stage).toBe(1);
+    expect(s.stage).toBe(2);
     expect(takeOutput(s, engine, "steam_engine_unit")).toBe(true);
     expect(s.inv.some((slot) => slot?.id === "steam_engine_unit")).toBe(true);
     console.log(`S1-1 line finished at ${Math.round(s.time / 1000)}s of game time`);

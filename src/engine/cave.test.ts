@@ -39,7 +39,7 @@ describe("ore layers", () => {
     expect(layer1).not.toContain("Mt");
     // Limestone opens with its stage, in caves as on the surface.
     expect(layer1).not.toContain("Ls");
-    expect(layerOres(1, 2)).toContain("Ls");
+    expect(layerOres(1, 3)).toContain("Ls");
   });
 
   it("smelts cave ores like their surface cousins, by family", () => {

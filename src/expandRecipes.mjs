@@ -4,6 +4,10 @@
 
 /** The machine that makes machines. */
 export const CONSTRUCTION = "construction_bench";
+/** The hand-work bench the game starts with. It makes the first stage's machines, the construction bench among them. */
+export const WORKBENCH = "workbench";
+/** Machines whose forms are other machines. */
+export const BUILDERS = [WORKBENCH, CONSTRUCTION];
 
 export function expandRecipes(era, materials) {
   const items = { ...era.items };
@@ -36,13 +40,15 @@ export function expandRecipes(era, materials) {
     }
   }
 
-  // Every machine is made on the construction bench: its cost goes in, the machine item comes out.
-  // The machine to make is the bench's form, picked like a shape on the forming bench.
+  // Every machine is made on a bench: its cost goes in, the machine item comes out. The machine to
+  // make is the bench's form, picked like a shape on the forming bench. The first stage's machines
+  // are made by hand on the workbench, and everything after on the construction bench.
+  const firstStage = era.milestones[0].unlockMachines;
   const builds = Object.entries(era.machines)
     .filter(([, machine]) => machine.cost)
     .map(([type, machine]) => ({
       id: `build_${type}`,
-      machine: CONSTRUCTION,
+      machine: firstStage.includes(type) ? WORKBENCH : CONSTRUCTION,
       form: type,
       time: machine.work ?? 10,
       in: { ...machine.cost },

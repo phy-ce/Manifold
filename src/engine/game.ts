@@ -1,9 +1,9 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { BELT_DRIVE, CONSTRUCTION, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { BELT_DRIVE, CONSTRUCTION, WORKBENCH, isBuilder, stageOpening, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
 
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 /** Saves older than this are not converted: fuel and power networks changed too much. */
 export const OLDEST_SAVE = 16;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
@@ -264,7 +264,7 @@ export function createGame(seed: number): GameState {
   };
   state.nodes.push(newWarehouse(state, 40, 200));
   // Every machine is made here, so the game starts with one already standing.
-  placeMachine(state, CONSTRUCTION, 40, 40);
+  placeMachine(state, WORKBENCH, 40, 40);
   addNearCave(state);
   reveal(state, BASE, BASE_REVEAL);
   return state;
@@ -815,7 +815,7 @@ export function setForm(s: GameState, nodeId: number, form: string): boolean {
   const node = nodeById(s, nodeId);
   if (!atBase(s) || !node || node.form === form || !machineForms(node.type).includes(form)) return false;
   // The construction bench can only make what the stage has opened.
-  if (node.type === CONSTRUCTION && !machinesAt(s.stage).includes(form)) return false;
+  if (isBuilder(node.type) && !machinesAt(s.stage).includes(form)) return false;
   const inputs = Object.values(node.ins).filter((stack) => stack !== null);
   const returned: Stack[] = Object.entries(node.outs).filter(([, n]) => n).map(([id, n]) => ({ id, n }));
   node.form = form;
@@ -1070,12 +1070,15 @@ export function upgradeSave(s: GameState): GameState {
   // Goals used to be handed in. Count what was handed in or still exists as made.
   const old = s as GameState & { delivered?: number; won?: boolean };
   if (s.stage === undefined) {
-    const { item } = STAGES[0].goal;
+    // What was then the first stage, S1-1.
+    const { item } = STAGES[1].goal;
     s.stage = old.won ? 1 : 0;
     s.made = { [item]: (old.delivered ?? 0) + countOf(s, item) };
     s.announced = null;
   }
-  if (s.stage >= 1) addRivers(s);
+  // S0 came in before S1-1 with save version 17, so an older save is one stage further on.
+  if (s.version < 17) s.stage += 1;
+  if (s.stage >= stageOpening(WATER)) addRivers(s);
   addLaterVeins(s);
   // Caves came with save version 15. Prospecting under way is not kept across a load.
   s.cave ??= null;
@@ -1085,13 +1088,14 @@ export function upgradeSave(s: GameState): GameState {
   s.shots ??= [];
   if (!s.sites.some((site) => site.ore === CAVE)) addNearCave(s);
   // Machines used to be built from the top list, one at a time. A build in progress gives its materials back,
-  // and a game with no construction bench gets one.
+  // and a game past S0 with no construction bench gets one. Every game keeps a workbench.
   const building = s as GameState & { project?: Project | null };
   if (building.project) refund(s, building.project.paid);
   delete building.project;
-  if (!s.nodes.some((n) => n.type === CONSTRUCTION)) {
+  for (const bench of s.stage >= 1 ? [WORKBENCH, CONSTRUCTION] : [WORKBENCH]) {
+    if (s.nodes.some((n) => n.type === bench)) continue;
     const spot = nextSpot(s);
-    addNode(s, CONSTRUCTION, spot.x, spot.y);
+    addNode(s, bench, spot.x, spot.y);
   }
   // The stove merged into the brick kiln.
   for (const node of s.nodes) {
@@ -1107,9 +1111,9 @@ export function upgradeSave(s: GameState): GameState {
 
 /** The first warehouse always stays, and a built one must be emptied before demolition. */
 export const isFirstWarehouse = (s: GameState, node: GameNode): boolean => s.nodes.find((n) => n.type === WAREHOUSE) === node;
-/** The last construction bench stays too: without one, no machine could ever be made again. */
+/** The last workbench and construction bench stay too: without them, some machines could never be made again. */
 const isLastBench = (s: GameState, node: GameNode): boolean =>
-  node.type === CONSTRUCTION && s.nodes.filter((n) => n.type === CONSTRUCTION).length === 1;
+  isBuilder(node.type) && s.nodes.filter((n) => n.type === node.type).length === 1;
 export const canRemove = (s: GameState, node: GameNode): boolean =>
   !isFirstWarehouse(s, node) && !isLastBench(s, node) && node.store.every((slot) => !slot);
 
@@ -1529,7 +1533,8 @@ const networks = new Map<number, PowerNet>();
 function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
   networks.clear();
   // Fluids are pushed by their sender's power. Belts move on a belt drive's, so their senders reserve none.
-  const senders = new Set(s.lines.filter((l) => lineLayer(s, l.from, l.material) === "fluid").map((l) => l.from));
+  // A riverbank pump pushes its own water: its rated power already covers it.
+  const senders = new Set(s.lines.filter((l) => lineLayer(s, l.from, l.material) === "fluid" && nodeById(s, l.from)?.type !== PUMP).map((l) => l.from));
   // A node's place in the queue is when its first power line was laid.
   const laid = new Map<number, number>();
   for (const line of s.lines) {
@@ -1758,9 +1763,10 @@ function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>, drives:
   line.active = false;
   const moved = isStore(from.type) ? sendStored(from, to) : sendOutput(from, to, line);
   if (!moved) return;
-  // Each item piped costs 1 force from a source that still has some. A belt drive pays as it runs.
+  // Each item piped costs 1 force from a source that still has some. A belt drive pays as it runs,
+  // and a riverbank pump's water comes free.
   const motor = drives.get(line.from)?.find((m) => m.energy > 0);
-  if (!belt && motor) motor.energy = Math.max(0, motor.energy - 1);
+  if (!belt && motor && from.type !== PUMP) motor.energy = Math.max(0, motor.energy - 1);
   line.active = true;
   line.lastMoved = s.time;
 }
@@ -1804,7 +1810,7 @@ function walk(s: GameState): void {
     return;
   }
   reveal(s, s.player, visionAt(s, s.player));
-  if (s.stage >= 1) nameRivers(s);
+  if (s.stage >= stageOpening(WATER)) nameRivers(s);
   // New ground can show a hazard on the way, so the safe route is worked out again.
   const target = s.path.at(-1);
   if (s.safeWalk && target && s.path.some((cell) => knownDamage(s, cell.x, cell.y) > 0)) s.path = routeTo(s, target);
@@ -2062,10 +2068,11 @@ export function createTestGame(seed: number): GameState {
   const raw: [string, number][] = [
     ["Lm", 64], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Kn", 64], ["Lg", 64], ["Bt", 64], ["coke", 64], ["iron", 64], ["copper", 64], ["steel", 32], ["brick", 64],
   ];
-  // Building parts: enough for a few of each S1-1 to S1-3 machine, and the steam engine's pieces.
+  // Building parts: enough for a few of each S0 to S1-3 machine, and the steam engine's pieces.
   const parts: [string, number][] = [
     ["iron_plate", 64], ["copper_tube", 64], ["iron_rod", 64], ["iron_rivet", 64], ["iron_gear", 32], ["iron_spring", 16],
     ["iron_cylinder", 16], ["iron_fan", 4], ["iron_drum", 4], ["boiler", 4], ["steam_engine_unit", 4], ["steam_module", 4],
+    ["bloom", 8],
   ];
   // Line materials, one layer each: belts for items, tubes for fluids, rods for power.
   // They weigh 2 each, so the bag stays under its limit and the player can still walk.
@@ -2094,6 +2101,11 @@ export function createTestGame(seed: number): GameState {
   addLaterVeins(s);
   for (const bank of riverBanks(seed)) reveal(s, bank, REVEAL);
   nameRivers(s);
+  // The workbench moves aside for a construction bench, which makes everything from S1-1 on.
+  const workbench = s.nodes.find((n) => n.type === WORKBENCH)!;
+  workbench.x = 780;
+  workbench.y = 40;
+  placeMachine(s, CONSTRUCTION, 40, 40);
   const motor = placeMachine(s, MOTOR, 300, 40)!;
   motor.energy = SPRING_MAX;
   const smelter = placeMachine(s, "smelter", 300, 200)!;
