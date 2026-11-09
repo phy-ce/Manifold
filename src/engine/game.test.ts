@@ -325,7 +325,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "fan", "boots", "pack", "pick"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "fan", "boots", "pack", "pick"]);
   });
 
   it("makes the chosen form from whichever metal goes in", () => {
@@ -531,9 +531,12 @@ describe("labels and lines", () => {
 });
 
 describe("warehouses", () => {
-  const withIron = (n: number) => {
+  /** The parts a warehouse costs, short by one plate when asked. */
+  const withParts = (short = false) => {
     const s = createGame(1);
-    s.inv[0] = { id: "iron", n };
+    s.inv[0] = { id: "iron_plate", n: short ? 5 : 6 };
+    s.inv[1] = { id: "iron_rod", n: 4 };
+    s.inv[2] = { id: "iron_rivet", n: 8 };
     return s;
   };
   const buildWarehouse = (s: GameState) => {
@@ -543,24 +546,24 @@ describe("warehouses", () => {
   };
 
   it("costs metal to build", () => {
-    expect(startProject(withIron(9), WAREHOUSE)).toBe(false);
-    const s = withIron(10);
+    expect(startProject(withParts(true), WAREHOUSE)).toBe(false);
+    const s = withParts();
     buildWarehouse(s);
-    expect(s.inv[0]).toBeNull();
+    expect(s.inv.slice(0, 3)).toEqual([null, null, null]);
   });
 
   it("counts and spends what every warehouse holds", () => {
-    const s = withIron(10);
+    const s = withParts();
     const extra = buildWarehouse(s);
-    extra.store[0] = { id: "Kn", n: 6 };
-    warehouse(s).store[0] = { id: "Kn", n: 4 };
-    expect(countOf(s, "clay")).toBe(10);
+    extra.store[0] = { id: "Kn", n: 12 };
+    warehouse(s).store[0] = { id: "Kn", n: 8 };
+    expect(countOf(s, "clay")).toBe(20);
     expect(startProject(s, "brick_kiln")).toBe(true);
     expect(countOf(s, "clay")).toBe(0);
   });
 
   it("overflows into the next warehouse", () => {
-    const s = withIron(10);
+    const s = withParts();
     const extra = buildWarehouse(s);
     warehouse(s).store.fill({ id: "Lm", n: 64 });
     const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
@@ -570,7 +573,7 @@ describe("warehouses", () => {
   });
 
   it("keeps the first warehouse and needs a built one emptied before demolition", () => {
-    const s = withIron(10);
+    const s = withParts();
     const extra = buildWarehouse(s);
     expect(removeNode(s, warehouse(s).id)).toBe(false);
     extra.store[0] = { id: "Kn", n: 1 };
@@ -581,7 +584,7 @@ describe("warehouses", () => {
   });
 
   it("moves goods between lines into a built warehouse", () => {
-    const s = withIron(10);
+    const s = withParts();
     const extra = buildWarehouse(s);
     const yard = placeMachine(s, "smelter", 0, 0)!;
     yard.outs.iron = 2;
@@ -664,7 +667,7 @@ describe("item index", () => {
   });
 
   it("shows which buildings need an item", () => {
-    expect(buildUses("iron").map(([type]) => type)).toContain("warehouse");
+    expect(buildUses("iron_rivet").map(([type]) => type)).toContain("warehouse");
     expect(buildUses("Kn").map(([type]) => type)).toContain("brick_kiln");
   });
 
@@ -1090,6 +1093,7 @@ describe("work and failure", () => {
     bench.ins.iron_plate = { id: "iron_plate", n: 12 };
     bench.ins.brick = { id: "brick", n: 16 };
     bench.ins.copper_tube = { id: "copper_tube", n: 8 };
+    bench.ins.iron_rivet = { id: "iron_rivet", n: 32 };
     for (let i = 0; i < 3; i += 1) failWork(s, bench.id);
     expect(bench.ins.iron_plate!.n).toBe(12);
     failWork(s, bench.id);
@@ -1318,14 +1322,14 @@ describe("building", () => {
   };
 
   it("refuses to start without the materials", () => {
-    const s = withClay(9);
+    const s = withClay(19);
     expect(canAfford(s, "brick_kiln")).toBe(false);
     expect(startProject(s, "brick_kiln")).toBe(false);
-    expect(s.inv[0]).toEqual({ id: "Kn", n: 9 });
+    expect(s.inv[0]).toEqual({ id: "Kn", n: 19 });
   });
 
   it("pays on start and gives a machine item when the work is done", () => {
-    const s = withClay(12);
+    const s = withClay(22);
     expect(startProject(s, "brick_kiln")).toBe(true);
     expect(s.inv[0]).toEqual({ id: "Kn", n: 2 });
     for (let i = 0; i < 19; i += 1) workProject(s);
@@ -1355,7 +1359,7 @@ describe("building", () => {
   });
 
   it("keeps a machine item in storage for later", () => {
-    const s = withClay(10);
+    const s = withClay(20);
     startProject(s, "brick_kiln");
     for (let i = 0; i < 20; i += 1) workProject(s);
     const index = s.inv.findIndex((slot) => slot?.id === "brick_kiln");
@@ -1373,13 +1377,13 @@ describe("building", () => {
   });
 
   it("runs one project at a time", () => {
-    const s = withClay(30);
+    const s = withClay(50);
     expect(startProject(s, "brick_kiln")).toBe(true);
     expect(startProject(s, "brick_kiln")).toBe(false);
   });
 
   it("needs the player at the base to work", () => {
-    const s = withClay(10);
+    const s = withClay(20);
     startProject(s, "brick_kiln");
     walkTo(s, s.sites[0]);
     arrive(s);
@@ -1387,10 +1391,10 @@ describe("building", () => {
   });
 
   it("refunds a cancelled project, and a removed machine comes back as an item", () => {
-    const s = withClay(10);
+    const s = withClay(20);
     startProject(s, "brick_kiln");
     cancelProject(s);
-    expect(countOf(s, "clay")).toBe(10);
+    expect(countOf(s, "clay")).toBe(20);
     startProject(s, "brick_kiln");
     for (let i = 0; i < 20; i += 1) workProject(s);
     const kiln = installMachine(s, "brick_kiln", 0, 0)!;
@@ -1410,8 +1414,8 @@ describe("building", () => {
   });
 
   it("spends from the warehouse too", () => {
-    const s = withClay(4);
-    warehouse(s).store[0] = { id: "Kn", n: 6 };
+    const s = withClay(8);
+    warehouse(s).store[0] = { id: "Kn", n: 12 };
     expect(startProject(s, "brick_kiln")).toBe(true);
     expect(countOf(s, "clay")).toBe(0);
   });
@@ -2327,6 +2331,26 @@ describe("S1-3", () => {
     expect(bench.outs.iron_fan).toBe(1);
   });
 
+  it("forms rods, rivets, gears and springs from any metal on the bench", () => {
+    const parts: [string, number, number][] = [["rod", 1, 2], ["rivet", 1, 4], ["gear", 2, 1], ["spring", 2, 1]];
+    for (const [form, n, out] of parts) {
+      for (const metal of ["iron", "copper", "steel"]) {
+        const s = createGame(1);
+        const bench = placeMachine(s, "forming_bench", 0, 0)!;
+        setForm(s, bench.id, form);
+        bench.ins.iron = { id: metal, n };
+        power(s, bench.id);
+        run(s, 20);
+        expect(bench.outs[`${metal}_${form}`]).toBe(out);
+      }
+    }
+  });
+
+  it("builds S1-4 and later from steel gears", () => {
+    expect(machineCost("coil_winder").steel_gear).toBe(4);
+    expect(machineCost("generator_bench").steel_gear).toBe(10);
+  });
+
   const tarLine = () => {
     const { s, motor } = stage3();
     const oven = placeMachine(s, "coke_oven", 0, 0)!;
@@ -2648,17 +2672,18 @@ describe("stage goals", () => {
 describe("S1-1 playthrough", () => {
   it("builds a steam engine from nothing but clicks and lines", () => {
     const s = createGame(2026);
-    gather(s, "iron_ore", 100);
-    gather(s, "coal", 80);
+    gather(s, "iron_ore", 160);
+    gather(s, "coal", 120);
     gather(s, "clay", 16);
     gather(s, "copper_ore", 16);
 
     const add = (type: string) => placeMachine(s, type, 0, 0)!.id;
     const store = warehouse(s).id;
-    const [bloom, smelter, kiln, hammer, cast, tube, boiler, engine, yard, ores] = [
-      "smelter", "smelter", "brick_kiln", "plate_hammer", "forming_bench", "forming_bench", "boiler_bench", "engine_bench", WAREHOUSE, WAREHOUSE,
+    const [bloom, smelter, kiln, hammer, cast, tube, rivet, boiler, engine, yard, ores] = [
+      "smelter", "smelter", "brick_kiln", "plate_hammer", "forming_bench", "forming_bench", "forming_bench", "boiler_bench", "engine_bench", WAREHOUSE, WAREHOUSE,
     ].map(add);
     expect(setForm(s, cast, "cylinder")).toBe(true);
+    expect(setForm(s, rivet, "rivet")).toBe(true);
     // No filters yet, so copper ore needs a warehouse of its own.
     const main = warehouse(s).store;
     const copperStore = nodeById(s, ores)!.store;
@@ -2673,12 +2698,12 @@ describe("S1-1 playthrough", () => {
 
     const wires: [number, number, string][] = [
       [store, bloom, "all"], [ores, smelter, "all"],
-      [bloom, yard, "byproduct"], [smelter, yard, "byproduct"], [bloom, hammer, "main"], [bloom, cast, "main"], [smelter, tube, "main"],
+      [bloom, yard, "byproduct"], [smelter, yard, "byproduct"], [bloom, hammer, "main"], [bloom, cast, "main"], [bloom, rivet, "main"], [rivet, boiler, "main"], [smelter, tube, "main"],
       [hammer, boiler, "main"], [hammer, engine, "main"], [tube, boiler, "main"], [tube, engine, "main"],
       [kiln, boiler, "main"], [cast, engine, "main"], [boiler, engine, "main"],
     ];
     for (const [from, to, material] of wires) expect(connect(s, from, to, material)).toBeTruthy();
-    for (const id of [store, ores, bloom, smelter, kiln, hammer, cast, tube, boiler]) power(s, id);
+    for (const id of [store, ores, bloom, smelter, kiln, hammer, cast, tube, rivet, boiler]) power(s, id);
     nodeById(s, kiln)!.ins.clay = { id: "Kn", n: 16 };
     nodeById(s, kiln)!.fuel = { id: "Lg", n: 8 };
 
