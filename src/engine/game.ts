@@ -1,11 +1,11 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { BELT_DRIVE, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, stageOpening, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, stageOpening, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
 
-export const SAVE_VERSION = 17;
-/** Saves older than this are not converted: fuel and power networks changed too much. */
-export const OLDEST_SAVE = 16;
+export const SAVE_VERSION = 18;
+/** Saves older than this are not converted: the boiler took the fire out of the steam engine (version 18). */
+export const OLDEST_SAVE = 18;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
 export const SPRING_MAX = 200;
 export const WIND = 5;
@@ -59,28 +59,34 @@ export const TUBE = "tube";
 export const BELT = "belt";
 const LINE_COST: Record<LineLayer, Record<string, number>> = { item: { [BELT]: 1 }, fluid: { [TUBE]: 1 }, power: { iron_rod: 1 } };
 /** A line material fits a cost key by its id, or by its shape when the key is a shape such as any tube. */
-const lineFits = (id: string, key: string): boolean => id === key || formOf(id) === key;
+const lineFits = (id: string, key: string): boolean => lineage(id).some((kind) => kind === key || formOf(kind) === key);
 
 /**
  * Items or litres per second one line carries, by the belt or tube it is laid with. Copper tube costs
  * more and carries twice what iron does. Better belts join here when they come.
  */
 export const LINE_RATE: Record<string, number> = { iron_belt: 2, iron_tube: 2, copper_tube: 4 };
+/** Litres of steam one litre of water makes, at the working pressure of an early boiler (about 6 bar). */
+export const STEAM_EXPANSION = 300;
+/** What one line of an item carries, its own rate or the one it inherits: a pig iron tube carries what an iron tube does. */
+export const lineRateOf = (id: string): number | undefined => lineage(id).map((kind) => LINE_RATE[kind]).find(Boolean);
 /** The belts or tubes a layer's lines can be laid with, the plainest first. Power lines are always a rod. */
 export const lineKinds = (layer: LineLayer): string[] =>
   layer === "power" ? [] : Object.keys(LINE_RATE).filter((id) => lineFits(id, Object.keys(LINE_COST[layer])[0]));
 /** What a line is laid with. Lines from before the choice go by what they were paid with, else the plainest kind. */
 export const kindOf = (line: Line, layer: LineLayer): string | undefined =>
-  line.kind ?? line.paid.find((stack) => LINE_RATE[stack.id])?.id ?? lineKinds(layer)[0];
+  line.kind ?? line.paid.find((stack) => lineRateOf(stack.id))?.id ?? lineKinds(layer)[0];
 
 /**
  * How an item performs, as [what, how much] rows for the index's detail. Pickers show only names and
  * counts, so the numbers live here. Temperatures and the like will join these as items gain them.
  */
 export function itemStats(id: string): [string, string][] {
-  const rate = LINE_RATE[id];
+  const rate = lineRateOf(id);
   if (rate && formOf(id) === TUBE) return [[tr("관 하나가 나르는 최대 유량"), `${rate} ${tr("L/초")}`]];
   if (rate && formOf(id) === BELT) return [[tr("벨트 하나가 나르는 최대 양"), `${rate} ${tr("개/초")}`]];
+  // Inside the game a unit of steam is a litre of the water it came from; how much room it really takes is told here only.
+  if (id === "steam") return [[tr("물 1L가 끓어 되는 증기"), `${STEAM_EXPANSION}L (${tr("약 6기압")})`]];
   return [];
 }
 
@@ -235,6 +241,8 @@ export interface GameState {
   stage: number;
   /** How many of each item have ever been made. Goals check this, so nothing is handed in. */
   made: Record<string, number>;
+  /** How many of the current goal's item had been made when its stage opened. */
+  goalBase?: number;
   /** A stage just finished, until the screen has shown it. */
   announced: string | null;
 }
@@ -805,12 +813,13 @@ export const nodeProcess = (node: GameNode) => processOf(node.type, node.form);
 /** The recipe the machine's current inputs select. */
 export function recipeOf(node: GameNode): Recipe {
   const { recipes, slots } = nodeProcess(node);
-  const fits = (r: Recipe) =>
+  // The recipe for exactly what went in comes first: pig iron makes pig iron plates, though it fits iron's too.
+  const fits = (r: Recipe, inherit: boolean) =>
     Object.keys(r.in).every((ingredient, i) => {
       const stack = node.ins[slots[i].key];
-      return !stack || matches(stack.id, ingredient);
+      return !stack || matches(stack.id, ingredient, inherit);
     });
-  return recipes.find(fits) ?? recipes[0];
+  return recipes.find((r) => fits(r, false)) ?? recipes.find((r) => fits(r, true)) ?? recipes[0];
 }
 
 /** Amount of one batch for a slot. */
@@ -1549,7 +1558,8 @@ export function status(node: GameNode): Status {
   if (node.type === MOTOR) return node.energy > 0 ? "run" : "idle";
   const state = readiness(node);
   // A fire needs fuel: loaded but with nothing to burn, a machine waits.
-  if (node.type === ENGINE) return state === "ready" && hasFire(node) ? "run" : "idle";
+  // An engine burns nothing of its own: it runs whenever it has steam from a boiler.
+  if (node.type === ENGINE) return state === "ready" ? "run" : "idle";
   if (state !== "ready") return state;
   if (machineBurn(node.type) && !hasFire(node)) return "idle";
   if (node.speed) return "run";
@@ -1658,14 +1668,20 @@ function supplyPower(s: GameState, drives: Map<number, GameNode[]>): void {
   }
 }
 
+/** What counts toward the current goal: only what was made since its stage opened. */
+export const goalMade = (s: GameState): number => (s.made[STAGES[Math.min(s.stage, STAGES.length - 1)].goal.item] ?? 0) - (s.goalBase ?? 0);
+
 /** Finishes the stage once its goal item has been made. The items stay with the player. */
 function checkGoal(s: GameState): void {
   if (s.stage >= PLAYABLE_STAGES) return;
   const stage = STAGES[s.stage];
-  if ((s.made[stage.goal.item] ?? 0) < stage.goal.amount) return;
+  if (goalMade(s) < stage.goal.amount) return;
   s.announced = stage.id;
   s.stage += 1;
-  addRivers(s);
+  // The next goal counts from here, so nothing made ahead of time fills it.
+  const next = STAGES[Math.min(s.stage, STAGES.length - 1)].goal.item;
+  s.goalBase = s.made[next] ?? 0;
+  if (s.stage >= stageOpening(WATER)) addRivers(s);
   addLaterVeins(s);
 }
 
@@ -1819,7 +1835,7 @@ function runNetworks(s: GameState, layer: LineLayer, driver: string, link: strin
     const inside = new Set(members);
     const drivers = members.map((id) => nodeById(s, id)).filter((n): n is GameNode => n?.type === driver);
     const running = drivers.filter((n) => (n.speed ?? 0) > 0).length;
-    const carrying = lines.filter((l) => inside.has(l.from) && l.material !== link && nodeById(s, l.from)?.type !== PUMP);
+    const carrying = lines.filter((l) => inside.has(l.from) && l.material !== link && !SELF_PUSHING.includes(nodeById(s, l.from)?.type ?? ""));
     // Each line tops out at what its belt or tube carries, so the network shows the best a line can do.
     const top = Math.max(...lineKinds(layer).map((id) => LINE_RATE[id]));
     const rate = carrying.length ? Math.min(top, (running * DRIVE_RATE) / carrying.length) : 0;
@@ -1838,7 +1854,7 @@ function runBelts(s: GameState): void {
 /** The most a line can carry per second: what its belt or tube carries. */
 export function lineCap(s: GameState, line: Line): number {
   const kind = kindOf(line, lineLayer(s, line.from, line.material));
-  return (kind && LINE_RATE[kind]) || BELT_MAX;
+  return (kind && lineRateOf(kind)) || BELT_MAX;
 }
 
 /** The belt network a node is on, as of the last step. */
@@ -1871,9 +1887,11 @@ function runLine(s: GameState, line: Line, nodes: Map<number, GameNode>): void {
   if (line.material === POWER || line.material === DRIVE || line.material === PRESS) return;
   const from = nodes.get(line.from)!;
   const to = nodes.get(line.to)!;
-  // A line moves at its network's pace. A riverbank pump pushes its own water while it has power.
-  const self = from.type === PUMP;
-  const pace = (self ? (from.carry ? lineCap(s, line) : 0) : lineRates.get(line.id) ?? 0) / BELT_MAX;
+  // A line moves at its network's pace. A riverbank pump or a boiler pushes its own fluid out.
+  const self = SELF_PUSHING.includes(from.type);
+  // The pump needs its power to push; a boiler's own steam pressure does it.
+  const pushing = from.type !== PUMP || from.carry;
+  const pace = (self ? (pushing ? lineCap(s, line) : 0) : lineRates.get(line.id) ?? 0) / BELT_MAX;
   if (!pace) {
     line.active = false;
     return;
@@ -2187,15 +2205,18 @@ export function trashCursor(s: GameState): void {
 export function createTestGame(seed: number): GameState {
   const s = createGame(seed);
   const store = s.nodes[0];
-  // Ores, fuels and metals. This one feeds the smelter, so it holds nothing a line shouldn't carry off.
+  // Ores and fuels. This one feeds the smelter, so it holds nothing a line shouldn't carry off.
   const raw: [string, number][] = [
-    ["Lm", 64], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Kn", 64], ["Lg", 64], ["Bt", 64], ["coke", 64], ["iron", 64], ["copper", 64], ["steel", 32], ["brick", 64],
+    ["Lm", 64], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Kn", 64], ["Lg", 64], ["Bt", 64], ["coke", 64],
   ];
-  // Building parts: enough for a few of each S0 to S1-3 machine, and the steam engine's pieces.
+  // Metals and bricks, from the bloom to steel.
+  const metals: [string, number][] = [
+    ["iron", 64], ["pig_iron", 32], ["copper", 64], ["steel", 32], ["brick", 64], ["bloom", 8],
+  ];
+  // Building parts: enough for a few of each S0 to S1-3 machine, and the steam engine's pieces. One warehouse holds 12.
   const parts: [string, number][] = [
     ["iron_plate", 64], ["copper_tube", 64], ["iron_rod", 64], ["iron_rivet", 64], ["iron_gear", 32], ["iron_spring", 16],
-    ["iron_cylinder", 16], ["iron_fan", 4], ["iron_drum", 4], ["boiler", 4], ["steam_engine_unit", 4], ["steam_module", 4],
-    ["bloom", 8],
+    ["iron_cylinder", 16], ["iron_fan", 4], ["iron_drum", 4], ["steam_drum", 4], ["steam_engine_unit", 4], ["steam_module", 4],
   ];
   // Line materials, one layer each: belts for items, tubes for fluids, rods for power.
   // They weigh 2 each, so the bag stays under its limit and the player can still walk.
@@ -2207,6 +2228,12 @@ export function createTestGame(seed: number): GameState {
   s.nodes.push(depot);
   parts.forEach(([id, n], i) => {
     depot.store[i] = { id, n };
+  });
+  // Metals sit to the right of the parts, beside the smelter they come from.
+  const metalStore = newWarehouse(s, 300, 360);
+  s.nodes.push(metalStore);
+  metals.forEach(([id, n], i) => {
+    metalStore.store[i] = { id, n };
   });
   // Lines are paid from the bag, so these go in the player's inventory.
   for (const [id, n] of transport) addTo(s.inv, id, n);

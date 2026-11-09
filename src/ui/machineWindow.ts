@@ -7,6 +7,7 @@ import {
 import { beltSummary } from "./graphView";
 import { MachineArt } from "./machineArt";
 import { RhythmLane, Strike, replay, sparks } from "./handWork";
+import { SOUND } from "./sound";
 import { makeSlot, paintSlot } from "./slots";
 
 const KEYS = ["A", "S", "D", "F"];
@@ -217,14 +218,18 @@ export class MachineWindow {
     // Paused, the beat stands and the fire holds still, so hand work waits too.
     if (!node || status(node) !== "manual" || !this.speed()) return;
     const manual = machineManual(node.type);
+    // What has come out so far, to hear when this strike finishes something.
+    const made = Object.values(node.outs).reduce((sum, n) => sum + n, 0);
     if (manual === "rhythm") {
       const strike = this.lane.judge(time);
       this.struck = { ...strike, at: performance.now() };
       if (strike.verdict === "miss") {
         failWork(s, node.id);
+        SOUND.miss();
         if (this.workBox) replay(this.workBox, "nudge");
       } else if (workMachine(s, node.id, strike.seconds)) {
         this.hitAt = performance.now();
+        SOUND[strike.verdict]();
         if (this.workBox) replay(this.workBox, strike.verdict === "exact" ? "nudge-hard" : "nudge");
         this.flashAt(STRIKE_AT[node.type] ?? SPARK_AT);
         const hit = STRIKE_AT[node.type] ?? SPARK_AT;
@@ -234,9 +239,11 @@ export class MachineWindow {
       if (!workMachine(s, node.id)) return;
       this.hitAt = performance.now();
       replay(this.gauge, "nudge");
+      SOUND.bellows();
       sparks(this.fx, SPARK_AT.x + 80, SPARK_AT.y + 20, "#7c8b9b", 3, 26, "~-");
       // Overheated just now: the batch burnt.
       if (node.burstAt === s.time) {
+        SOUND.burst();
         if (this.workBox) replay(this.workBox, "nudge-hard");
         const fire = FIRE_AT[node.type] ?? SPARK_AT;
         sparks(this.fx, fire.x, fire.y, "#ff5f56", 16, 90, "*#%");
@@ -245,6 +252,7 @@ export class MachineWindow {
       if (!workMachine(s, node.id)) return;
       this.hitAt = performance.now();
     }
+    if (Object.values(node.outs).reduce((sum, n) => sum + n, 0) > made) SOUND.done();
     this.changed();
   }
 
@@ -290,6 +298,11 @@ export class MachineWindow {
 
   get isOpen(): boolean {
     return this.nodeId !== null;
+  }
+
+  /** Real ms until the open rhythm machine's next beat. */
+  beatIn(): number {
+    return this.lane.msToNextBeat();
   }
 
   /** The machine open right now, if any. */

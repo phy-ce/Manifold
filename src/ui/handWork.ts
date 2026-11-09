@@ -6,11 +6,9 @@
 /** How close to a beat a strike must land, in ms either side. */
 export const EXACT_MS = 70;
 export const GOOD_MS = 150;
-/** Work, in seconds, that a strike is worth. Every fifth exact strike in a row adds a little. */
+/** Work, in seconds, that a strike is worth. */
 const EXACT_WORK = 1.2;
 const GOOD_WORK = 1;
-const STREAK = 5;
-const STREAK_BONUS = 0.5;
 /** Time before the first beat reaches the line, so the player sees it coming. */
 const LEAD_MS = 1500;
 /** How fast beats slide left, in px per ms, and where the strike line stands. */
@@ -108,10 +106,17 @@ export class RhythmLane {
     for (const old of this.judged) if (old < i - 8) this.judged.delete(old);
     const exact = off <= EXACT_MS;
     this.streak = exact ? this.streak + 1 : 0;
-    const bonus = exact && this.streak % STREAK === 0 ? STREAK_BONUS : 0;
     this.line.classList.add("lit");
     setTimeout(() => this.line.classList.remove("lit"), 90);
-    return { verdict: exact ? "exact" : "good", seconds: (exact ? EXACT_WORK : GOOD_WORK) + bonus, streak: this.streak };
+    return { verdict: exact ? "exact" : "good", seconds: exact ? EXACT_WORK : GOOD_WORK, streak: this.streak };
+  }
+
+  /** Real ms until the next beat reaches the line; tools/speedrun strikes on it. */
+  msToNextBeat(): number {
+    const now = this.gameTime(performance.now());
+    const [i] = this.nearest(now);
+    const next = this.beatAt(i) > now ? this.beatAt(i) : this.beatAt(i + 1);
+    return (next - now) / Math.max(this.rate(), 0.01);
   }
 
   /** Moves the game clock up to a real moment. */
@@ -178,4 +183,13 @@ export function replay(el: HTMLElement, cls: string): void {
   el.classList.remove(cls);
   void el.offsetWidth;
   el.classList.add(cls);
+}
+
+/**
+ * The most work a rhythm machine can do in a second at normal speed: every beat struck exactly.
+ * A recipe's fastest time by hand is its work divided by this.
+ */
+export function maxWorkRate(pattern: number[]): number {
+  const cycle = pattern.reduce((sum, gap) => sum + gap, 0) || 700;
+  return (pattern.length / (cycle / 1000)) * EXACT_WORK;
 }

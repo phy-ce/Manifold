@@ -6,15 +6,15 @@
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
     "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
-    "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "copper": "구리 주괴", "slag": "슬래그",
-    "boiler": "보일러", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
+    "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그",
+    "steam_drum": "증기 드럼", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
     "steel_plate": "강판", "steel_shaft": "강철 축", "copper_wire": "구리선", "port_flange": "포트 증설 플랜지",
     "pitch": "절연 피치", "insulated_coil": "절연 코일", "iron_core": "철심", "steam_generator": "증기 발전기"
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "brick": 2, "bloom": 3, "slag": 2, "boiler": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 30
+    "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 30
   },
   "stockpiled": ["slag", "coal_tar"],
   "food": {
@@ -54,7 +54,8 @@
 
     "spring_motor": { "name": "태엽 동력기", "powerOut": 5, "tier": "spring", "cost": { "iron_plate": 6, "iron_spring": 2, "iron_gear": 4, "copper_tube": 2 }, "work": 20 },
 
-    "steam_engine": { "name": "증기기관", "powerOut": 10, "tier": "low", "burn": 1, "cost": { "steam_engine_unit": 1, "iron_plate": 4, "iron_rivet": 8 }, "work": 30 },
+    "steam_engine": { "name": "증기기관", "powerOut": 10, "tier": "low", "cost": { "steam_engine_unit": 1, "iron_plate": 4, "iron_rivet": 8 }, "work": 30 },
+    "steam_boiler": { "name": "보일러", "burn": 1.6, "cost": { "steam_drum": 1, "brick": 12, "iron_plate": 4, "copper_tube": 4 }, "work": 30 },
     "belt_drive": { "name": "벨트 구동기", "power": 2, "tier": "spring", "cost": { "iron_plate": 4, "iron_gear": 2, "iron_rod": 4, "iron_belt": 2 }, "work": 15 },
     "pressure_pump": { "name": "압송 펌프", "power": 2, "tier": "spring", "cost": { "iron_cylinder": 1, "iron_plate": 4, "iron_gear": 2, "copper_tube": 4 }, "work": 20 },
     "steam_manifold": { "name": "증기 배분기", "cost": { "copper_tube": 6, "iron_plate": 2 }, "work": 15 },
@@ -62,7 +63,7 @@
     "drainage_pump": { "name": "강가 펌프", "power": 3, "tier": "spring", "steamReady": true, "cost": { "iron_cylinder": 1, "copper_tube": 8, "iron_plate": 4, "iron_gear": 2, "iron_rivet": 8 }, "work": 25 },
     "steam_hammer": { "name": "증기 해머", "power": 3, "steamReady": true, "cost": { "iron_cylinder": 2, "iron_plate": 12, "iron_rod": 4, "iron_rivet": 16, "steam_module": 1 }, "work": 30 },
 
-    "coke_oven": { "name": "코크스로", "cost": { "brick": 40, "boiler": 1 }, "work": 40 },
+    "coke_oven": { "name": "코크스로", "cost": { "brick": 40, "steam_drum": 1 }, "work": 40 },
     "blast_furnace": { "name": "고로", "power": 4, "steamReady": true, "cost": { "brick": 60, "iron_plate": 30, "copper_tube": 10, "iron_fan": 2, "steam_module": 1 }, "work": 60 },
     "converter": { "name": "전로", "power": 6, "steamReady": true, "cost": { "brick": 20, "iron_plate": 40, "iron_cylinder": 2, "iron_fan": 1, "steam_module": 1 }, "work": 50 },
     "tar_tank": { "name": "타르 저장조", "cost": { "iron_plate": 10 }, "work": 20 },
@@ -72,7 +73,7 @@
     "gear_cutter": { "name": "기어 절삭기", "power": 2, "tier": "high", "cost": { "steel": 20, "iron_plate": 10 } },
     "wire_drawer": { "name": "증기 인발기", "power": 2, "tier": "high", "cost": { "steel": 10, "copper_tube": 4 } },
 
-    "tar_still": { "name": "타르 증류기", "power": 2, "tier": "high", "cost": { "steel_plate": 10, "copper_tube": 10, "boiler": 1 } },
+    "tar_still": { "name": "타르 증류기", "power": 2, "tier": "high", "cost": { "steel_plate": 10, "copper_tube": 10, "steam_drum": 1 } },
     "coil_winder": { "name": "코일 권선기", "power": 2, "tier": "high", "cost": { "steel_plate": 10, "steel_gear": 4 } },
     "core_press": { "name": "철심 프레스", "power": 3, "tier": "high", "cost": { "steel_plate": 10, "iron_cylinder": 1 } },
     "generator_bench": { "name": "발전기 조립대", "power": 4, "tier": "high", "cost": { "steel_plate": 20, "steel_gear": 10 } }
@@ -105,22 +106,23 @@
     { "id": "iron_bloom", "machine": "smelter", "time": 6, "in": { "iron_ore": 2 }, "out": { "iron": 1, "slag": 1 } },
     { "id": "copper_sulfide_smelt", "machine": "smelter", "time": 8, "in": { "copper_sulfide": 3 }, "out": { "copper": 1, "slag": 2 } },
     { "id": "copper", "machine": "smelter", "time": 6, "in": { "copper_oxide": 2 }, "out": { "copper": 1, "slag": 1 } },
-    { "id": "boiler", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 6, "copper_tube": 6, "iron_rivet": 12 }, "out": { "boiler": 1 } },
-    { "id": "steam_engine_unit", "machine": "engine_bench", "time": 30, "in": { "iron_cylinder": 2, "boiler": 1, "iron_gear": 4, "iron_rod": 4 }, "out": { "steam_engine_unit": 1 } },
+    { "id": "steam_drum", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 6, "copper_tube": 6, "iron_rivet": 12 }, "out": { "steam_drum": 1 } },
+    { "id": "steam_engine_unit", "machine": "engine_bench", "time": 30, "in": { "iron_cylinder": 2, "steam_drum": 1, "iron_gear": 4, "iron_rod": 4 }, "out": { "steam_engine_unit": 1 } },
     { "id": "steam_module", "machine": "engine_bench", "time": 20, "in": { "iron_cylinder": 1, "iron_plate": 2, "steam_engine_unit": 1, "copper_tube": 2 }, "out": { "steam_module": 2 } },
 
     { "id": "cook_berry", "machine": "brick_kiln", "time": 5, "in": { "Be": 1 }, "out": { "Bc": 1 } },
     { "id": "cook_mushroom", "machine": "brick_kiln", "time": 5, "in": { "Mu": 1 }, "out": { "Mc": 1 } },
 
     { "id": "pump_water", "machine": "drainage_pump", "time": 0.5, "in": {}, "out": { "water": 1 } },
-    { "id": "steam", "machine": "steam_engine", "time": 10, "in": { "water": 4 }, "out": {} },
+    { "id": "boil", "machine": "steam_boiler", "time": 4, "in": { "water": 2 }, "out": { "steam": 2 } },
+    { "id": "engine_run", "machine": "steam_engine", "time": 4, "in": { "steam": 1 }, "out": {} },
 
     { "id": "coke", "machine": "coke_oven", "time": 10, "in": { "coal": 2 }, "out": { "coke": 1, "coal_tar": 1 } },
-    { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "iron": 4, "slag": 2 } },
+    { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "pig_iron": 4, "slag": 2 } },
     { "id": "copper_matte", "machine": "blast_furnace", "time": 6, "in": { "copper_sulfide": 4, "coke": 2, "limestone": 1 }, "out": { "copper_matte": 3, "slag": 2 } },
-    { "id": "steel", "machine": "converter", "time": 10, "in": { "iron": 4 }, "out": { "steel": 3, "slag": 1 } },
+    { "id": "steel", "machine": "converter", "time": 10, "in": { "pig_iron": 4 }, "out": { "steel": 3, "slag": 1 } },
     { "id": "copper_converted", "machine": "converter", "time": 8, "in": { "copper_matte": 2 }, "out": { "copper": 2, "slag": 1 } },
-    { "id": "steel_scrap", "machine": "converter", "time": 10, "in": { "iron": 3, "scrap": 2 }, "out": { "steel": 3, "slag": 1 }, "alt": true },
+    { "id": "steel_scrap", "machine": "converter", "time": 10, "in": { "pig_iron": 3, "scrap": 2 }, "out": { "steel": 3, "slag": 1 }, "alt": true },
 
     { "id": "steel_plate", "machine": "rolling_mill", "time": 3, "in": { "steel": 1 }, "out": { "steel_plate": 1 } },
     { "id": "steel_shaft", "machine": "lathe", "time": 8, "in": { "steel": 2 }, "out": { "steel_shaft": 1, "scrap": 1 } },
@@ -148,13 +150,13 @@
     {
       "id": "S1-2", "name": "증기 동력 보급",
       "unlockSources": ["water"],
-      "unlockMachines": ["steam_engine", "drainage_pump", "pressure_pump", "steam_hammer"],
-      "goal": { "item": "iron_plate", "amount": 120, "perMinute": 30 }
+      "unlockMachines": ["steam_engine", "steam_boiler", "drainage_pump", "pressure_pump", "steam_hammer", "coke_oven"],
+      "goal": { "item": "coke_oven", "amount": 1, "perMinute": 0.2 }
     },
     {
       "id": "S1-3", "name": "코크스와 고로",
       "unlockSources": ["limestone"],
-      "unlockMachines": ["steam_manifold", "item_splitter", "coke_oven", "blast_furnace", "converter", "tar_tank"],
+      "unlockMachines": ["steam_manifold", "item_splitter", "blast_furnace", "converter", "tar_tank"],
       "goal": { "item": "steel", "amount": 100, "perMinute": 20 }
     },
     {

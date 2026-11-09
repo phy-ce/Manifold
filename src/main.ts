@@ -1,8 +1,11 @@
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_VITAL, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, currentCave, inCave, startProbe } from "./engine/game";
+import { GameState, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, currentCave, inCave, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
+import * as engine from "./engine/game";
+import * as content from "./content";
+import * as world from "./engine/world";
 import { GraphView } from "./ui/graphView";
 import { ItemIndex } from "./ui/itemIndex";
 import { MachineWindow } from "./ui/machineWindow";
@@ -10,6 +13,7 @@ import { RouteWindow } from "./ui/routeWindow";
 import { HelpWindow } from "./ui/helpWindow";
 import { SaveWindow } from "./ui/saveWindow";
 import { MenuWindow } from "./ui/menuWindow";
+import { setSound, soundOn } from "./ui/sound";
 import { MapView } from "./ui/mapView";
 import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
 import { applyTheme } from "./ui/theme";
@@ -132,7 +136,20 @@ menuButton.type = "button";
 menuButton.className = "tech";
 menuButton.textContent = tr("메뉴");
 menuButton.dataset.tip = tr("메뉴 (Esc)");
-const menu = new MenuWindow([testStart, reset]);
+// One switch for every sound, quiet by default.
+const soundButton = document.createElement("button");
+soundButton.type = "button";
+soundButton.className = "tech";
+const showSound = () => {
+  soundButton.textContent = soundOn() ? tr("소리 켜짐") : tr("소리 꺼짐");
+  soundButton.setAttribute("aria-pressed", String(soundOn()));
+};
+showSound();
+soundButton.addEventListener("click", () => {
+  setSound(!soundOn());
+  showSound();
+});
+const menu = new MenuWindow([soundButton, testStart, reset]);
 menuButton.addEventListener("click", () => menu.open());
 topActions.append(travel, indexButton, speedBar, saveButton, helpButton, menuButton);
 top.append(topStatus, topActions);
@@ -424,7 +441,7 @@ function redraw(): void {
   if (travel.textContent !== place) travel.textContent = place;
   const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
   const { item, amount } = stage.goal;
-  const made = state.made[item] ?? 0;
+  const made = goalMade(state);
   const target = `${stage.id}|${made}`;
   if (goal.dataset.key !== target) {
     goal.dataset.key = target;
@@ -513,3 +530,24 @@ function tick(): void {
 redraw();
 setInterval(tick, STEP_MS);
 window.addEventListener("beforeunload", save);
+
+// For tools/speedrun: a dev-server-only handle to drive the game from outside and record it.
+// import.meta.env.DEV is false in a build, so none of this ships.
+if (import.meta.env.DEV) {
+  (window as unknown as { __manifold: unknown }).__manifold = {
+    game: () => state,
+    engine,
+    content,
+    world,
+    redraw,
+    setSpeed: (value: number) => speedButtons[SPEEDS.findIndex(([, v]) => v === value)]?.click(),
+    setScreen: (value: "base" | "map") => {
+      screen = value;
+      redraw();
+    },
+    openMachine: (id: number) => windowView.open(id),
+    closeMachine: () => windowView.close(),
+    beatIn: () => windowView.beatIn(),
+    index: itemIndex,
+  };
+}

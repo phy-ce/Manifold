@@ -12,7 +12,7 @@ const SHAPE_OF: Record<string, string> = {
   steel: "ingot",
   coal_tar: "water",
   brick: "brick", steam_module: "steam_module",
-  iron: "ingot", copper: "ingot", boiler: "boiler", steam_engine_unit: "engine",
+  iron: "ingot", copper: "ingot", steam_drum: "steam_drum", pig_iron: "ingot", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
 };
 
@@ -156,7 +156,7 @@ export function itemIcon(id: string): string {
     const shape = formOf(item) ?? SHAPE_OF[item];
     if (isMachine(item)) html = machineIcon(item, COLS, ROWS);
     else if (lump) html = drawLump(itemColor(item), lump);
-    else html = shape ? printShape(SHAPES[shape], METAL_SHAPES.has(shape) ? METAL_CHARS : SOLID_CHARS, rampOf(itemColor(item))) : "";
+    else html = shape && SHAPES[shape] ? printShape(SHAPES[shape], METAL_SHAPES.has(shape) ? METAL_CHARS : SOLID_CHARS, rampOf(itemColor(item))) : "";
     cache.set(id, html);
   }
   return html;

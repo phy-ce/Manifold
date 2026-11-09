@@ -2,11 +2,12 @@
 // It docks beside the game so it can stay open next to a machine window.
 import { tr } from "../i18n";
 import {
-  FUEL_GROUP, Recipe, burners, buildUses, compareItems, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
+  FUEL_GROUP, machineRhythm, Recipe, burners, buildUses, compareItems, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
   machinePower, machinePowerOut, recipesFor, usesOf,
 } from "../content";
 import { GameState, bagHolds, countOf, itemStats, fillFromBag, nodeById, runsRecipe } from "../engine/game";
 import { knownMembers, makeSlot, paintSlot } from "./slots";
+import { maxWorkRate } from "./handWork";
 
 /** A group such as coal has members instead of recipes. Items with numbers to them also have a stats tab. */
 type Tab = "recipes" | "uses" | "members" | "stats";
@@ -153,7 +154,8 @@ export class ItemIndex {
       const name = document.createElement("strong");
       name.textContent = machineName(machine);
       const manual = machineManual(machine);
-      const hand = manual === "keys" ? tr("키 입력") : manual === "rhythm" ? tr("박자") : manual === "bellows" ? tr("풀무") : manual === "click" ? tr("클릭") : "";
+      // A rhythm machine's pace by hand is capped by its beat, so its fastest speed is what is worth knowing.
+      const hand = manual === "keys" ? tr("키 입력") : manual === "rhythm" ? `${tr("손작업 최대")} ×${short(maxWorkRate(machineRhythm(machine)))}` : manual === "bellows" ? tr("풀무") : manual === "click" ? tr("클릭") : "";
       const heat = machineBurn(machine);
       const facts = [
         hand,
@@ -194,7 +196,9 @@ export class ItemIndex {
     const note = document.createElement("div");
     note.className = "card-note";
     const form = recipe.form && recipe.machine === "forming_bench" ? `${formLabel(recipe.form)} · ` : "";
-    note.textContent = `${form}${recipe.time}${tr("초")}`;
+    // By hand, the fastest the recipe can go when every beat is struck exactly.
+    const fastest = machineManual(recipe.machine) === "rhythm" ? ` · ${tr("최대")} ${short(recipe.time / maxWorkRate(machineRhythm(recipe.machine)))}${tr("초")}` : "";
+    note.textContent = `${form}${recipe.time}${tr("초")}${fastest}`;
     box.append(row, note);
     return box;
   }

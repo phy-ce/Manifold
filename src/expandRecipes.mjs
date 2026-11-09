@@ -16,7 +16,10 @@ export function expandRecipes(era, materials) {
 
   for (const template of era.recipeTemplates) {
     const form = materials.forms[template.form];
-    for (const metalId of template.metals) {
+    // A metal that is a kind of another, as pig iron is a kind of iron, gets that metal's parts too: each one a kind of
+    // the parent's part. Tools and products stay the parent's own.
+    const kin = ["gear", "product"].includes(form.category) ? [] : Object.keys(materials.metals).filter((id) => template.metals.includes(materials.metals[id].extends) && !template.metals.includes(id));
+    for (const metalId of [...template.metals, ...kin]) {
       const metal = materials.metals[metalId];
       const id = `${metalId}_${template.form}`;
       items[id] = metal.name + form.name;

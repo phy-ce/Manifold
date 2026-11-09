@@ -91,6 +91,10 @@ export const PRESSURE_PUMP = "pressure_pump";
 /** The line that joins a pressure pump to a fluid network. It carries nothing. */
 export const PRESS = "press";
 export const PUMP = "drainage_pump";
+/** Boils water into steam for steam engines. One feeds two engines, and it pushes its own steam out. */
+export const BOILER = "steam_boiler";
+/** Machines that push their own fluid out along their pipes, needing no pressure pump. */
+export const SELF_PUSHING = [PUMP, BOILER];
 export const WATER = "water";
 /** The empty drum, what it holds, and the full item for each fluid. */
 export const DRUM: { empty: string; liters: number; fills: Record<string, string> } = era.drum;
@@ -315,9 +319,36 @@ export function itemWeight(id: string): number {
   return weights[id] ?? metals[id]?.weight ?? 1;
 }
 
-/** True when an item can fill a recipe ingredient, directly or through its ore family. */
-export const matches = (item: string, ingredient: string): boolean =>
+/**
+ * What an item is a kind of, one step up: pig iron is a kind of iron, so a pig iron plate is a kind of iron plate.
+ * The metal table says which metal extends which; parts follow their metal.
+ */
+export function parentOf(id: string): string | undefined {
+  const metals = materials.metals as Record<string, { extends?: string }>;
+  if (metals[id]?.extends) return metals[id].extends;
+  const variant = variants[id];
+  const up = variant && metals[variant.metal]?.extends;
+  return up ? `${up}_${variant.form}` : undefined;
+}
+
+/** An item, then each thing it is a kind of, nearest first. */
+export function lineage(id: string): string[] {
+  const out = [id];
+  for (let up = parentOf(id); up && !out.includes(up); up = parentOf(up)) out.push(up);
+  return out;
+}
+
+/** Fits by the item itself: the same id, or an ore's family or group. */
+const fitsAsIs = (item: string, ingredient: string): boolean =>
   item === ingredient || ores[item]?.family === ingredient || !!ores[item]?.groups?.includes(ingredient);
+
+/**
+ * True when an item can fill a recipe ingredient: directly, through its ore family, or as a kind of what is asked
+ * for. A pig iron plate fills an iron plate's place; an iron plate never fills a pig iron plate's.
+ * `inherit` false checks the item as it is, without its parents.
+ */
+export const matches = (item: string, ingredient: string, inherit = true): boolean =>
+  (inherit ? lineage(item) : [item]).some((kind) => fitsAsIs(kind, ingredient));
 /** Every ore a family or group takes in, shallowest first. */
 export const groupMembers = (id: string): string[] =>
   Object.keys(ores).filter((ore) => ores[ore].family === id || ores[ore].groups?.includes(id)).sort((a, b) => ores[a].layers[0] - ores[b].layers[0]);
