@@ -50,7 +50,8 @@ export function expandRecipes(era, materials) {
       id: `build_${type}`,
       machine: firstStage.includes(type) ? WORKBENCH : CONSTRUCTION,
       form: type,
-      time: machine.work ?? 10,
+      // The construction bench works in a team's time: half what the machine's own work says.
+      time: firstStage.includes(type) ? machine.work ?? 10 : Math.ceil((machine.work ?? 10) / 2),
       in: { ...machine.cost },
       out: { [type]: 1 },
     }));

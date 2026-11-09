@@ -6,6 +6,7 @@ import {
   lineKinds, kindOf, Ghost, Group, GameNode, GameState, LINE_LAYERS, LINE_MS, Line, LineLayer, SPRING_MAX, BELT_MAX, DRIVE_RATE, beltNetOf, pipeNetOf, lineLayer, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
+import { machineIcon } from "./art";
 
 const NODE_W = SIZE.nodeW;
 const NODE_H = SIZE.nodeH;
@@ -167,6 +168,29 @@ function savedLayer(): LineLayer {
     return "item";
   }
 }
+/** How a node card looks: its words (machine, flow, progress) or its picture. Also a view setting. */
+type Look = "text" | "shape";
+const LOOKS: [Look, string][] = [["text", tr("글자")], ["shape", tr("모양")]];
+const LOOK_KEY = "modpack-simulator-graph-look";
+function savedLook(): Look {
+  try {
+    return localStorage.getItem(LOOK_KEY) === "shape" ? "shape" : "text";
+  } catch {
+    return "text";
+  }
+}
+/** A node's picture in shape mode: the machine drawn small at the 3px icon glyph, beside its label. */
+const NODE_ART = { cols: 44, rows: 26 };
+const nodeArt = new Map<string, string>();
+const artOf = (type: string): string => {
+  let html = nodeArt.get(type);
+  if (html === undefined) {
+    html = machineIcon(type, NODE_ART.cols, NODE_ART.rows);
+    nodeArt.set(type, html);
+  }
+  return html;
+};
+
 /** Board zoom limits, and how much one wheel notch changes it. */
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 1.6;
@@ -249,6 +273,8 @@ export class GraphView {
   private clip: number[] = [];
   /** The layer on screen. New lines are made on it, and the route window lists only its channels. */
   layer: LineLayer = savedLayer();
+  private look: Look = savedLook();
+  private readonly lookButtons = new Map<Look, HTMLButtonElement>();
   private pointer: { x: number; y: number } | null = null;
   private boxFrom: { x: number; y: number } | null = null;
 
@@ -330,7 +356,22 @@ export class GraphView {
       this.pickingPort = !this.pickingPort;
       this.draw();
     });
-    this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.groupButton, this.buildAll, this.zoomButton);
+    // Words or pictures on the node cards.
+    const looks = document.createElement("div");
+    looks.className = "modes";
+    looks.setAttribute("role", "group");
+    looks.setAttribute("aria-label", tr("노드 모양"));
+    for (const [look, label] of LOOKS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = label;
+      b.dataset.tip = look === "text" ? tr("노드에 이름과 재료를 글자로 보입니다") : tr("노드에 설비 그림을 보입니다");
+      b.addEventListener("click", () => this.setLook(look));
+      this.lookButtons.set(look, b);
+      looks.append(b);
+    }
+    this.tools.append(this.search, lines, looks, this.copyButton, this.pasteButton, this.groupButton, this.buildAll, this.zoomButton);
   }
 
   /** Lays down a blueprint of a machine at the next free spot. */
@@ -338,6 +379,17 @@ export class GraphView {
     const s = this.game();
     const at = nextSpot(s);
     addGhost(s, type, at.x, at.y);
+    this.changed();
+  }
+
+  private setLook(look: Look): void {
+    if (look === this.look) return;
+    this.look = look;
+    try {
+      localStorage.setItem(LOOK_KEY, look);
+    } catch {
+      // Without storage the board just starts in words next time.
+    }
     this.changed();
   }
 
@@ -960,6 +1012,20 @@ export class GraphView {
     this.drag = null;
   }
 
+  /**
+   * A node in shape mode: the machine's picture on the left, and beside it only what tells nodes apart
+   * at a glance, its label, port use and progress. The card keeps the same size as in words mode.
+   */
+  private nodeShape(s: GameState, node: GameNode): string {
+    const used = portsUsed(s, node.id);
+    const ports = "●".repeat(used) + "○".repeat(MAX_PORTS - used);
+    const works = !isPassive(node.type) && node.type !== MOTOR;
+    const fill = Math.round(node.progress * 8);
+    const progress = works ? `<span class="progress">[${"#".repeat(fill).padEnd(8, ".")}]</span>` : "";
+    return `<span class="node-art">${artOf(node.type)}</span>` +
+      `<span class="node-side"><b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span>${progress}</span>`;
+  }
+
   private nodeHtml(s: GameState, node: GameNode): string {
     const used = portsUsed(s, node.id);
     const ports = "●".repeat(used) + "○".repeat(MAX_PORTS - used);
@@ -1169,6 +1235,10 @@ export class GraphView {
       const label = machineName(type);
       if (b.textContent !== label) b.textContent = label;
     }
+    for (const [look, b] of this.lookButtons) {
+      b.classList.toggle("selected", look === this.look);
+      b.setAttribute("aria-pressed", String(look === this.look));
+    }
     for (const [layer, b] of this.layerButtons) {
       b.classList.toggle("selected", layer === this.layer);
       b.setAttribute("aria-pressed", String(layer === this.layer));
@@ -1209,7 +1279,8 @@ export class GraphView {
       const found = !!query && this.matches(s, node, query);
       view.root.classList.toggle("dim", !!query && !found);
       view.root.classList.toggle("found", found);
-      const html = this.nodeHtml(s, node);
+      view.body.classList.toggle("shape", this.look === "shape");
+      const html = this.look === "shape" ? this.nodeShape(s, node) : this.nodeHtml(s, node);
       if (html !== view.key) {
         view.key = html;
         view.body.innerHTML = html;

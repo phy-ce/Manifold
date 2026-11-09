@@ -1,11 +1,12 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
+import { machineRhythm, isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
 import {
-  GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  BLAST, hasFire, inBlastZone, GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { beltSummary } from "./graphView";
 import { MachineArt } from "./machineArt";
+import { RhythmLane, Strike, replay, sparks } from "./handWork";
 import { makeSlot, paintSlot } from "./slots";
 
 const KEYS = ["A", "S", "D", "F"];
@@ -17,6 +18,26 @@ const parts = (list: Record<string, number>, role: (id: string, index: number) =
     .map(([id, n], i) => `<span data-tip="${itemName(id)}">${role(id, i)}</span> ${n}${unitOf(id)}`)
     .join(" + ");
 const HIT_MS = 140;
+/** The pose of each hand tool at the bottom of its stroke, as an art frame. */
+const STRIKE_FRAME: Record<string, number> = { plate_hammer: 4, hand_forge: 4, workbench: 4, construction_bench: 6 };
+/** Where sparks fly from when no machine-specific spot is known, and their colour by machine. */
+const SPARK_AT = { x: 140, y: 170 };
+/** A point of a scene, from art.ts scene units to pixels over the picture (glyph 6px wide by 0.6, rows squashed by 0.62). */
+const spot = (x: number, y: number) => ({ x: Math.round(x * 3.6), y: Math.round(y * 0.62 * 6) });
+/** Where each hand tool meets its work at the bottom of the stroke: only there flashes. */
+const STRIKE_AT: Record<string, { x: number; y: number }> = {
+  plate_hammer: spot(36, 44), hand_forge: spot(37, 37), workbench: spot(45, 24), construction_bench: spot(27, 29),
+};
+/** Where each fire shows: only there flickers, and embers rise from it. */
+const FIRE_AT: Record<string, { x: number; y: number }> = {
+  bloomery: spot(40, 57), brick_kiln: spot(38, 52), smelter: spot(38, 52), open_kiln: spot(38, 56),
+  steam_engine: spot(21, 59), blast_furnace: spot(36, 62), converter: spot(37, 15),
+};
+const SPARK_COLOR: Record<string, string> = { plate_hammer: "#ffcd72", hand_forge: "#ffb238", workbench: "#c49a68", construction_bench: "#ffd58c" };
+/** Embers rise from a working fire this often, in ms. */
+const EMBER_MS = 260;
+/** How long a strike's verdict stays on the status line. */
+const VERDICT_MS = 700;
 
 export class MachineWindow {
   readonly root = document.createElement("div");
@@ -48,13 +69,26 @@ export class MachineWindow {
   private riverPick: { pump: number; bank: number; tube: string } | null = null;
   private stored: HTMLButtonElement[] = [];
   private readonly art = new MachineArt();
+  /** The beat a rhythm machine is struck to, and what the last strike was judged. */
+  private readonly lane: RhythmLane;
+  private struck: (Strike & { at: number }) | null = null;
+  /** A hand furnace's bellows gauge, beside its picture. */
+  private readonly gauge = document.createElement("div");
+  private readonly gaugeFill = document.createElement("div");
+  /** Sparks and embers fly over the picture from here. */
+  private readonly fx = document.createElement("span");
+  private emberAt = 0;
+  /** A warm glow over a fire's own spot, and the brief flash where a tool lands. */
+  private readonly fireGlow = document.createElement("span");
   private nodeId: number | null = null;
 
-  constructor(private readonly game: () => GameState, private readonly changed: () => void) {
+  /** `speed` is the game speed: hand work keeps time with it, and none is taken while paused. */
+  constructor(private readonly game: () => GameState, private readonly changed: () => void, private readonly speed: () => number = () => 1) {
+    this.lane = new RhythmLane(speed);
     this.root.className = "window-back";
     this.root.hidden = true;
     const panel = document.createElement("div");
-    panel.className = "window";
+    panel.className = "window machine-window";
     panel.setAttribute("role", "dialog");
     const head = document.createElement("div");
     head.className = "bar-row";
@@ -120,9 +154,30 @@ export class MachineWindow {
     });
     window.addEventListener("keydown", (e) => {
       if (e.target instanceof HTMLInputElement) return; // typing in the item search
+      // Held keys repeat: only the first press counts, or one hold would strike many times.
+      if (e.repeat || this.nodeId === null) return;
       const index = KEYS.indexOf(e.key.toUpperCase());
-      if (index >= 0 && !e.repeat) this.pressKey(index);
+      if (index >= 0) return this.pressKey(index);
+      // Space works a rhythm machine or a bellows. Its default would also click whatever button has
+      // focus, which would count the strike twice.
+      if (e.code === "Space") {
+        const node = nodeById(this.game(), this.nodeId);
+        const manual = node && machineManual(node.type);
+        if (manual === "rhythm" || manual === "bellows") {
+          e.preventDefault();
+          this.act(e.timeStamp);
+        }
+      }
     });
+    this.gauge.className = "blast-gauge";
+    this.gauge.setAttribute("role", "img");
+    this.gaugeFill.className = "blast-fill";
+    this.gauge.append(this.gaugeFill);
+    this.fx.className = "work-fx";
+    this.fx.setAttribute("aria-hidden", "true");
+    this.fireGlow.className = "fire-glow";
+    this.fireGlow.hidden = true;
+    this.fx.append(this.fireGlow);
     this.recipe.className = "recipe";
     this.topLabel.className = "slot-label";
     this.invBox.className = "inv-box";
@@ -130,7 +185,7 @@ export class MachineWindow {
     invLabel.className = "slot-label";
     invLabel.textContent = tr("내 인벤토리");
     this.invBox.append(invLabel, this.inv);
-    panel.append(head, this.modes, this.recipe, this.topLabel, this.top, this.bar, this.keys, this.invBox);
+    panel.append(head, this.modes, this.recipe, this.topLabel, this.top, this.lane.root, this.bar, this.keys, this.invBox);
     this.root.append(panel);
     this.root.addEventListener("click", (e) => {
       if (e.target === this.root) this.close();
@@ -141,9 +196,55 @@ export class MachineWindow {
   }
 
   /** One unit of hand work. */
-  private strike(): void {
-    if (this.nodeId === null || !workMachine(this.game(), this.nodeId)) return;
-    this.hitAt = performance.now();
+  /** A brief flash where a tool lands, and nowhere else. */
+  private flashAt(point: { x: number; y: number }): void {
+    const flash = document.createElement("span");
+    flash.className = "strike-flash";
+    flash.style.left = `${point.x}px`;
+    flash.style.top = `${point.y}px`;
+    this.fx.append(flash);
+    setTimeout(() => flash.remove(), 160);
+  }
+
+  /**
+   * One unit of hand work, at the moment of the input that made it: a key's or a press's own
+   * timeStamp, never the time the frame gets round to it. Rhythm machines judge it against the beat,
+   * a bellows pumps, and anything else simply strikes.
+   */
+  private act(time: number): void {
+    const s = this.game();
+    const node = this.nodeId === null ? undefined : nodeById(s, this.nodeId);
+    // Paused, the beat stands and the fire holds still, so hand work waits too.
+    if (!node || status(node) !== "manual" || !this.speed()) return;
+    const manual = machineManual(node.type);
+    if (manual === "rhythm") {
+      const strike = this.lane.judge(time);
+      this.struck = { ...strike, at: performance.now() };
+      if (strike.verdict === "miss") {
+        failWork(s, node.id);
+        if (this.workBox) replay(this.workBox, "nudge");
+      } else if (workMachine(s, node.id, strike.seconds)) {
+        this.hitAt = performance.now();
+        if (this.workBox) replay(this.workBox, strike.verdict === "exact" ? "nudge-hard" : "nudge");
+        this.flashAt(STRIKE_AT[node.type] ?? SPARK_AT);
+        const hit = STRIKE_AT[node.type] ?? SPARK_AT;
+        sparks(this.fx, hit.x, hit.y, SPARK_COLOR[node.type] ?? "#ffcd72", strike.verdict === "exact" ? 7 : 4, strike.verdict === "exact" ? 46 : 30);
+      }
+    } else if (manual === "bellows") {
+      if (!workMachine(s, node.id)) return;
+      this.hitAt = performance.now();
+      replay(this.gauge, "nudge");
+      sparks(this.fx, SPARK_AT.x + 80, SPARK_AT.y + 20, "#7c8b9b", 3, 26, "~-");
+      // Overheated just now: the batch burnt.
+      if (node.burstAt === s.time) {
+        if (this.workBox) replay(this.workBox, "nudge-hard");
+        const fire = FIRE_AT[node.type] ?? SPARK_AT;
+        sparks(this.fx, fire.x, fire.y, "#ff5f56", 16, 90, "*#%");
+      }
+    } else {
+      if (!workMachine(s, node.id)) return;
+      this.hitAt = performance.now();
+    }
     this.changed();
   }
 
@@ -159,7 +260,7 @@ export class MachineWindow {
       setTimeout(() => cap.classList.remove("wrong"), HIT_MS);
       return;
     }
-    this.strike();
+    this.act(performance.now());
     let next = this.target;
     while (next === this.target) next = Math.floor(Math.random() * KEYS.length);
     this.target = next;
@@ -208,6 +309,12 @@ export class MachineWindow {
     this.top.replaceChildren();
     this.workBox = null;
     this.keys.hidden = machineManual(node.type) !== "keys";
+    // A rhythm machine shows its beat, which starts over each time the window opens on it.
+    const rhythm = machineManual(node.type) === "rhythm";
+    this.lane.root.hidden = !rhythm;
+    if (rhythm) this.lane.start(machineRhythm(node.type));
+    else this.lane.stop();
+    this.struck = null;
     this.inputs = [];
     this.outputs = [];
     this.stored = [];
@@ -231,6 +338,7 @@ export class MachineWindow {
 
   close(): void {
     this.nodeId = null;
+    this.lane.stop();
     this.root.hidden = true;
   }
 
@@ -495,11 +603,16 @@ export class MachineWindow {
     this.workBox.type = "button";
     this.workBox.className = "work";
     this.workBox.setAttribute("aria-label", `${machineName(node.type)} ${tr("작업")}`);
-    this.workBox.append(this.art.root);
-    this.workBox.addEventListener("click", () => {
-      if (machineManual(node.type) === "click") this.strike();
+    this.workBox.append(this.art.root, this.fx);
+    // Pressing down is the strike: a click only fires on release, a tenth of a second late for a beat.
+    this.workBox.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || !machineManual(node.type) || machineManual(node.type) === "keys") return;
+      this.act(e.timeStamp);
     });
-    this.top.append(left, this.workBox, right);
+    // A bellows has its gauge at the far right, after what comes out.
+    const bellows = machineManual(node.type) === "bellows";
+    if (bellows) this.gauge.onpointerdown = (e) => { if (e.button === 0) this.act(e.timeStamp); };
+    this.top.append(left, this.workBox, right, ...(bellows ? [this.gauge] : []));
   }
 
   private buildMotor(node: GameNode): void {
@@ -615,7 +728,8 @@ export class MachineWindow {
     }
     const state = status(node);
     const current = recipeOf(node);
-    const hand = machineManual(node.type) === "keys" ? tr("키를 누르세요") : tr("그림을 클릭하세요");
+    const style = machineManual(node.type);
+    const hand = style === "keys" ? tr("키를 누르세요") : style === "rhythm" ? tr("박자에 맞춰 그림이나 Space") : style === "bellows" ? tr("풀무질: 초록 칸 유지") : tr("그림을 클릭하세요");
     const unlinked = node.type === PUMP && !riverOf(s, node);
     // Why a loaded machine isn't running: no fuel, too weak a power tier, or cut off at the back of the queue.
     const powerText = node.tierLow ? tr("동력 등급 부족") : node.order ? tr("동력 부족") : tr("동력 없음");
@@ -655,23 +769,67 @@ export class MachineWindow {
     });
     const waiting = state === "manual";
     const manual = machineManual(node.type);
-    this.workBox!.disabled = !(manual === "click" && waiting);
+    // Every hand machine but the key-pressing ones is worked on its picture.
+    this.workBox!.disabled = !(waiting && manual && manual !== "keys");
     this.keycaps.forEach((cap, i) => {
       cap.disabled = !waiting;
       cap.classList.toggle("target", waiting && i === this.target);
     });
-    // Hand tools only move while the player is striking.
-    const striking = performance.now() - this.hitAt < HIT_MS;
-    const mode = waiting ? (striking ? "run" : "idle") : state;
-    // Still machines keep their picture; only moving ones are redrawn.
-    const scene = `${node.type}|${mode}|${mode === "run" ? frame >> 1 : ""}`;
+    const now = performance.now();
+    const striking = now - this.hitAt < HIT_MS;
+    const bellows = manual === "bellows";
+    const blast = node.blast ?? 0;
+    const burning = machineBurn(node.type) > 0 && hasFire(node);
+    // Hand tools sit still and show the bottom of the stroke for a moment after each strike.
+    // A bellows furnace burns on its own, so it moves whenever its fire is lit.
+    const mode = bellows ? (waiting ? "run" : state) : waiting ? (striking ? "run" : "idle") : state;
+    const pose = !bellows && waiting && striking && STRIKE_FRAME[node.type] !== undefined ? STRIKE_FRAME[node.type] : frame;
+    const scene = `${node.type}|${mode}|${mode === "run" ? pose >> 1 : ""}`;
     if (this.art.root.dataset.scene !== scene) {
       this.art.root.dataset.scene = scene;
-      this.art.show(node.type, mode, frame);
+      this.art.show(node.type, mode, pose);
+    }
+    // Light by state, so a working furnace is plainly bright and a cold one plainly dull. Fires flicker.
+    // Light by state, steady: a working machine is plainly bright and a stopped one plainly dull.
+    // Only the fire itself flickers, in its own glow over the fire spot.
+    this.art.root.style.filter =
+      bellows && waiting ? `brightness(${0.75 + blast / 260}) saturate(${0.6 + blast / 110})`
+      : state === "run" ? "brightness(1.12) saturate(1.35)"
+      : waiting ? "" : "brightness(.55) saturate(.3)";
+    const fireSpot = FIRE_AT[node.type];
+    const glowing = !!fireSpot && burning && (state === "run" || (bellows && waiting));
+    this.fireGlow.hidden = !glowing;
+    if (glowing && fireSpot) {
+      const strength = bellows ? 0.25 + blast / 160 : 0.55;
+      this.fireGlow.style.left = `${fireSpot.x}px`;
+      this.fireGlow.style.top = `${fireSpot.y}px`;
+      this.fireGlow.style.opacity = String(strength * (frame % 2 ? 1 : 0.7));
+    }
+    // Embers rise from a lit fire; a powered tool throws the odd spark as it works.
+    if ((state === "run" || (bellows && waiting)) && now - this.emberAt > (bellows ? EMBER_MS * (1.6 - blast / 100) : EMBER_MS)) {
+      this.emberAt = now;
+      const fire = FIRE_AT[node.type] ?? SPARK_AT;
+      if (machineBurn(node.type)) sparks(this.fx, fire.x + (Math.random() - 0.5) * 24, fire.y - 6, "#ffb238", 2, 34, "'·*");
+      else if (machinePower(node.type)) sparks(this.fx, SPARK_AT.x, SPARK_AT.y, "#a9bacb", 1, 26, "*·");
+    }
+    if (bellows) {
+      this.gaugeFill.style.height = `${Math.min(100, (blast / BLAST.max) * 100)}%`;
+      this.gaugeFill.className = `blast-fill ${blast > BLAST.high ? "over" : inBlastZone(node) ? "in" : ""}`;
+      this.gauge.setAttribute("aria-label", `${tr("풀무")} ${Math.round(blast)}/${BLAST.max}`);
     }
     const fill = Math.round(node.progress * 18);
-    const flow = state === "run" ? ">>>".slice(0, 1 + (frame % 3)).padEnd(3) : state === "blocked" ? "xxx" : "   ";
-    this.bar.className = `window-bar ${state === "blocked" ? "stop" : ""}`;
-    this.bar.textContent = `${flow} [${"#".repeat(fill).padEnd(18, ".")}] ${flow}`;
+    const flow = state === "run" || (bellows && inBlastZone(node) && waiting) ? ">>>".slice(0, 1 + (frame % 3)).padEnd(3) : state === "blocked" ? "xxx" : "   ";
+    // What the last strike was worth, or why a furnace just lost its batch.
+    const burst = bellows && node.burstAt !== undefined && s.time - node.burstAt < 2000;
+    const verdict = this.struck && now - this.struck.at < VERDICT_MS
+      ? ` ${this.struck.verdict === "exact" ? tr("정확") : this.struck.verdict === "good" ? tr("좋음") : tr("빗나감")}${this.struck.streak >= 2 ? ` · ${tr("연속")} ${this.struck.streak}` : ""}`
+      : "";
+    const note = burst ? ` ${tr("과열! 재료가 타 버렸습니다")}` : verdict;
+    // The note has its own line under the bar, kept even when empty, so nothing moves or resizes.
+    const noteKind = burst || (this.struck?.verdict === "miss" && verdict) ? "stop" : verdict ? "ok" : "";
+    this.bar.className = `window-bar split ${state === "blocked" ? "stop" : ""}`;
+    const core = `${flow} [${"#".repeat(fill).padEnd(18, ".")}] ${flow}`;
+    const html = `<span>${core}</span><span class="bar-note ${noteKind}">${note.trim() || "&nbsp;"}</span>`;
+    if (this.bar.innerHTML !== html) this.bar.innerHTML = html;
   }
 }

@@ -123,6 +123,10 @@ export interface GameNode {
   fuel?: Stack | null;
   heat?: number;
   heatFull?: number;
+  /** How hot the bellows have blown a hand furnace, 0 to BLAST.max. */
+  blast?: number;
+  /** When the bellows last overheated it and burnt a batch, in game time. */
+  burstAt?: number;
   /** The riverbank a pump draws from. */
   siteId?: number;
   /** The tubes laid from the base to that riverbank, given back when the pump lets go of it. */
@@ -1566,11 +1570,24 @@ function runMachine(s: GameState, node: GameNode): void {
   // Decided before the fire is tended, so the step that burns the last heat still counts.
   const working = node.type === ENGINE ? readiness(node) === "ready" : status(node) === "run";
   const lit = tendFire(node);
+  // A hand furnace: the blast cools by itself, faster with no fire, and the work moves only while it sits in the zone.
+  if (machineManual(node.type) === "bellows") {
+    node.blast = Math.max(0, (node.blast ?? 0) - ((lit ? BLAST.fall : BLAST.fallCold) * STEP_MS) / 1000);
+    if (lit && status(node) === "manual" && inBlastZone(node)) advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
+  }
+  // A fire that goes out lets the work cool: what was done slips back, at half the pace it was made.
+  if (machineBurn(node.type) && node.type !== ENGINE && node.progress > 0 && !lit) {
+    node.progress = Math.max(0, node.progress - (COOL_RATE * STEP_MS) / (recipeOf(node).time * 1000));
+    return;
+  }
   if (!working || !lit) return;
   advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
   // An engine makes steam whenever it has water and fire, whether or not the steam is used.
   if (node.type === ENGINE) node.energy = Math.min(STEAM_MAX, node.energy + (machinePowerOut(node.type) * STEP_MS) / 1000);
 }
+
+/** How fast work cools back once a fire is out, against the pace it was made at. */
+export const COOL_RATE = 0.5;
 
 /** One power network: what its sources give, what is connected, and what is drawing now. */
 export interface PowerNet {
@@ -1653,12 +1670,35 @@ function checkGoal(s: GameState): void {
 }
 
 /** One press of work by the player, worth one second of machine time. */
-export function workMachine(s: GameState, nodeId: number): boolean {
+export function workMachine(s: GameState, nodeId: number, seconds = 1): boolean {
   const node = nodeById(s, nodeId);
   if (!atBase(s) || !node || status(node) !== "manual") return false;
-  advance(s, node, (isWeak(s) ? WEAK_WORK : 1) / recipeOf(node).time);
+  const strength = isWeak(s) ? WEAK_WORK : 1;
+  if (machineManual(node.type) === "bellows") return pumpBellows(s, node, strength);
+  // A rhythm strike says how much work it was worth: more for one right on the beat.
+  advance(s, node, (seconds * strength) / recipeOf(node).time);
   return true;
 }
+
+/**
+ * The bellows of a hand furnace. Each pump raises the blast; the work moves on only while the blast
+ * sits in the zone, and blowing it past the top burns the batch inside.
+ */
+export const BLAST = { push: 12, max: 100, low: 40, high: 80, fall: 5, fallCold: 15, after: 35 };
+
+function pumpBellows(s: GameState, node: GameNode, strength: number): boolean {
+  node.blast = (node.blast ?? 0) + BLAST.push * strength;
+  if (node.blast <= BLAST.max) return true;
+  // Overheated: the batch in the furnace is lost and the fire settles back.
+  takeBatch(node);
+  node.progress = 0;
+  node.blast = BLAST.after;
+  node.burstAt = s.time;
+  return true;
+}
+
+/** Whether a hand furnace's blast is in the zone where its work moves. */
+export const inBlastZone = (node: GameNode): boolean => (node.blast ?? 0) >= BLAST.low && (node.blast ?? 0) <= BLAST.high;
 
 /**
  * A wrong input. It always costs progress, scaled by the machine's difficulty.
@@ -1681,16 +1721,22 @@ export function failWork(s: GameState, nodeId: number): boolean {
   return true;
 }
 
+/** Takes one batch of every input out of a machine: used up by finished work, or burnt by an overheat. */
+function takeBatch(node: GameNode): void {
+  for (const { key } of nodeProcess(node).slots) {
+    const slot = node.ins[key];
+    if (!slot) continue;
+    slot.n -= Math.min(slot.n, batchOf(node, key));
+    if (!slot.n) node.ins[key] = null;
+  }
+}
+
 function advance(s: GameState, node: GameNode, amount: number): void {
   const recipe = recipeOf(node);
   node.progress += amount;
   if (node.progress < 1 - 1e-9) return;
   node.progress = 0;
-  for (const { key } of nodeProcess(node).slots) {
-    const slot = node.ins[key]!;
-    slot.n -= batchOf(node, key);
-    if (!slot.n) node.ins[key] = null;
-  }
+  takeBatch(node);
   for (const [item, qty] of Object.entries(recipe.out)) {
     node.outs[item] += qty;
     s.made[item] = (s.made[item] ?? 0) + qty;

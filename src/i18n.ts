@@ -146,6 +146,8 @@ export const EN: Record<string, string> = {
   // Game data: machines
   "창고": "Warehouse", "벽돌 가마": "Brick kiln", "제련로": "Smelter", "판금 망치": "Plate hammer", "성형대": "Forming bench", "보일러 제작대": "Boiler bench", "기관 조립대": "Engine bench",
   "관 하나가 나르는 최대 유량": "Most one pipe carries", "성능": "Stats", "새 선을 이것으로 놓습니다. 성능은 도감에서 볼 수 있습니다": "Lays new lines with this. Its stats are in the index", "벨트 하나가 나르는 최대 양": "Most one belt carries",
+  "글자": "Words", "모양": "Shapes", "노드 모양": "Node look", "노드에 이름과 재료를 글자로 보입니다": "Shows each node's name and materials in words", "노드에 설비 그림을 보입니다": "Shows each node's machine picture",
+  "키 입력": "Keys", "박자": "Rhythm", "클릭": "Click", "음식": "Food", "박자에 맞춰 그림이나 Space": "Strike on the beat: picture or Space", "풀무질: 초록 칸 유지": "Pump: keep it in the green", "풀무": "Bellows", "정확": "Exact", "좋음": "Good", "빗나감": "Miss", "연속": "Streak", "과열! 재료가 타 버렸습니다": "Overheated! The batch burnt",
   "까지 관": " needs", "개를 놓습니다": " tubes laid", "인벤토리에": "In the bag:", "취소": "Cancel",
   "압송 펌프": "Pressure pump", "배관": "Pipes", "압송": "Pressure", "L/초": " L/s", "관당": "Per pipe", "연결된 관 없음": "No pipes connected",
   "받은 동력으로 연결된 유체망의 관을 모두 같은 속도로 밀어 보냅니다": "Pushes every pipe of the joined fluid network at one pace, on the power it gets",

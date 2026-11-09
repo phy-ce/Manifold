@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BELT_DRIVE, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
+import { BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
 import {
-  GameState, GameNode, lineLayer, bagCount, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
+  GameState, GameNode, lineLayer, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
   placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -445,7 +445,8 @@ describe("manual work", () => {
   it("leaves fuel-fired machines automatic", () => {
     expect(machineManual("smelter")).toBeUndefined();
     expect(machineManual("brick_kiln")).toBeUndefined();
-    expect(machineManual("plate_hammer")).toBe("click");
+    expect(machineManual("plate_hammer")).toBe("rhythm");
+    expect(machineManual("bloomery")).toBe("bellows");
     expect(machineManual("forming_bench")).toBe("keys");
     expect(machineManual("boiler_bench")).toBe("keys");
   });
@@ -698,6 +699,13 @@ describe("item index", () => {
     // Coal burns as fuel, which isn't a recipe; as a material it goes into coke.
     expect(ids(usesOf("Lg", 3))).toEqual(expect.arrayContaining(["coke"]));
     expect(usesOf("slag")).toEqual([]);
+  });
+
+  it("names each raw item by its categories too, for map search", () => {
+    expect(categoryNames("Kn")).toContain("점토");
+    expect(categoryNames("Ml")).toEqual(expect.arrayContaining(["구리광", "산화 구리광"]));
+    expect(categoryNames("Lg")).toEqual(expect.arrayContaining(["석탄", "연료"]));
+    expect(categoryNames("Be")).toContain("음식");
   });
 
   it("treats ore families and fuel as groups with members", () => {
@@ -1447,6 +1455,22 @@ describe("survival", () => {
     expect(kiln.outs.Mc).toBe(1);
   });
 
+  it("lets the work cool back slowly once the fire is out, and picks up from there", () => {
+    const s = createGame(1);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    kiln.ins.clay = { id: "Kn", n: 2 };
+    kiln.progress = 0.5;
+    // No fuel: half a batch of an 8 s recipe is 4 s of work, and it cools at half pace, so 2 s takes back 1 s.
+    run(s, 2);
+    expect(kiln.progress).toBeCloseTo(0.5 - 1 / 8, 5);
+    run(s, 10);
+    expect(kiln.progress).toBe(0);
+    expect(kiln.ins.clay).toEqual({ id: "Kn", n: 2 });
+    kiln.fuel = { id: "Lg", n: 2 };
+    run(s, 9);
+    expect(kiln.outs.brick).toBe(2);
+  });
+
   it("still fires bricks after food shares the kiln", () => {
     const s = createGame(1);
     const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
@@ -1498,7 +1522,9 @@ describe("building", () => {
     expect(fillFromBag(s, bench(s).id, recipeOf(bench(s)), 1)).toBe(true);
     expect(s.inv[0]).toEqual({ id: "Kn", n: 2 });
     expect(warehouse(s).store[0]).toEqual({ id: "Kn", n: 40 });
-    for (let i = 0; i < machineWork("brick_kiln") - 1; i += 1) workMachine(s, bench(s).id);
+    // The construction bench takes half the machine's own work.
+    expect(recipeOf(bench(s)).time).toBe(Math.ceil(machineWork("brick_kiln") / 2));
+    for (let i = 0; i < recipeOf(bench(s)).time - 1; i += 1) workMachine(s, bench(s).id);
     expect(bench(s).outs.brick_kiln).toBe(0);
     workMachine(s, bench(s).id);
     expect(bench(s).outs.brick_kiln).toBe(1);
@@ -2973,6 +2999,56 @@ describe("pressure pumps", () => {
   });
 });
 
+describe("hand work styles", () => {
+  /** A bloomery loaded with ore and lit. */
+  const furnace = () => {
+    const s = newGame(1);
+    const node = placeMachine(s, "bloomery", 0, 0)!;
+    node.ins.iron_ore = { id: "Lm", n: 6 };
+    node.fuel = { id: "Lg", n: 8 };
+    run(s, 0.1);
+    return { s, node };
+  };
+
+  it("moves a bloomery's work only while the bellows keep the blast in the zone", () => {
+    const { s, node } = furnace();
+    expect(status(node)).toBe("manual");
+    // Cold: nothing moves.
+    run(s, 2);
+    expect(node.progress).toBe(0);
+    // Four pumps bring it into the zone, and it works while it stays there.
+    for (let i = 0; i < 4; i += 1) workMachine(s, node.id);
+    expect(node.blast).toBe(BLAST.push * 4);
+    run(s, 1);
+    expect(node.progress).toBeGreaterThan(0);
+    // Left alone it cools out of the zone and stops.
+    run(s, 4);
+    const stopped = node.progress;
+    run(s, 2);
+    expect(node.progress).toBe(stopped);
+  });
+
+  it("burns the batch inside when the bellows blow it past the top", () => {
+    const { s, node } = furnace();
+    node.progress = 0.5;
+    for (let i = 0; i < 9; i += 1) workMachine(s, node.id);
+    expect(node.ins.iron_ore).toEqual({ id: "Lm", n: 3 });
+    expect(node.progress).toBe(0);
+    expect(node.blast).toBe(BLAST.after);
+    expect(node.burstAt).toBe(s.time);
+  });
+
+  it("counts a rhythm strike as the work it was worth", () => {
+    const s = createGame(1);
+    const hammer = placeMachine(s, "plate_hammer", 0, 0)!;
+    hammer.ins.iron = { id: "iron", n: 2 };
+    expect(machineRhythm("plate_hammer")).toEqual([700]);
+    // An exact strike is worth 1.2 s of a 4 s plate.
+    workMachine(s, hammer.id, 1.2);
+    expect(hammer.progress).toBeCloseTo(1.2 / 4, 5);
+  });
+});
+
 describe("S0 hand work", () => {
   /** Makes a machine on a bench as a player does: picks it, loads its cost from the bag, works it and takes it. */
   const build = (s: GameState, benchId: number, type: string): boolean => {
@@ -3026,7 +3102,8 @@ describe("S0 hand work", () => {
       if (!bloomery.ins.iron_ore) bloomery.ins.iron_ore = { id: "Lm", n: 15 };
       if (!bloomery.fuel) bloomery.fuel = { id: "Lg", n: 8 };
       run(s, 1);
-      press(s, bloomery.id, 1);
+      // Pump only while the blast is low enough, so it stays in the zone without overheating.
+      if ((bloomery.blast ?? 0) < BLAST.low + 10) press(s, bloomery.id, 1);
       takeOutput(s, bloomery.id, "bloom");
       takeOutput(s, bloomery.id, "slag");
     }

@@ -1,7 +1,7 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
-import { CAVE, CAVES, WATER, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
+import { CAVE, CAVES, WATER, categoryNames, forageSeasons, itemCode, itemColor, itemName, richnessName } from "../content";
 import { GameState, REVEAL, SEASON_NAMES, clearLine, mobVisible, atCaveExit, caveDoorHere, caveSeenAt, currentCave, enterCave, leaveCave, onThisMap, setSafeWalk, canHarvest, isRevealed, isVisible, mine, siteHere, startProbe, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, caveCell, hash, orderSites, terrain } from "../engine/world";
 
@@ -396,7 +396,8 @@ export class MapView {
     const steps = (v: Site) => Math.max(Math.abs(v.x - s.player.x), Math.abs(v.y - s.player.y));
     const matching = s.sites
       .filter((v) => onThisMap(s, v) && (s.cave !== null || isRevealed(s, v.x, v.y)))
-      .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v)].some((t) => t.toLowerCase().includes(query)));
+      // By name, code or place name, or by category: "점토" finds every clay vein, "연료" every coal.
+      .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v), ...categoryNames(v.ore)].some((t) => t.toLowerCase().includes(query)));
     const found = orderSites(matching, steps, this.hideEmpty).slice(0, MAX_RESULTS);
     this.results.replaceChildren(...found.map((site) => {
       const b = document.createElement("button");

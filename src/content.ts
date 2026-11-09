@@ -54,7 +54,7 @@ const variants = expanded.variants;
 const forms: Record<string, { label: string }> = materials.forms;
 const ores: Record<string, Ore> = oreData.ores;
 const display: Record<string, { code: string; color: string }> = displayData;
-const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean; burn?: number; tier?: string }> = era.machines;
+const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; rhythm?: number[]; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean; burn?: number; tier?: string }> = era.machines;
 
 const food: Record<string, { hunger: number; hp: number }> = era.food;
 
@@ -284,8 +284,10 @@ export function stageOres(stage: number): string[] {
 export const laterOres = (stage: number): string[] => stageOres(stage).filter((id) => !SURFACE_ORES.includes(id));
 
 export const machineCost = (type: string): Record<string, number> => machines[type].cost ?? {};
-/** How an unpowered machine is worked by hand: "click", "keys", or nothing if it runs itself. */
+/** How an unpowered machine is worked by hand: "rhythm" (strike on the beat), "bellows", "keys", "click", or nothing if it runs itself. */
 export const machineManual = (type: string): string | undefined => machines[type]?.manual;
+/** The beat a rhythm machine is struck to: the gaps between beats in ms, repeated. */
+export const machineRhythm = (type: string): number[] => machines[type]?.rhythm ?? [700];
 export const machineWork = (type: string): number => machines[type].work ?? 1;
 export const machineName = (type: string): string => machines[type].name;
 /** How harshly a machine punishes mistakes, from 1 upward. */
@@ -322,6 +324,18 @@ export const groupMembers = (id: string): string[] =>
 
 /** Stands for whatever burns, like an ore family stands for its ores. Never held, only shown. */
 export const FUEL_GROUP = "fuel";
+
+/**
+ * The names a raw item can be found by besides its own: its ore family and groups (점토, 구리광, 산화 구리광),
+ * and whether it is fuel or food. Map search uses these, so "점토" finds every clay vein.
+ */
+export function categoryNames(id: string): string[] {
+  const ids = [familyOf(id), ...(ores[id]?.groups ?? [])].filter((x): x is string => !!x);
+  const names = ids.map((x) => itemName(x));
+  if (isFuel(id)) names.push(tr("연료"));
+  if (FORAGE.includes(id)) names.push(tr("음식"));
+  return names;
+}
 /** The items a group stands for: an ore family or group, or every fuel. Empty for a plain item. */
 export const membersOf = (id: string): string[] => (id === FUEL_GROUP ? FUELS : groupMembers(id));
 export const isGroup = (id: string): boolean => membersOf(id).length > 0;

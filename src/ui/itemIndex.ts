@@ -15,9 +15,13 @@ type Tab = "recipes" | "uses" | "members" | "stats";
 const short = (n: number) => String(Math.round(n * 100) / 100);
 
 /** Rows of items per page, and the page size before the grid has been laid out. */
-const GRID_ROWS = 6;
+const GRID_ROWS = 4;
 const GRID_PAGE = 40;
 const CARD_HEIGHT = 110;
+/** Rough heights of a one-line card, a machine group's head, and each recipe row under it. */
+const TEXT_HEIGHT = 44;
+const GROUP_HEAD = 60;
+const RECIPE_ROW = 92;
 
 /** Previous and next buttons for a paged list. Empty when everything fits on one page. */
 function pager(page: number, pages: number, go: (page: number) => void): HTMLElement {
@@ -132,9 +136,44 @@ export class ItemIndex {
     this.grid.querySelectorAll(".ghost").forEach((slot) => slot.classList.remove("ghost"));
   }
 
-  private recipeCard(recipe: Recipe): HTMLElement {
-    const card = document.createElement("div");
-    card.className = "card";
+  /**
+   * Recipes grouped by the machine that runs them: the machine's icon and name once at the head, how it is
+   * worked beside it, and each recipe as a row underneath. Order follows the recipes given.
+   */
+  private machineGroups(recipes: Recipe[]): [HTMLElement, number][] {
+    const byMachine = new Map<string, Recipe[]>();
+    for (const r of recipes) byMachine.set(r.machine, [...(byMachine.get(r.machine) ?? []), r]);
+    return [...byMachine].map(([machine, list]) => {
+      const card = document.createElement("div");
+      card.className = "card machine-group";
+      const head = document.createElement("div");
+      head.className = "card-row group-head";
+      const icon = this.itemSlot(machine);
+      icon.classList.add("small");
+      const name = document.createElement("strong");
+      name.textContent = machineName(machine);
+      const manual = machineManual(machine);
+      const hand = manual === "keys" ? tr("키 입력") : manual === "rhythm" ? tr("박자") : manual === "bellows" ? tr("풀무") : manual === "click" ? tr("클릭") : "";
+      const heat = machineBurn(machine);
+      const facts = [
+        hand,
+        machinePower(machine) ? `${tr("동력")} ${machinePower(machine)}` : "",
+        machinePowerOut(machine) ? `${tr("동력")} +${machinePowerOut(machine)}` : "",
+        heat ? `${tr("열")} ${short(heat)}/${tr("초")}` : "",
+      ].filter(Boolean).join(" · ");
+      const meta = document.createElement("span");
+      meta.className = "card-note";
+      meta.textContent = facts;
+      head.append(icon, name, meta);
+      card.append(head, ...list.map((r) => this.recipeRow(r)));
+      return [card, GROUP_HEAD + list.length * RECIPE_ROW];
+    });
+  }
+
+  /** One recipe under its machine: what goes in, what comes out, and its time. */
+  private recipeRow(recipe: Recipe): HTMLElement {
+    const box = document.createElement("div");
+    box.className = "recipe-row";
     const row = document.createElement("div");
     row.className = "card-row";
     row.append(...Object.entries(recipe.in).map(([id, n]) => this.itemSlot(id, n)));
@@ -150,19 +189,14 @@ export class ItemIndex {
     const arrow = document.createElement("span");
     arrow.textContent = ">";
     row.append(arrow, ...Object.entries(recipe.out).map(([id, n]) => this.itemSlot(id, n)));
-    const form = recipe.form && recipe.machine === "forming_bench" ? ` (${formLabel(recipe.form)})` : "";
-    const manual = machineManual(recipe.machine);
-    const hand = manual === "keys" ? tr(" · 키 입력") : manual === "click" ? tr(" · 클릭") : "";
-    const note = document.createElement("div");
-    note.className = "card-note";
-    const power = machinePower(recipe.machine) ? ` · ${tr("동력")} ${machinePower(recipe.machine)}` : "";
-    const makes = machinePowerOut(recipe.machine) ? ` · ${tr("동력")} +${machinePowerOut(recipe.machine)}` : "";
-    const burn = heat ? ` · ${tr("열")} ${short(heat)}/${tr("초")}` : "";
-    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}${tr("초")}${hand}${power}${makes}${burn}`;
     const fill = this.fillButton(recipe);
     if (fill) row.append(fill);
-    card.append(row, note);
-    return card;
+    const note = document.createElement("div");
+    note.className = "card-note";
+    const form = recipe.form && recipe.machine === "forming_bench" ? `${formLabel(recipe.form)} · ` : "";
+    note.textContent = `${form}${recipe.time}${tr("초")}`;
+    box.append(row, note);
+    return box;
   }
 
   /** Shown on recipes the open machine can run. Takes from the bag only, never the warehouse. */
@@ -308,30 +342,39 @@ export class ItemIndex {
       ...(stats.length ? [tabButton("stats", tr("성능"))] : []),
     );
 
-    const cards: HTMLElement[] = [];
+    // Cards with their rough heights, so a page holds what fits. Recipes come grouped by the machine that runs them.
+    const cards: [HTMLElement, number][] = [];
+    const text = (t: string): [HTMLElement, number] => [this.textCard(t), TEXT_HEIGHT];
     if (this.tab === "stats") {
-      cards.push(...stats.map(([what, much]) => this.textCard(`${what}: ${much}`)));
+      cards.push(...stats.map(([what, much]) => text(`${what}: ${much}`)));
     } else if (this.tab === "members") {
-      if (members.length) cards.push(this.membersCard(members));
+      if (members.length) cards.push([this.membersCard(members), CARD_HEIGHT]);
     } else if (this.tab === "recipes") {
-      if (source) cards.push(this.textCard(source));
-      cards.push(...recipes.map((r) => this.recipeCard(r)));
+      if (source) cards.push(text(source));
+      cards.push(...this.machineGroups(recipes));
     } else {
-      cards.push(...burns.map((type) => this.burnCard(type, id)));
-      cards.push(...uses.map((r) => this.recipeCard(r)));
-      cards.push(...builds.map(([type, cost]) => this.buildCard(type, cost)));
+      cards.push(...burns.map((type): [HTMLElement, number] => [this.burnCard(type, id), CARD_HEIGHT]));
+      cards.push(...this.machineGroups(uses));
+      cards.push(...builds.map(([type, cost]): [HTMLElement, number] => [this.buildCard(type, cost), CARD_HEIGHT]));
     }
-    if (!cards.length) cards.push(this.textCard(tr("아직 없습니다")));
-    // As many cards as the panel has room for.
-    const room = this.detail.clientHeight || window.innerHeight / 2;
-    const perPage = Math.max(1, Math.floor((room - CARD_HEIGHT) / CARD_HEIGHT));
-    const pages = Math.ceil(cards.length / perPage);
-    this.cardPage = Math.min(this.cardPage, pages - 1);
-    const shown = cards.slice(this.cardPage * perPage, (this.cardPage + 1) * perPage);
-    const bar = pager(this.cardPage, pages, (page) => {
+    if (!cards.length) cards.push(text(tr("아직 없습니다")));
+    // Pages filled in order up to the room the panel has; a card taller than the room gets a page of its own.
+    const room = (this.detail.clientHeight || window.innerHeight / 2) - CARD_HEIGHT;
+    const pages: HTMLElement[][] = [[]];
+    let used = 0;
+    for (const [card, height] of cards) {
+      if (used + height > room && pages[pages.length - 1].length) {
+        pages.push([]);
+        used = 0;
+      }
+      pages[pages.length - 1].push(card);
+      used += height;
+    }
+    this.cardPage = Math.min(this.cardPage, pages.length - 1);
+    const bar = pager(this.cardPage, pages.length, (page) => {
       this.cardPage = page;
       this.drawDetail();
     });
-    this.detail.append(head, tabs, ...shown, bar);
+    this.detail.append(head, tabs, ...pages[this.cardPage], bar);
   }
 }

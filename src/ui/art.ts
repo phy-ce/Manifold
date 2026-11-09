@@ -598,36 +598,47 @@ function beltDrive(mode: Status, f: number) {
 }
 
 function constructionBench(mode: Status, f: number) {
-  const drop = [0, 4, 8, 4][pose(mode, f)];
-  // Timber assembly bench with a cantilever hoist lowering a part into an open chassis.
-  rect("#59402e", 10, 56, 7, 16);
-  rect("#59402e", 58, 56, 7, 16);
-  rect("#b18a5c", 10, 56, 3, 16);
-  rect("#886342", 16, 65, 43, 4);
-  rect("#624630", 7, 8, 6, 42);
-  rect("#b99263", 7, 8, 2, 42);
-  line("#987249", 5, 12, 27, 29, 10);
-  rect("#785538", 5, 6, 46, 6);
-  rect("#d0aa77", 5, 6, 46, 3);
-  oval("#e0bd75", 38, 13, 5, 5);
-  line("#d8b276", 3, 38, 17, 38, 22 + drop);
-  rect("#647b8a", 30, 22 + drop, 16, 8);
-  rect("#d1dfe5", 30, 22 + drop, 16, 3);
-  rect("#394e5c", 42, 25 + drop, 4, 5);
-  rect("#705039", 5, 50, 65, 8);
-  rect("#c49a68", 5, 50, 65, 3);
-  rect("#463326", 5, 56, 65, 3);
-  rect("#425563", 24, 45, 28, 5);
-  rect("#718897", 24, 34, 5, 11);
-  rect("#718897", 47, 34, 5, 11);
-  rect("#c4d5dd", 24, 34, 3, 11);
-  rect("#b9ccd5", 24, 45, 28, 3);
-  rect("#e0bd75", 34, 41, 8, 4);
-  // A tool rack: an open-ended wrench and a hammer.
-  rect("#77563a", 55, 16, 17, 4);
-  polygon("#c0d0d8", [[56, 23], [59, 23], [59, 28], [62, 28], [62, 23], [65, 23], [65, 32], [62, 34], [62, 43], [58, 43], [58, 34], [56, 32]]);
-  rect("#b58a57", 68, 26, 3, 17);
-  rect("#9db1bf", 65, 23, 10, 5);
+  // A staked building plot: string lines, a brick footing, an unfinished frame and gable,
+  // scaffolding, and heaps of bricks and beams. Only the hammer strokes.
+  const headY = [10, 14, 18, 22][pose(mode, f)];
+  polygon("#40382f", [[4, 52], [17, 43], [65, 43], [72, 61], [69, 72], [4, 72]]);
+  polygon("#87765a", [[4, 52], [17, 43], [65, 43], [72, 66], [4, 66]]);
+  line("#b6a383", 2, 5, 52, 17, 44);
+  line("#d8b276", 2, 10, 46, 63, 40);
+  line("#d8b276", 2, 63, 40, 69, 64);
+  line("#d8b276", 2, 10, 46, 6, 64);
+  bricks(21, 49, 35, 8, [174, 113, 80]);
+  bricks(18, 54, 7, 10, [190, 127, 88]);
+  bricks(49, 54, 10, 10, [145, 94, 69]);
+  rect("#cba482", 21, 49, 35, 2);
+  rect("#443c34", 25, 57, 24, 7);
+  for (const [x, y] of [[23, 29], [48, 29], [36, 17]]) {
+    rect("#435563", x, y, 6, 51 - y);
+    rect("#a9bdc8", x, y, 2, 51 - y);
+  }
+  line("#718996", 5, 25, 29, 39, 17);
+  line("#c4d4da", 2, 24, 27, 38, 15);
+  rect("#718996", 23, 29, 31, 5);
+  rect("#c4d4da", 23, 29, 31, 2);
+  for (const x of [25, 49]) rect("#e0bd75", x, 31, 3, 3);
+  for (const x of [59, 68]) line("#8598a2", 3, x, 30, x, 60);
+  line("#526570", 3, 59, 57, 68, 37);
+  rect("#795337", 56, 39, 16, 5);
+  rect("#d0a575", 56, 39, 16, 2);
+  bricks(10, 57, 12, 8, [194, 126, 87]);
+  for (const y of [59, 64]) {
+    rect("#694830", 30, y, 17, 4);
+    rect("#bf9563", 30, y, 17, 2);
+  }
+  line("#d8b276", 2, 6, 66, 69, 66);
+  for (const [x, y] of [[8, 43], [61, 37], [4, 61], [67, 61]]) {
+    rect("#775236", x, y, 4, 11);
+    rect("#e0bd75", x, y, 4, 3);
+  }
+  line("#bd925f", 3, 29, headY + 3, 40, headY - 4);
+  rect("#536978", 22, headY, 11, 7);
+  rect("#d3dfe3", 22, headY, 11, 2);
+  if (mode === "run" && headY === 22) line("#ffd58c", 2, 20, 28, 16, 24);
   blocked(mode);
 }
 

@@ -181,6 +181,14 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .ports, .progress { font-size: var(--text-xs); }
 .ports { color: var(--dim); letter-spacing: 1px; }
 .flow { white-space: nowrap; overflow: hidden; }
+/* Shape mode: the machine drawn small on the left (44x26 characters at the 3px icon glyph), its label beside it.
+   The card keeps its words-mode size; how the machine is doing shows in how bright the picture is. */
+.node-body.shape { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr; align-items: center; gap: var(--gap-sm); }
+.node-art { font: 700 var(--glyph-icon)/var(--glyph-icon) var(--mono); white-space: pre; filter: brightness(.6) saturate(.4); }
+.node[data-status="run"] .node-art { filter: brightness(1.15) saturate(1.35); }
+.node[data-status="manual"] .node-art { filter: none; }
+.node-side { display: grid; gap: 1px; min-width: 0; }
+.node-side b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .progress { color: var(--fire); }
 .node[data-status="idle"] .progress { color: var(--faint); }
 .node[data-status="blocked"] .progress { color: var(--alert); }
@@ -214,7 +222,19 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 /* Windows: one at a time, covering the base */
 .window-back, .win { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: calc(var(--gap) * 2); background: rgb(8 11 15 / 82%); overflow: hidden; }
 .window { display: grid; gap: var(--gap-lg); max-width: 100%; padding: var(--gap-lg); background: var(--panel); border: 1px solid var(--dim); }
-.machine { display: grid; grid-template-columns: auto auto auto; gap: var(--gap-lg); justify-content: center; align-items: center; }
+/*
+ * Windows keep one size whatever they show. Each is sized for its fullest state, kept as narrow as that allows:
+ * the machine window fits inputs, the 274px picture, outputs and a bellows gauge in one row (about 462px) inside
+ * eight slots of width. Lines whose text changes stay on one line and cut off rather than wrap, so the height holds too.
+ */
+.machine-window { width: calc(var(--slot) * 8); }
+.machine-window > .bar-row:first-child { flex-wrap: nowrap; min-width: 0; }
+.machine-window > .bar-row:first-child h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.machine-window .recipe { flex-wrap: nowrap; min-width: 0; overflow: hidden; white-space: nowrap; }
+.machine-window .recipe > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.machine-window .recipe .state { flex: none; }
+.machine-window .window-bar { min-height: calc(var(--gap) * 2.5); overflow: hidden; }
+.machine { display: grid; grid-auto-flow: column; grid-auto-columns: auto; gap: var(--gap-lg); justify-content: center; align-items: center; }
 .stack { display: grid; gap: var(--gap); }
 .art { font-size: var(--glyph-machine); line-height: var(--glyph-machine); font-weight: 700; }
 .window-bar { text-align: center; color: var(--fire); min-height: calc(var(--gap) * 2); }
@@ -223,6 +243,11 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .store-grid { padding: var(--gap); background: var(--bg); border: 1px solid var(--rock); }
 .inv-box { display: grid; gap: var(--gap-sm); padding-top: var(--gap); border-top: 1px dashed var(--line); }
 .window-bar.stop { color: var(--alert); }
+/* A bar with a note: the note has its own line under the bar, kept even when empty, so nothing moves or resizes. */
+.window-bar.split { display: grid; justify-items: center; gap: 0; }
+.bar-note { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.bar-note.ok { color: var(--go); }
+.bar-note.stop { color: var(--alert); }
 .win { z-index: 30; text-align: center; }
 .keys { display: flex; justify-content: center; gap: var(--gap); }
 .keycap { width: var(--slot); height: var(--slot); border: 1px solid var(--line); background: var(--bg); color: var(--faint); font-size: var(--text-lg); font-weight: 700; }
@@ -237,12 +262,38 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .need { display: flex; align-items: center; gap: var(--gap); }
 .need .slot { cursor: default; }
 .short { color: var(--alert); font-weight: 700; }
-.work { display: block; margin: 0 auto; user-select: none; }
+.work { position: relative; display: block; margin: 0 auto; user-select: none; touch-action: manipulation; }
 .work:not([disabled]) { outline: 1px dashed var(--line); }
 .work:not([disabled]):hover { outline-color: var(--go); }
 .work:not([disabled]):active .art { transform: translateY(1px); }
 .art canvas { display: block; }
 .work[disabled] { cursor: default; }
+
+/* Hand work feedback, kept to the terminal look: a step-wise nudge, a brief brightening, sparks drawn as characters. */
+.work-fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.spark { position: absolute; font: 700 var(--text-xs)/1 var(--mono); animation: spark-fly 380ms steps(6) forwards; }
+@keyframes spark-fly { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+.nudge { animation: nudge 90ms steps(2); }
+.nudge-hard { animation: nudge-hard 200ms steps(4); }
+@keyframes nudge { 50% { transform: translate(1px, 1px); } }
+@keyframes nudge-hard { 25% { transform: translate(-3px, 1px); } 50% { transform: translate(3px, -1px); } 75% { transform: translate(-2px, 0); } }
+/* Light only where it comes from: a flash where a tool lands, a glow over a fire. Both blend onto the picture. */
+.strike-flash { position: absolute; width: calc(var(--gap) * 4); height: calc(var(--gap) * 3); margin: calc(var(--gap) * -1.5) 0 0 calc(var(--gap) * -2); background: radial-gradient(closest-side, #fff8e0, rgb(255 178 56 / 60%) 55%, transparent); mix-blend-mode: screen; animation: strike-flash 150ms steps(3) forwards; }
+@keyframes strike-flash { from { opacity: 1; } to { opacity: 0; } }
+.fire-glow { position: absolute; width: calc(var(--gap) * 7); height: calc(var(--gap) * 5); margin: calc(var(--gap) * -2.5) 0 0 calc(var(--gap) * -3.5); background: radial-gradient(closest-side, rgb(255 210 120 / 90%), rgb(224 84 30 / 45%) 60%, transparent); mix-blend-mode: screen; }
+/* The beat for rhythm machines: beats slide left to the strike line. */
+.lane { position: relative; height: calc(var(--gap) * 5); background: var(--bg); border: 1px solid var(--line); overflow: hidden; font: 700 var(--text-lg)/calc(var(--gap) * 5 - 2px) var(--mono); }
+.lane-line { position: absolute; top: 0; bottom: 0; left: calc(var(--gap) * 8 - 1px); width: 2px; background: var(--faint); }
+.lane-line.lit { background: var(--fire); }
+.lane-beat { position: absolute; top: 0; left: -6px; color: var(--fire); will-change: transform; }
+.lane-beat.done { color: var(--go); }
+.lane-beat.missed { color: var(--faint); }
+/* A bellows furnace's gauge: the green band is where the work moves, the red top burns the batch. */
+.blast-gauge { position: relative; align-self: stretch; width: calc(var(--gap) * 3); background: linear-gradient(to top, var(--bg) 40%, #1c2d1d 40% 80%, #36200f 80%); border: 1px solid var(--line); cursor: pointer; }
+.blast-fill { position: absolute; left: 5px; right: 5px; bottom: 0; background: var(--fire); }
+.blast-fill.in { background: var(--go); }
+.blast-fill.over { background: var(--alert); }
+@media (prefers-reduced-motion: reduce) { .spark { display: none; } .nudge, .nudge-hard, .strike-flash { animation: none; } .strike-flash { opacity: 0; } }
 .build .work[disabled] { opacity: .25; }
 .amount { color: var(--fire); text-align: center; white-space: pre; }
 .facility.building { border-style: dashed; color: var(--go); }
@@ -252,7 +303,15 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .dock { position: fixed; top: 0; right: 0; bottom: 0; z-index: 25; width: var(--dock); max-width: 100%; display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap); background: var(--panel); border-left: 1px solid var(--dim); overflow: hidden; }
 .dock input { width: 100%; min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .dock input:focus { outline: 2px solid var(--go); outline-offset: -2px; }
-.dock-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--slot)); grid-auto-rows: var(--slot); gap: var(--gap-sm); justify-content: center; align-content: start; }
+/* The index grid draws each icon's same 34x20 characters at 2px instead of 3px: 44px slots, nothing lost. */
+.dock-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--dock-slot)); grid-auto-rows: var(--dock-slot); gap: calc(var(--gap-sm) / 2); justify-content: center; align-content: start; }
+.dock-grid .slot { width: var(--dock-slot); height: var(--dock-slot); }
+.dock-grid .icon { font-size: var(--glyph-dock); line-height: var(--glyph-dock); }
+/* A machine group in the index: the machine once at the head, its recipes as rows underneath. */
+.machine-group .group-head { padding-bottom: var(--gap-sm); border-bottom: 1px solid var(--line); }
+.machine-group .recipe-row { display: grid; gap: 2px; }
+.card .slot.small { width: var(--dock-slot); height: var(--dock-slot); }
+.card .slot.small .icon { font-size: var(--glyph-dock); line-height: var(--glyph-dock); }
 .pager { display: flex; align-items: center; justify-content: center; gap: var(--gap); color: var(--dim); font-size: var(--text-sm); }
 .dock-detail { flex: 1; min-height: 0; display: grid; gap: var(--gap); align-content: start; overflow: hidden; border-top: 1px solid var(--line); padding-top: var(--gap); }
 .card { display: grid; gap: var(--gap-sm); padding: var(--gap-sm) var(--gap); background: var(--bg); border: 1px solid var(--line); }
@@ -267,7 +326,7 @@ body.dock-open #app { margin-right: var(--dock); }
 body.dock-open .window-back { right: var(--dock); }
 
 /* Route settings */
-.route-window { min-width: calc(var(--node-w) * 2.4); max-width: 100%; }
+.route-window { width: calc(var(--node-w) * 2.4); max-width: 100%; }
 .menu-window { min-width: calc(var(--node-w) * 1.6); max-width: 100%; }
 .menu-list { display: grid; gap: var(--gap); }
 .menu-list .tech { min-height: var(--control); text-align: left; }

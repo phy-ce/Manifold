@@ -176,7 +176,7 @@ function meter(label: string, value: number, kind = ""): string {
   return `<span class="meter${low}${kind ? ` ${kind}` : ""}">${label} [${"#".repeat(fill).padEnd(cells, ".")}] ${String(value).padStart(String(MAX_VITAL).length)}</span>`;
 }
 
-const windowView = new MachineWindow(game, redraw);
+const windowView = new MachineWindow(game, redraw, () => speed);
 // The route window shows the layer the graph is on. The graph is made below, before any window opens.
 const routeView = new RouteWindow(game, redraw, () => graph.layer);
 const saveView = new SaveWindow(game, (loaded) => {
