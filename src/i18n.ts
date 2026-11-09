@@ -51,7 +51,7 @@ export const EN: Record<string, string> = {
   // Top bar and general
   "새 게임": "New game", "도감": "Index", "저장": "Save", "배속": "x speed", "일시정지": "Pause",
   "테스트 시작": "Test start",
-  "지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다": "Starts with every stage so far open, a wound spring motor, a smelter and a stocked warehouse",
+  "지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 원료 창고와 부품 창고와 함께 시작합니다": "Starts with every stage so far open, a wound spring motor, a smelter, and warehouses of raw materials and parts",
   "정말 초기화?": "Really reset?", "조작 도움말 (단축키 ?)": "Controls (shortcut ?)", "조작 도움말": "Controls",
   "단축키 G": "Shortcut G", "단축키 M": "Shortcut M", "인벤토리": "Inventory", "정렬": "Sort", "버리기": "Trash",
   "들고 있는 아이템을 버립니다": "Throws away the held item", "계속하기": "Continue", "지도": "Map", "기지로": "To base",
@@ -106,6 +106,8 @@ export const EN: Record<string, string> = {
   "작업대에 표시된 키 누르기": "Press the key shown on a bench", "그림 클릭": "Click the picture",
   "판금 망치 작업, 태엽 감기": "Work a plate hammer, wind a spring", "조작": "Controls",
   // Item index
+  "종": " kinds", "열량": "Heat", "/개": " each", "구성원": "Members", "연소": "Burns", "초/개": "s each",
+  "▱ 표시가 있는 칸 위에서 들어갈 수 있는 아이템 목록": "Over a slot marked ▱, list the items that fit",
   "아이템 도감": "Item index", "이름이나 코드로 검색": "Search by name or code", "아이템 검색": "Search items", " · 키 입력": " · keys", " · 클릭": " · click",
   "인벤토리에 재료가 없습니다": "No materials in your bag", "인벤토리에서 넣기 (Shift: 가득)": "Load from your bag (Shift: fill)",
   "인벤토리에서 재료 넣기": "Load materials from your bag", "건설 재료": "build materials", "이전 아이템": "Previous item", "보유": "Have",

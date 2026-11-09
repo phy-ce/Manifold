@@ -79,6 +79,8 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .icon { font-size: var(--glyph-icon); line-height: var(--glyph-icon); font-weight: 700; }
 .code, .n { position: absolute; right: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; background: rgb(16 21 28 / 72%); }
 .code { top: 1px; font-weight: 700; }
+/* A group's badge: how many kinds count as it. Top left, clear of the code and the count. */
+.kinds { position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; color: var(--dim); background: rgb(16 21 28 / 72%); }
 .n { bottom: 1px; color: var(--fg); }
 
 /* Map */
@@ -236,6 +238,11 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .card { display: grid; gap: var(--gap-sm); padding: var(--gap-sm) var(--gap); background: var(--bg); border: 1px solid var(--line); }
 .card-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); }
 .card-note { color: var(--dim); font-size: var(--text-sm); }
+.dock-detail .heat { color: var(--fire); }
+/* The fuel piece burning now: a bar that empties, and the seconds left. */
+.fire-left { display: inline-flex; align-items: center; gap: var(--gap-sm); }
+.gauge { display: inline-block; width: calc(var(--gap) * 6); height: var(--gap-sm); border: 1px solid var(--line); background: var(--bg); }
+.gauge i { display: block; height: 100%; background: var(--fire); }
 body.dock-open #app { margin-right: var(--dock); }
 body.dock-open .window-back { right: var(--dock); }
 
@@ -262,6 +269,11 @@ body.dock-open .window-back { right: var(--dock); }
 
 /* Tooltip */
 .tip { position: fixed; left: 0; top: 0; z-index: 50; padding: var(--gap-sm) var(--gap); background: var(--bg); border: 1px solid var(--dim); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }
+/* Shift on a group lists what fills it: code, name, and for fuels the heat. */
+.tip kbd { padding: 0 var(--gap-sm); border: 1px solid var(--line); color: var(--dim); font: inherit; font-size: var(--text-xs); }
+.tip-row { display: grid; grid-template-columns: 4ch auto auto; gap: var(--gap); margin-top: var(--gap-sm); }
+.tip-code { font-weight: 700; }
+.tip-value { color: var(--fire); text-align: right; }
 
 @keyframes pulse { 50% { background: #3a1a1a; } }
 @media (prefers-reduced-motion: reduce) { .slot.full, .node[data-status="blocked"] { animation: none; } }

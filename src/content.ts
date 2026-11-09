@@ -262,7 +262,7 @@ export const machineName = (type: string): string => machines[type].name;
 /** How harshly a machine punishes mistakes, from 1 upward. */
 export const machineDifficulty = (type: string): number => machines[type]?.difficulty ?? 1;
 export const itemName = (id: string): string =>
-  ores[id] ? `${ores[id].name} (${ores[id].elements})` : itemNames[id] ?? machines[id]?.name ?? id;
+  ores[id] ? `${ores[id].name} (${ores[id].elements})` : id === FUEL_GROUP ? tr("연료") : itemNames[id] ?? machines[id]?.name ?? id;
 /** A finished machine is an item until it is installed. */
 export const isMachine = (id: string): boolean => id in machines;
 export const itemCode = (id: string): string => variants[id]?.code ?? display[id]?.code ?? id.slice(0, 2);
@@ -290,6 +290,14 @@ export const matches = (item: string, ingredient: string): boolean =>
 /** Every ore a family or group takes in, shallowest first. */
 export const groupMembers = (id: string): string[] =>
   Object.keys(ores).filter((ore) => ores[ore].family === id || ores[ore].groups?.includes(id)).sort((a, b) => ores[a].layers[0] - ores[b].layers[0]);
+
+/** Stands for whatever burns, like an ore family stands for its ores. Never held, only shown. */
+export const FUEL_GROUP = "fuel";
+/** The items a group stands for: an ore family or group, or every fuel. Empty for a plain item. */
+export const membersOf = (id: string): string[] => (id === FUEL_GROUP ? FUELS : groupMembers(id));
+export const isGroup = (id: string): boolean => membersOf(id).length > 0;
+/** Machines open by a stage that burn fuel while they work. */
+export const burners = (stage = 0): string[] => machinesAt(stage).filter((type) => machineBurn(type) > 0);
 
 // ---- Item order
 

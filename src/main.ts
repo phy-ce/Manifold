@@ -11,7 +11,7 @@ import { RouteWindow } from "./ui/routeWindow";
 import { HelpWindow } from "./ui/helpWindow";
 import { SaveWindow } from "./ui/saveWindow";
 import { MapView } from "./ui/mapView";
-import { makeSlot, paintSlot } from "./ui/slots";
+import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
 import { applyTheme } from "./ui/theme";
 import { installTooltip } from "./ui/tooltip";
 
@@ -97,7 +97,7 @@ const testStart = document.createElement("button");
 testStart.type = "button";
 testStart.className = "tech";
 testStart.textContent = tr("테스트 시작");
-testStart.dataset.tip = tr("지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 재료가 찬 창고와 함께 시작합니다");
+testStart.dataset.tip = tr("지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 원료 창고와 부품 창고와 함께 시작합니다");
 testStart.addEventListener("click", () => {
   if (testStart.dataset.armed !== "1") {
     testStart.dataset.armed = "1";
@@ -450,6 +450,7 @@ function redraw(): void {
     win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `${tr("다음 단계:")} ${next.id} ${next.name}` : `${next.id}${tr("은 아직 준비 중입니다.")}`;
   }
   graph.setStage(state.stage);
+  setSlotStage(state.stage);
   itemIndex.sync();
   if (showBase) graph.draw();
   else map.draw();

@@ -3,6 +3,7 @@
   "Ml": { "code": "Ml", "color": "#35b779" },
   "Lg": { "code": "Lg", "color": "#9a7350" },
   "Kn": { "code": "Kn", "color": "#d9cfc0" },
+  "fuel": { "code": "fu", "color": "#ffb238" },
   "iron_ore": { "code": "fe", "color": "#c9983f" },
   "copper_ore": { "code": "cu", "color": "#35b779" },
   "coal": { "code": "co", "color": "#9a7350" },

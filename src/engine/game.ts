@@ -86,9 +86,10 @@ export interface GameNode {
   order?: number;
   /** Connected to power of too weak a tier to drive it, such as a spring for a hammer. */
   tierLow?: boolean;
-  /** The fuel waiting in the firebox, and heat left from the last piece burned. */
+  /** The fuel waiting in the firebox, heat left in the piece burning now, and the heat that piece started with. */
   fuel?: Stack | null;
   heat?: number;
+  heatFull?: number;
   /** The riverbank a pump draws from. */
   siteId?: number;
   /** A steam module is fitted, so this machine can take steam power. */
@@ -1294,15 +1295,23 @@ function fuelRoom(node: GameNode, item: string, viaLine: boolean): number {
 /** Whether a machine has heat left or fuel to burn. */
 export const hasFire = (node: GameNode): boolean => (node.heat ?? 0) > 1e-9 || !!node.fuel;
 
-/** Draws heat for one step of work, burning a new piece of fuel when the last runs out. */
-function burnFuel(node: GameNode, amount: number): boolean {
-  while ((node.heat ?? 0) < amount - 1e-9) {
-    if (!node.fuel) return false;
-    node.heat = (node.heat ?? 0) + fuelValue(node.fuel.id);
+/**
+ * Like a furnace: a piece of fuel is lit only when there is a recipe to run, and once lit
+ * it burns down every step, work or not, until it is gone. True while the fire is lit.
+ */
+function tendFire(node: GameNode): boolean {
+  const burn = machineBurn(node.type);
+  if (!burn) return true;
+  if ((node.heat ?? 0) <= 1e-9) {
+    if (!node.fuel || readiness(node) !== "ready") return false;
+    node.heat = fuelValue(node.fuel.id);
+    node.heatFull = node.heat;
     node.fuel.n -= 1;
     if (!node.fuel.n) node.fuel = null;
   }
-  node.heat = (node.heat ?? 0) - amount;
+  const left = node.heat! - (burn * STEP_MS) / 1000;
+  // Rounding leaves crumbs; a fire that is out reads as exactly zero.
+  node.heat = left > 1e-9 ? left : 0;
   return true;
 }
 
@@ -1444,23 +1453,15 @@ export const lacksPower = (node: GameNode): boolean =>
 export const lacksFuel = (node: GameNode): boolean =>
   !!machineBurn(node.type) && readiness(node) === "ready" && !hasFire(node);
 
-/** An engine keeps its fire going whenever it has water and fuel, whether or not the steam is used. */
-function boil(s: GameState, node: GameNode): void {
-  if (readiness(node) !== "ready" || !burnFuel(node, (machineBurn(node.type) * STEP_MS) / 1000)) return;
-  advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
-  node.energy = Math.min(STEAM_MAX, node.energy + (machinePowerOut(node.type) * STEP_MS) / 1000);
-}
-
 function runMachine(s: GameState, node: GameNode): void {
   if (isPassive(node.type) || node.type === MOTOR) return;
-  if (node.type === ENGINE) {
-    boil(s, node);
-    return;
-  }
-  if (status(node) !== "run") return;
-  // Other fires only burn while there is work to do.
-  if (machineBurn(node.type) && !burnFuel(node, (machineBurn(node.type) * STEP_MS) / 1000)) return;
+  // Decided before the fire is tended, so the step that burns the last heat still counts.
+  const working = node.type === ENGINE ? readiness(node) === "ready" : status(node) === "run";
+  const lit = tendFire(node);
+  if (!working || !lit) return;
   advance(s, node, STEP_MS / (recipeOf(node).time * 1000));
+  // An engine makes steam whenever it has water and fire, whether or not the steam is used.
+  if (node.type === ENGINE) node.energy = Math.min(STEAM_MAX, node.energy + (machinePowerOut(node.type) * STEP_MS) / 1000);
 }
 
 /** Power each sending node reserves for carrying along its lines. */
@@ -1944,15 +1945,29 @@ export function trashCursor(s: GameState): void {
   s.cursor = null;
 }
 
-/** A running start for trying things out: the steam stage open and a wound motor driving a stocked warehouse. */
+/**
+ * A running start for trying things out: every playable stage open, a wound motor driving a smelter
+ * from a warehouse of raw materials, and a second warehouse of parts for building any machine so far.
+ */
 export function createTestGame(seed: number): GameState {
   const s = createGame(seed);
   const store = s.nodes[0];
-  const stock: [string, number][] = [
-    ["Lm", 64], ["Ml", 64], ["Lg", 64], ["Kn", 64], ["iron", 32], ["copper", 32], ["iron_plate", 32], ["copper_tube", 32], ["brick", 32], ["steam_engine_unit", 2], ["iron_cylinder", 8], ["iron_drum", 4],
+  // Ores, fuels and metals. This one feeds the smelter, so it holds nothing a line shouldn't carry off.
+  const raw: [string, number][] = [
+    ["Lm", 64], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Kn", 64], ["Lg", 64], ["Bt", 64], ["coke", 64], ["iron", 64], ["copper", 64], ["steel", 32], ["brick", 64],
   ];
-  stock.forEach(([id, n], i) => {
+  // Building parts: enough for a few of each S1-1 to S1-3 machine, and the steam engine's pieces.
+  const parts: [string, number][] = [
+    ["iron_plate", 64], ["copper_tube", 64], ["iron_rod", 64], ["iron_rivet", 64], ["iron_gear", 32], ["iron_spring", 16],
+    ["iron_cylinder", 16], ["iron_fan", 4], ["iron_drum", 4], ["boiler", 4], ["steam_engine_unit", 4], ["steam_module", 4],
+  ];
+  raw.forEach(([id, n], i) => {
     store.store[i] = { id, n };
+  });
+  const depot = newWarehouse(s, 40, 220);
+  s.nodes.push(depot);
+  parts.forEach(([id, n], i) => {
+    depot.store[i] = { id, n };
   });
   s.stage = PLAYABLE_STAGES - 1;
   addRivers(s);

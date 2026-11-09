@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf } from "../content";
+import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
 import {
   GameState, GameNode, CARRY_POWER, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkStep, walkTo, workMachine, workProject,
@@ -666,6 +666,19 @@ describe("item index", () => {
     expect(usesOf("slag")).toEqual([]);
   });
 
+  it("treats ore families and fuel as groups with members", () => {
+    expect(membersOf("coal")).toEqual(["Lg", "Bt", "An"]);
+    expect(membersOf("clay")).toEqual(["Kn"]);
+    expect(membersOf(FUEL_GROUP)).toEqual(["Lg", "Bt", "An", "coke"]);
+    expect(isGroup("Lg")).toBe(false);
+    expect(itemName(FUEL_GROUP)).toBe("연료");
+  });
+
+  it("knows which machines burn fuel", () => {
+    expect(burners(1)).toEqual(expect.arrayContaining(["brick_kiln", "smelter"]));
+    expect(burners(1)).not.toContain("plate_hammer");
+  });
+
   it("shows which buildings need an item", () => {
     expect(buildUses("iron_rivet").map(([type]) => type)).toContain("warehouse");
     expect(buildUses("Kn").map(([type]) => type)).toContain("brick_kiln");
@@ -1019,6 +1032,12 @@ describe("test preset", () => {
     expect(warehouse(s).store.some((slot) => slot?.id === "iron")).toBe(true);
     expect(motor.energy).toBeLessThan(SPRING_MAX);
     expect(smelter.progress + (warehouse(s).store.find((x) => x?.id === "slag")?.n ?? 0)).toBeGreaterThan(0);
+  });
+
+  it("stocks the parts to build every machine open so far", () => {
+    const s = createTestGame(1);
+    expect(s.nodes.filter((n) => n.type === WAREHOUSE).length).toBe(2);
+    for (const type of machinesAt(s.stage)) expect([type, canAfford(s, type)]).toEqual([type, true]);
   });
 });
 
@@ -2190,13 +2209,28 @@ describe("fuel", () => {
     expect(kiln.fuel).toEqual({ id: "Lg", n: 3 });
   });
 
-  it("keeps leftover heat when it runs out of work", () => {
-    const { s, kiln } = kilnWith(2, { id: "An", n: 1 });
+  it("keeps burning a lit piece after the work runs out, like a furnace", () => {
+    const { s, kiln } = kilnWith(2, { id: "An", n: 2 });
     run(s, 10);
-    // Anthracite gives 16; one batch took 8.
+    // Anthracite gives 16; one batch took 8, and the fire kept going for 2 more seconds.
     expect(kiln.outs.brick).toBe(2);
-    expect(kiln.fuel).toBeNull();
-    expect(kiln.heat).toBeCloseTo(8);
+    expect(kiln.fuel).toEqual({ id: "An", n: 1 });
+    expect(kiln.heat).toBeCloseTo(6);
+    expect(kiln.heatFull).toBe(16);
+    run(s, 10);
+    // Burnt out, and with no clay left the next piece stays unlit.
+    expect(kiln.heat).toBe(0);
+    expect(kiln.fuel).toEqual({ id: "An", n: 1 });
+  });
+
+  it("lights the next piece when work comes back", () => {
+    const { s, kiln } = kilnWith(0, { id: "Lg", n: 2 });
+    run(s, 3);
+    expect(kiln.fuel).toEqual({ id: "Lg", n: 2 });
+    kiln.ins.clay = { id: "Kn", n: 2 };
+    run(s, 0.5);
+    expect(kiln.fuel).toEqual({ id: "Lg", n: 1 });
+    expect(kiln.heat).toBeGreaterThan(7);
   });
 
   it("waits with no fuel, and says so", () => {
@@ -2679,11 +2713,15 @@ describe("S1-1 playthrough", () => {
 
     const add = (type: string) => placeMachine(s, type, 0, 0)!.id;
     const store = warehouse(s).id;
-    const [bloom, smelter, kiln, hammer, cast, tube, rivet, boiler, engine, yard, ores] = [
-      "smelter", "smelter", "brick_kiln", "plate_hammer", "forming_bench", "forming_bench", "forming_bench", "boiler_bench", "engine_bench", WAREHOUSE, WAREHOUSE,
+    // Two iron smelters: one line can't feed every bench that needs iron.
+    const [bloom, parts, smelter, kiln, hammer, cast, tube, rivet, gear, rod, boiler, engine, yard, ores] = [
+      "smelter", "smelter", "smelter", "brick_kiln", "plate_hammer", "forming_bench", "forming_bench", "forming_bench", "forming_bench", "forming_bench",
+      "boiler_bench", "engine_bench", WAREHOUSE, WAREHOUSE,
     ].map(add);
     expect(setForm(s, cast, "cylinder")).toBe(true);
     expect(setForm(s, rivet, "rivet")).toBe(true);
+    expect(setForm(s, gear, "gear")).toBe(true);
+    expect(setForm(s, rod, "rod")).toBe(true);
     // No filters yet, so copper ore needs a warehouse of its own.
     const main = warehouse(s).store;
     const copperStore = nodeById(s, ores)!.store;
@@ -2697,13 +2735,14 @@ describe("S1-1 playthrough", () => {
     addTo(copperStore, "Lg", 16);
 
     const wires: [number, number, string][] = [
-      [store, bloom, "all"], [ores, smelter, "all"],
-      [bloom, yard, "byproduct"], [smelter, yard, "byproduct"], [bloom, hammer, "main"], [bloom, cast, "main"], [bloom, rivet, "main"], [rivet, boiler, "main"], [smelter, tube, "main"],
-      [hammer, boiler, "main"], [hammer, engine, "main"], [tube, boiler, "main"], [tube, engine, "main"],
-      [kiln, boiler, "main"], [cast, engine, "main"], [boiler, engine, "main"],
+      [store, bloom, "all"], [store, parts, "all"], [ores, smelter, "all"],
+      [bloom, yard, "byproduct"], [parts, yard, "byproduct"], [smelter, yard, "byproduct"],
+      [bloom, hammer, "main"], [bloom, rivet, "main"], [parts, cast, "main"], [parts, gear, "main"], [parts, rod, "main"], [smelter, tube, "main"],
+      [hammer, boiler, "main"], [rivet, boiler, "main"], [tube, boiler, "main"], [kiln, boiler, "main"],
+      [cast, engine, "main"], [boiler, engine, "main"], [gear, engine, "main"], [rod, engine, "main"],
     ];
     for (const [from, to, material] of wires) expect(connect(s, from, to, material)).toBeTruthy();
-    for (const id of [store, ores, bloom, smelter, kiln, hammer, cast, tube, rivet, boiler]) power(s, id);
+    for (const id of [store, ores, bloom, parts, smelter, kiln, hammer, cast, tube, rivet, gear, rod, boiler]) power(s, id);
     nodeById(s, kiln)!.ins.clay = { id: "Kn", n: 16 };
     nodeById(s, kiln)!.fuel = { id: "Lg", n: 8 };
 

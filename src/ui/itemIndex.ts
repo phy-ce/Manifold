@@ -2,12 +2,17 @@
 // It docks beside the game so it can stay open next to a machine window.
 import { tr } from "../i18n";
 import {
-  Recipe, machinePower, buildUses, familyMembers, groupMembers, formLabel, indexItems, itemCode, itemName, itemSource, machineManual, machineName, recipesFor, usesOf,
+  FUEL_GROUP, Recipe, burners, buildUses, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
+  machinePower, machinePowerOut, recipesFor, usesOf,
 } from "../content";
 import { GameState, bagHolds, countOf, fillFromBag, nodeById, runsRecipe } from "../engine/game";
-import { makeSlot, paintSlot } from "./slots";
+import { knownMembers, makeSlot, paintSlot } from "./slots";
 
-type Tab = "recipes" | "uses";
+/** A group such as coal has members instead of recipes. */
+type Tab = "recipes" | "uses" | "members";
+
+/** Short numbers: whole when they are, otherwise up to two decimals. */
+const short = (n: number) => String(Math.round(n * 100) / 100);
 
 const GRID_PAGE = 40;
 const CARD_HEIGHT = 110;
@@ -85,13 +90,11 @@ export class ItemIndex {
     document.body.classList.toggle("dock-open", open);
   }
 
-  /** A family like "coal" isn't an item you hold, so jump to the ore that fills it. */
-  private resolve(id: string): string {
-    return familyMembers(id)[0] ?? groupMembers(id)[0] ?? id;
-  }
-
   show(id: string, tab: Tab = "recipes", remember = true): void {
-    const next = this.resolve(id);
+    const next = id;
+    // A group isn't made, it is filled: its first page is what counts as it.
+    if (isGroup(next) && tab === "recipes") tab = "members";
+    if (!isGroup(next) && tab === "members") tab = "recipes";
     if (remember && this.item && this.item !== next) this.history.push(this.item);
     if (next !== this.item || tab !== this.tab) this.cardPage = 0;
     this.item = next;
@@ -127,6 +130,15 @@ export class ItemIndex {
     const row = document.createElement("div");
     row.className = "card-row";
     row.append(...Object.entries(recipe.in).map(([id, n]) => this.itemSlot(id, n)));
+    // A fire takes any fuel, so it gets the fuel group with no count. Shift lists how long each piece burns here.
+    const heat = machineBurn(recipe.machine);
+    if (heat) {
+      const fuel = makeSlot(() => this.show(FUEL_GROUP));
+      paintSlot(fuel, null, "fuel", FUEL_GROUP);
+      fuel.classList.remove("ghost");
+      fuel.dataset.tipBurn = String(heat);
+      row.append(fuel);
+    }
     const arrow = document.createElement("span");
     arrow.textContent = ">";
     row.append(arrow, ...Object.entries(recipe.out).map(([id, n]) => this.itemSlot(id, n)));
@@ -136,7 +148,9 @@ export class ItemIndex {
     const note = document.createElement("div");
     note.className = "card-note";
     const power = machinePower(recipe.machine) ? ` · ${tr("동력")} ${machinePower(recipe.machine)}` : "";
-    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}${tr("초")}${hand}${power}`;
+    const makes = machinePowerOut(recipe.machine) ? ` · ${tr("동력")} +${machinePowerOut(recipe.machine)}` : "";
+    const burn = heat ? ` · ${tr("열")} ${short(heat)}/${tr("초")}` : "";
+    note.textContent = `${machineName(recipe.machine)}${form} · ${recipe.time}${tr("초")}${hand}${power}${makes}${burn}`;
     const fill = this.fillButton(recipe);
     if (fill) row.append(fill);
     card.append(row, note);
@@ -182,6 +196,36 @@ export class ItemIndex {
     return card;
   }
 
+  /** Everything that counts as a group, each opening its own page. */
+  private membersCard(members: string[]): HTMLElement {
+    const card = document.createElement("div");
+    card.className = "card";
+    const row = document.createElement("div");
+    row.className = "card-row";
+    row.append(...members.map((id) => this.itemSlot(id)));
+    row.querySelectorAll(".ghost").forEach((slot) => slot.classList.remove("ghost"));
+    card.append(row);
+    return card;
+  }
+
+  /** A machine that burns fuel: its heat per second, and how long one piece of this fuel lasts in it. */
+  private burnCard(type: string, fuel: string): HTMLElement {
+    const card = document.createElement("div");
+    card.className = "card";
+    const row = document.createElement("div");
+    row.className = "card-row";
+    const machine = this.itemSlot(type);
+    machine.classList.remove("ghost");
+    row.append(machine);
+    const note = document.createElement("div");
+    note.className = "card-note";
+    const burn = machineBurn(type);
+    const lasts = isFuel(fuel) ? ` · ${short(fuelValue(fuel) / burn)}${tr("초/개")}` : "";
+    note.textContent = `${tr("연소")} · ${machineName(type)} · ${tr("열")} ${short(burn)}/${tr("초")}${lasts}`;
+    card.append(row, note);
+    return card;
+  }
+
   private buildCard(type: string, cost: Record<string, number>): HTMLElement {
     const card = document.createElement("div");
     card.className = "card";
@@ -216,14 +260,24 @@ export class ItemIndex {
     title.textContent = itemName(id);
     const owned = document.createElement("span");
     owned.className = "push";
-    owned.textContent = `${tr("보유")} ${countOf(this.game(), id)}`;
-    head.append(back, title, owned);
+    const group = isGroup(id);
+    owned.textContent = group ? "" : `${tr("보유")} ${countOf(this.game(), id)}`;
+    head.append(back, title);
+    if (isFuel(id)) {
+      const heat = document.createElement("span");
+      heat.className = "heat";
+      heat.textContent = `${tr("열량")} ${fuelValue(id)}${tr("/개")}`;
+      head.append(heat);
+    }
+    head.append(owned);
 
     const stage = this.game().stage;
-    const recipes = recipesFor(id, stage);
-    const source = itemSource(id);
+    const members = knownMembers(id);
+    const recipes = group ? [] : recipesFor(id, stage);
+    const source = group ? null : itemSource(id);
     const uses = usesOf(id, stage);
     const builds = buildUses(id, stage);
+    const burns = isFuel(id) || id === FUEL_GROUP ? burners(stage) : [];
 
     const tabs = document.createElement("div");
     tabs.className = "modes";
@@ -236,15 +290,20 @@ export class ItemIndex {
       return b;
     };
     tabs.append(
-      tabButton("recipes", `${tr("얻는 법")} ${recipes.length + (source ? 1 : 0)}`),
-      tabButton("uses", `${tr("사용처")} ${uses.length + builds.length}`),
+      group
+        ? tabButton("members", `${tr("구성원")} ${members.length}`)
+        : tabButton("recipes", `${tr("얻는 법")} ${recipes.length + (source ? 1 : 0)}`),
+      tabButton("uses", `${tr("사용처")} ${burns.length + uses.length + builds.length}`),
     );
 
     const cards: HTMLElement[] = [];
-    if (this.tab === "recipes") {
+    if (this.tab === "members") {
+      if (members.length) cards.push(this.membersCard(members));
+    } else if (this.tab === "recipes") {
       if (source) cards.push(this.textCard(source));
       cards.push(...recipes.map((r) => this.recipeCard(r)));
     } else {
+      cards.push(...burns.map((type) => this.burnCard(type, id)));
       cards.push(...uses.map((r) => this.recipeCard(r)));
       cards.push(...builds.map(([type, cost]) => this.buildCard(type, cost)));
     }

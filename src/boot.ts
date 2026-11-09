@@ -37,7 +37,7 @@ function showFailure(error: unknown): void {
   const title = document.createElement("h1");
   title.textContent = tr("게임을 시작하지 못했습니다");
   const detail = document.createElement("pre");
-  detail.textContent = String(error);
+  detail.textContent = error instanceof Error && error.stack ? error.stack : String(error);
   const fresh = document.createElement("button");
   fresh.type = "button";
   fresh.textContent = tr("세이브를 보관하고 새로 시작");

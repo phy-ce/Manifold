@@ -518,7 +518,12 @@ export class MachineWindow {
     const queue = node.order ? ` · ${tr("순번")} ${node.order}` : "";
     const use = load ? `<span class="card-note">${tr("동력")} ${load.now}/${load.limit} · ${tr("연결")} ${load.connected}</span>`
       : machinePower(node.type) ? `<span class="card-note">${tr("동력")} ${machinePower(node.type)}${queue}</span>` : "";
-    const heat = machineBurn(node.type) ? `<span class="card-note">${tr("열")} ${Math.ceil(node.heat ?? 0)}</span>` : "";
+    // The lit piece burning down, in 5% steps so the line isn't rebuilt every frame.
+    const burnt = node.heatFull ? Math.round(((node.heat ?? 0) / node.heatFull) * 20) * 5 : 0;
+    const secondsLeft = Math.ceil((node.heat ?? 0) / (machineBurn(node.type) || 1));
+    const heat = machineBurn(node.type)
+      ? `<span class="card-note fire-left"><span class="gauge" aria-hidden="true"><i style="width:${burnt}%"></i></span>${secondsLeft}${tr("초")}</span>`
+      : "";
     const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}${use}${heat}<span class="state ${state}">${stateText}</span>`;
     if (this.recipe.dataset.line !== line) {
       this.recipe.dataset.line = line;
