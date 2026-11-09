@@ -2,7 +2,7 @@
 // It docks beside the game so it can stay open next to a machine window.
 import { tr } from "../i18n";
 import {
-  FUEL_GROUP, Recipe, burners, buildUses, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
+  FUEL_GROUP, Recipe, burners, buildUses, compareItems, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
   machinePower, machinePowerOut, recipesFor, usesOf,
 } from "../content";
 import { GameState, bagHolds, countOf, fillFromBag, nodeById, runsRecipe } from "../engine/game";
@@ -14,6 +14,8 @@ type Tab = "recipes" | "uses" | "members";
 /** Short numbers: whole when they are, otherwise up to two decimals. */
 const short = (n: number) => String(Math.round(n * 100) / 100);
 
+/** Rows of items per page, and the page size before the grid has been laid out. */
+const GRID_ROWS = 6;
 const GRID_PAGE = 40;
 const CARD_HEIGHT = 110;
 
@@ -88,6 +90,8 @@ export class ItemIndex {
   private setOpen(open: boolean): void {
     this.root.hidden = !open;
     document.body.classList.toggle("dock-open", open);
+    // The page size depends on how many slots fit across, which is only known once the dock shows.
+    if (open) this.drawGrid();
   }
 
   show(id: string, tab: Tab = "recipes", remember = true): void {
@@ -111,12 +115,16 @@ export class ItemIndex {
 
   private drawGrid(): void {
     const query = this.search.value.trim().toLowerCase();
+    // Same order as stacks everywhere else: raw materials, metals by shape, made goods by depth, then machines.
     const found = indexItems(this.game().stage).filter((id) =>
-      !query || itemName(id).toLowerCase().includes(query) || itemCode(id).toLowerCase().includes(query));
-    const pages = Math.max(1, Math.ceil(found.length / GRID_PAGE));
+      !query || itemName(id).toLowerCase().includes(query) || itemCode(id).toLowerCase().includes(query)).sort(compareItems);
+    // A page is whole rows of what fits across, so no page but the last has a gap.
+    const columns = getComputedStyle(this.grid).gridTemplateColumns.split(" ").filter((c) => c.endsWith("px")).length;
+    const perPage = columns ? columns * GRID_ROWS : GRID_PAGE;
+    const pages = Math.max(1, Math.ceil(found.length / perPage));
     this.gridPage = Math.min(this.gridPage, pages - 1);
-    const start = this.gridPage * GRID_PAGE;
-    this.grid.replaceChildren(...found.slice(start, start + GRID_PAGE).map((id) => this.itemSlot(id, undefined)));
+    const start = this.gridPage * perPage;
+    this.grid.replaceChildren(...found.slice(start, start + perPage).map((id) => this.itemSlot(id, undefined)));
     this.gridBar.replaceChildren(pager(this.gridPage, pages, (page) => {
       this.gridPage = page;
       this.drawGrid();

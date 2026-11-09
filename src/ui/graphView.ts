@@ -1,9 +1,9 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { tr } from "../i18n";
-import { ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, POWER, isFluid, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { BELT_DRIVE, ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
 import {
   NAME_MAX, TAR_TANK_CAP, needsModule, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
-  Ghost, Group, GameNode, GameState, LINE_MS, Line, SPRING_MAX, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
+  Ghost, Group, GameNode, GameState, LINE_LAYERS, LINE_MS, Line, LineLayer, SPRING_MAX, BELT_MAX, DRIVE_RATE, beltNetOf, lineLayer, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
 
@@ -136,10 +136,30 @@ interface GhostView {
   body: HTMLButtonElement;
   key: string;
 }
-/** Which lines stand out. Everything else fades back. */
-type Channel = "all" | "power" | "item";
-const CHANNELS: [Channel, string][] = [["all", tr("모든 선")], ["power", tr("동력")], ["item", tr("재료")]];
-const channelOf = (material: string): Channel => (material === POWER ? "power" : "item");
+/** What a belt drive is doing: how many belts it runs and how fast, or why it stands. */
+export function beltSummary(node: GameNode, detail = false): string {
+  const net = beltNetOf(node.id);
+  if (!net?.belts) return tr("연결된 벨트 없음");
+  // What this drive alone puts in, then, in the window, how the whole network shares it out.
+  const own = `${tr("공급")} ${node.speed ? DRIVE_RATE : 0}${tr("개/초")}`;
+  if (!node.speed) return `${own} · ${tr("동력 없음")}`;
+  const short = (n: number) => Math.round(n * 100) / 100;
+  const whole = `${tr("구동기")} ${net.running}${tr("대")} · ${tr("벨트")} ${net.belts}${tr("줄")} · ${tr("벨트당")} ${short(net.rate)}${tr("개/초")}${net.rate >= BELT_MAX ? ` (${tr("최대")})` : ""}`;
+  return detail ? `${own} · ${whole}` : `${own} · ${tr("벨트")} ${net.belts}${tr("줄")}`;
+}
+
+/** The layers the board shows one at a time. Lines on the other layers are not drawn at all. */
+const LAYERS: [LineLayer, string][] = [["item", tr("재료")], ["fluid", tr("유체")], ["power", tr("동력")]];
+/** Remembers the layer between visits. It is a view setting, so it stays out of the save. */
+const LAYER_KEY = "modpack-simulator-graph-layer";
+function savedLayer(): LineLayer {
+  try {
+    const value = localStorage.getItem(LAYER_KEY);
+    return LINE_LAYERS.find((l) => l === value) ?? "item";
+  } catch {
+    return "item";
+  }
+}
 /** Board zoom limits, and how much one wheel notch changes it. */
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 1.6;
@@ -205,7 +225,7 @@ export class GraphView {
   private readonly paletteItems = new Map<string, HTMLButtonElement>();
   private readonly tools = document.createElement("div");
   private readonly search = document.createElement("input");
-  private readonly channels = new Map<Channel, HTMLButtonElement>();
+  private readonly layerButtons = new Map<LineLayer, HTMLButtonElement>();
   private readonly copyButton = document.createElement("button");
   private readonly pasteButton = document.createElement("button");
   private readonly buildAll = document.createElement("button");
@@ -221,7 +241,8 @@ export class GraphView {
   private pickingPort = false;
   private readonly selected = new Set<number>();
   private clip: number[] = [];
-  private channel: Channel = "all";
+  /** The layer on screen. New lines are made on it, and the route window lists only its channels. */
+  layer: LineLayer = savedLayer();
   private pointer: { x: number; y: number } | null = null;
   private boxFrom: { x: number; y: number } | null = null;
 
@@ -266,17 +287,18 @@ export class GraphView {
     this.search.setAttribute("aria-label", tr("노드 찾기"));
     this.search.addEventListener("input", () => this.draw());
     const lines = document.createElement("div");
-    lines.className = "modes";
-    for (const [channel, label] of CHANNELS) {
+    lines.className = "modes layers";
+    lines.setAttribute("role", "group");
+    lines.setAttribute("aria-label", tr("레이어"));
+    for (const [layer, label] of LAYERS) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "tech";
+      b.dataset.layer = layer;
+      b.dataset.tip = tr("L 키로 다음 레이어");
       b.textContent = label;
-      b.addEventListener("click", () => {
-        this.channel = channel;
-        this.draw();
-      });
-      this.channels.set(channel, b);
+      b.addEventListener("click", () => this.setLayer(layer));
+      this.layerButtons.set(layer, b);
       lines.append(b);
     }
     const action = (b: HTMLButtonElement, label: string, tip: string, run: () => void) => {
@@ -302,6 +324,18 @@ export class GraphView {
       this.draw();
     });
     this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.groupButton, this.buildAll, this.zoomButton);
+  }
+
+  private setLayer(layer: LineLayer): void {
+    if (layer === this.layer) return;
+    this.layer = layer;
+    this.cancelLink();
+    try {
+      localStorage.setItem(LAYER_KEY, layer);
+    } catch {
+      // Without storage the board just starts on the item layer next time.
+    }
+    this.changed();
   }
 
   private copy(): void {
@@ -549,6 +583,9 @@ export class GraphView {
     const s = this.game();
     if ((e.ctrlKey || e.metaKey) && e.code === "KeyC") this.copy();
     else if ((e.ctrlKey || e.metaKey) && e.code === "KeyV") this.paste();
+    else if (e.code === "KeyL" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !document.querySelector(".window-back:not([hidden])")) {
+      this.setLayer(LINE_LAYERS[(LINE_LAYERS.indexOf(this.layer) + 1) % LINE_LAYERS.length]);
+    }
     else if (e.key === "Delete") {
       // Only plans can be deleted from the board. Real machines are demolished in their window.
       for (const id of [...this.selected]) {
@@ -631,7 +668,7 @@ export class GraphView {
     for (const line of s.ghostLines) {
       const a = this.spotOf(s, line.from);
       const b = this.spotOf(s, line.to);
-      if (!a || !b) continue;
+      if (!a || !b || lineLayer(s, line.from, line.material) !== this.layer) continue;
       const key = `${line.from}>${line.to}:${line.material}`;
       live.add(key);
       let path = this.ghostWires.get(key);
@@ -645,7 +682,6 @@ export class GraphView {
       const at = attach(a, b);
       path.setAttribute("d", wirePath(route(at.start, at.end, at.flat)));
       path.style.stroke = itemColor(line.material);
-      path.classList.toggle("muted", this.channel !== "all" && channelOf(line.material) !== this.channel);
     }
     for (const [key, path] of this.ghostWires) {
       if (!live.has(key)) {
@@ -782,7 +818,8 @@ export class GraphView {
     if (from === id) return this.cancelLink();
     const s = this.game();
     this.cancelLink();
-    if (routeMaterials(s, from, id).length) {
+    // A line is made on the layer on screen, so the target has to take something on it.
+    if (routeMaterials(s, from, id).some((m) => lineLayer(s, from, m) === this.layer)) {
       this.openRoute(from, id);
       return;
     }
@@ -922,6 +959,9 @@ export class GraphView {
     if (node.type === MANIFOLD) {
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${tr("동력을 나눕니다")}</span>`;
     }
+    if (node.type === BELT_DRIVE) {
+      return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${beltSummary(node)}</span>`;
+    }
     if (isStore(node.type)) {
       const kinds = node.store.filter(Boolean).map((x) => tag(x!.id, x!.n)).slice(0, 4).join(" ");
       return `<b>${nodeLabel(s, node)}</b><span class="ports">${ports}</span><span class="flow">${kinds || "·"}</span>`;
@@ -974,10 +1014,10 @@ export class GraphView {
   }
 
   /** Remakes a wire's strands when its materials change: power dashes, fluids run in pipes. */
-  private makeStrands(view: LineView, materials: string[]): void {
+  private makeStrands(view: LineView, materials: string[], layer: LineLayer): void {
     for (const strand of view.strands) for (const path of strand.paths) path.remove();
     view.strands = materials.map((id) => {
-      const kind = id === POWER ? "power" : isFluid(id) ? "pipe" : "solid";
+      const kind = layer === "power" ? "power" : layer === "fluid" ? "pipe" : "solid";
       const paths = [document.createElementNS(SVG, "path")];
       if (kind === "pipe") paths.push(document.createElementNS(SVG, "path"));
       paths[0].setAttribute("class", `strand ${kind}`);
@@ -1117,12 +1157,15 @@ export class GraphView {
   draw(): void {
     const s = this.game();
     this.drawRoster(s);
+    // The build list only makes machines. What is already made shows as items in the bag and warehouses.
     for (const [type, b] of this.paletteItems) {
-      const owned = countOf(s, type);
-      const label = `${machineName(type)} ${owned ? `x${owned}` : "+"}`;
+      const label = machineName(type);
       if (b.textContent !== label) b.textContent = label;
     }
-    for (const [channel, b] of this.channels) b.classList.toggle("selected", channel === this.channel);
+    for (const [layer, b] of this.layerButtons) {
+      b.classList.toggle("selected", layer === this.layer);
+      b.setAttribute("aria-pressed", String(layer === this.layer));
+    }
     this.copyButton.disabled = !this.selected.size;
     const canGroup = [...this.selected].filter((id) => nodeById(s, id)).length >= 2;
     if (!canGroup) this.pickingPort = false;
@@ -1181,10 +1224,11 @@ export class GraphView {
     this.board.style.width = `${Math.max(width, this.view.clientWidth / this.zoom)}px`;
     this.board.style.height = `${Math.max(height, this.view.clientHeight / this.zoom)}px`;
 
-    // All materials between the same two nodes share one line.
+    // Only the layer on screen is drawn. Its materials between the same two nodes share one line.
     const routes = new Map<string, Line[]>();
     for (const line of s.lines) {
-      const key = `${line.from}>${line.to}`;
+      if (lineLayer(s, line.from, line.material) !== this.layer) continue;
+      const key = `${this.layer}:${line.from}>${line.to}`;
       routes.set(key, [...(routes.get(key) ?? []), line]);
     }
     for (const [key, view] of this.lines) {
@@ -1238,10 +1282,10 @@ export class GraphView {
       const codes = materials.join();
       if (view.set.dataset.codes !== codes) {
         view.set.dataset.codes = codes;
-        this.makeStrands(view, materials);
+        this.makeStrands(view, materials, this.layer);
       }
       // A bundle lays its materials side by side, so none of them loses its colour.
-      const widest = materials.some(isFluid) ? PIPE_W : STRAND_W;
+      const widest = this.layer === "fluid" ? PIPE_W : STRAND_W;
       const gap = widest + 1.5;
       const span = (materials.length - 1) * gap;
       view.casing.setAttribute("d", shape);
@@ -1252,13 +1296,9 @@ export class GraphView {
       });
       view.arrow.setAttribute("points", arrowPoints(wire));
 
-      const lit = this.channel === "all" || group.some((l) => channelOf(l.material) === this.channel);
       const linked = traced === undefined || group[0].from === traced || group[0].to === traced;
       if (traced !== undefined && linked) for (const id of [group[0].from, group[0].to]) near.add(id);
-      for (const mark of [view.set, view.tag, view.mover]) {
-        mark.classList.toggle("muted", !lit);
-        mark.classList.toggle("faded", lit && !linked);
-      }
+      for (const mark of [view.set, view.tag, view.mover]) mark.classList.toggle("faded", !linked);
       const names = group.map((l) => itemName(l.material)).join(", ");
       view.hit.dataset.tip = names;
       view.tag.dataset.tip = names;

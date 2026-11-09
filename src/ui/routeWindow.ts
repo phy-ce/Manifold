@@ -1,8 +1,8 @@
 // Route settings between two nodes. Without a filter a route only has broad channels:
 // a warehouse sends whatever it holds, and a machine sends its main output or by-products.
 import { tr } from "../i18n";
-import { MANIFOLD, MAX_PORTS, SPLITTER, isPowerSource, itemCode, itemColor, itemName } from "../content";
-import { GameState, canAffordRoute, hasDrive, nodeById, nodeLabel, portsUsed, routeCost, routeMaterials, toggleRoute } from "../engine/game";
+import { BELT_DRIVE, MANIFOLD, MAX_PORTS, isPowerSource, itemCode, itemColor, itemName } from "../content";
+import { GameState, LineLayer, TUBE, bagCount, beltNetOf, canAffordRoute, hasDrive, lineLayer, nodeById, nodeLabel, portsUsed, routeCost, routeMaterials, toggleRoute } from "../engine/game";
 
 export class RouteWindow {
   readonly root = document.createElement("div");
@@ -14,7 +14,7 @@ export class RouteWindow {
   private to: number | null = null;
   private drawn = "";
 
-  constructor(private readonly game: () => GameState, private readonly changed: () => void) {
+  constructor(private readonly game: () => GameState, private readonly changed: () => void, private readonly layer: () => LineLayer) {
     this.root.className = "window-back";
     this.root.hidden = true;
     const panel = document.createElement("div");
@@ -71,17 +71,28 @@ export class RouteWindow {
     const from = nodeById(s, this.from);
     const to = nodeById(s, this.to);
     if (!from || !to) return this.close();
-    const lines = s.lines.filter((l) => l.from === from.id && l.to === to.id);
+    // Only the layer on screen: its lines, and the channels that would run on it.
+    const layer = this.layer();
+    const onLayer = (material: string) => lineLayer(s, from.id, material) === layer;
+    const lines = s.lines.filter((l) => l.from === from.id && l.to === to.id && onLayer(l.material));
     const full = portsUsed(s, from.id) >= MAX_PORTS || portsUsed(s, to.id) >= MAX_PORTS;
-    const channels = routeMaterials(s, from.id, to.id);
-    const afford = canAffordRoute(s, from.id, to.id);
-    const cost = Object.entries(routeCost(s, from.id, to.id)).map(([id, n]) => `${itemName(id)} ${n}`).join(", ");
-    const key = `${channels.join()}|${lines.map((l) => `${l.material}${l.active}`).join()}|${full}|${afford}`;
+    const channels = routeMaterials(s, from.id, to.id).filter(onLayer);
+    // Paid from the bag only, so the count shown is what the player carries.
+    // "Any tube" is a shape, not one item.
+    const costName = (id: string) => (id === TUBE ? tr("관 (철관, 구리관)") : itemName(id));
+    const costOf = (material: string) => Object.entries(routeCost(s, from.id, material)).map(([id, n]) => `${costName(id)} ${n} (${tr("인벤토리")} ${bagCount(s, id)})`).join(", ");
+    const afford = channels.some((id) => canAffordRoute(s, from.id, id));
+    const cost = channels.length ? costOf(channels[0]) : "";
+    const key = `${layer}|${channels.join()}|${lines.map((l) => `${l.material}${l.active}`).join()}|${full}|${afford}|${cost}`;
     if (key === this.drawn) return;
     this.drawn = key;
 
     this.route.textContent = `${nodeLabel(s, from)} > ${nodeLabel(s, to)}`;
-    this.drive.textContent = isPowerSource(from.type) || from.type === MANIFOLD || from.type === SPLITTER || hasDrive(s, from.id) ? "" : tr("보내는 쪽에 동력이 없어 멈춰 있습니다");
+    // Belts stand without a running belt drive on their network; pipes without power at the sender.
+    const stands = layer === "item"
+      ? from.type !== BELT_DRIVE && !beltNetOf(from.id)?.rate && tr("이 물류망에 돌아가는 벨트 구동기가 없어 멈춰 있습니다")
+      : layer === "fluid" && !hasDrive(s, from.id) && tr("보내는 쪽에 동력이 없어 멈춰 있습니다");
+    this.drive.textContent = isPowerSource(from.type) || from.type === MANIFOLD || !stands ? "" : stands;
     this.ports.textContent = `${tr("포트")} ${portsUsed(s, from.id)}/${MAX_PORTS} > ${portsUsed(s, to.id)}/${MAX_PORTS} · ${tr("연결 비용:")} ${cost}`;
     this.ports.classList.toggle("short", !afford);
     this.list.replaceChildren(...channels.map((id) => {
@@ -89,7 +100,7 @@ export class RouteWindow {
       const b = document.createElement("button");
       b.type = "button";
       b.className = `route-row ${line ? "on" : ""}`;
-      b.disabled = !line && (full || !afford);
+      b.disabled = !line && (full || !canAffordRoute(s, from.id, id));
       b.setAttribute("aria-pressed", String(!!line));
       const mark = document.createElement("span");
       mark.textContent = line ? "[x]" : "[ ]";
@@ -103,9 +114,11 @@ export class RouteWindow {
       state.textContent = line ? (line.active ? tr("이동 중") : tr("대기")) : "";
       b.append(mark, code, name, state);
       b.addEventListener("click", () => {
-        toggleRoute(this.game(), from.id, to.id, id);
+        const done = toggleRoute(this.game(), from.id, to.id, id);
         this.drawn = "";
         this.draw();
+        // Taking a line down puts its materials in the bag, so a full bag refuses.
+        if (!done && line) this.drive.textContent = tr("인벤토리가 가득 차서 선을 거둘 수 없습니다");
         this.changed();
       });
       return b;

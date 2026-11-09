@@ -1,7 +1,7 @@
 // Build window: shows what a facility needs, then the player works it into existence.
 import { tr } from "../i18n";
 import { machineCost, machineName, machineWork } from "../content";
-import { GameState, addGhost, canAfford, cancelProject, countOf, installMachine, nextSpot, startProject, workProject } from "../engine/game";
+import { GameState, addGhost, canAfford, cancelProject, countOf, nextSpot, startProject, workProject } from "../engine/game";
 import { COLS, renderArt } from "./art";
 import { makeSlot, paintSlot } from "./slots";
 
@@ -14,7 +14,7 @@ export class BuildWindow {
   private readonly art = document.createElement("pre");
   private readonly start = document.createElement("button");
   private readonly cancel = document.createElement("button");
-  private readonly install = document.createElement("button");
+  private readonly note = document.createElement("p");
   private readonly plan = document.createElement("button");
   private rows: [string, number, HTMLSpanElement][] = [];
   private type: string | null = null;
@@ -62,14 +62,9 @@ export class BuildWindow {
       cancelProject(this.game());
       this.changed();
     });
-    this.install.type = "button";
-    this.install.className = "tech";
-    this.install.addEventListener("click", () => {
-      const s = this.game();
-      const at = nextSpot(s);
-      if (this.type && installMachine(s, this.type, at.x, at.y)) this.close();
-      this.changed();
-    });
+    // A finished machine is an item like any other: it is installed by holding it and clicking the board.
+    this.note.className = "card-note";
+    this.note.textContent = tr("완성된 기계는 아이템으로 인벤토리에 들어갑니다. 손에 들고 보드를 클릭하면 설치됩니다");
     this.plan.type = "button";
     this.plan.className = "tech";
     this.plan.textContent = tr("청사진");
@@ -83,9 +78,9 @@ export class BuildWindow {
     });
     const actions = document.createElement("div");
     actions.className = "bar-row";
-    actions.append(this.start, this.cancel, this.install, this.plan);
+    actions.append(this.start, this.cancel, this.plan);
 
-    panel.append(head, this.needs, this.work, this.amount, actions);
+    panel.append(head, this.needs, this.work, this.amount, actions, this.note);
     this.root.append(panel);
     this.root.addEventListener("click", (e) => {
       if (e.target === this.root) this.close();
@@ -141,10 +136,6 @@ export class BuildWindow {
     this.cancel.hidden = !mine;
     this.start.hidden = !!mine;
     this.start.disabled = !!s.project || !canAfford(s, this.type);
-    const owned = countOf(s, this.type);
-    const label = `${tr("설치 (보유")} ${owned})`;
-    if (this.install.textContent !== label) this.install.textContent = label;
-    this.install.disabled = owned < 1;
 
     // The facility rises from the ground as the work fills up.
     const key = `${this.type}|${done}|${!!mine}`;

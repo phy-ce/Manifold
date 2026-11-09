@@ -16,7 +16,7 @@ const SHAPE_OF: Record<string, string> = {
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
 };
 
-const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "drum", "fan", "boots", "pack", "pick"]);
+const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick"]);
 
 interface Lump {
   /** Gives each lump its own outline. */
@@ -40,6 +40,8 @@ const LUMPS: Record<string, Lump> = {
   Bt: { seed: 25, grain: 0.55, mineral: "bituminous" },
   An: { seed: 26, grain: 0.2, mineral: "anthracite" },
   slag: { seed: 41, holes: 9 },
+  // Matte is a cooled copper sulphide melt: a dense lump with a metallic sheen and a few gas pockets.
+  copper_matte: { seed: 43, grain: 0.45, holes: 4, mineral: "chalcocite" },
 };
 
 const { cols: COLS, rows: ROWS } = charGrid(SIZE.slot - 2, GLYPH.icon);

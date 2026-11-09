@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
+import { BELT_DRIVE, DRIVE, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
 import {
-  GameState, GameNode, CARRY_POWER, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  GameState, GameNode, lineLayer, bagCount, beltNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
   placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkStep, walkTo, workMachine, workProject,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
@@ -33,12 +33,13 @@ const warehouse = (s: GameState) => s.nodes.find((n) => n.type === WAREHOUSE)!;
  * anything that needs steam gets its own stoked engine, whatever stage the test is at.
  */
 const power = (s: GameState, id: number) => {
-  if (s.lines.some((l) => l.to === id && l.material === POWER)) return;
+  if (s.lines.some((l) => l.to === id && (l.material === POWER || l.material === DRIVE))) return;
   const node = nodeById(s, id)!;
   if (!machinePower(node.type) || machineTier(node.type) === "spring") {
     const motor = placeMachine(s, MOTOR, 0, 0)!;
     motor.energy = 100000;
-    connect(s, motor.id, id, POWER);
+    // A machine that uses power takes it straight. Anything else only sends, so it gets a belt drive.
+    if (!connect(s, motor.id, id, POWER)) belt(s, id, motor);
     return;
   }
   const stage = s.stage;
@@ -50,12 +51,25 @@ const power = (s: GameState, id: number) => {
   node.module = true;
   connect(s, engine.id, id, POWER);
 };
-const carrying = (s: GameState) => s.lines.filter((l) => l.material !== POWER);
+/** Joins a node's belt network to a belt drive on a motor that never runs down, unless it has one. */
+const belt = (s: GameState, id: number, motor?: GameNode) => {
+  if (s.lines.some((l) => l.to === id && l.material === DRIVE)) return;
+  if (!motor) {
+    motor = placeMachine(s, MOTOR, 0, 0)!;
+    motor.energy = 100000;
+  }
+  const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
+  connect(s, motor.id, drive.id, POWER);
+  connect(s, drive.id, id, DRIVE);
+};
+const carrying = (s: GameState) => s.lines.filter((l) => l.material !== POWER && l.material !== DRIVE);
 /** Routes cost parts; tests about routing itself just pay for them. */
 const route = (s: GameState, from: number, to: number, material: string) => {
-  s.inv[6] = { id: "iron_plate", n: 64 };
-  s.inv[7] = { id: "copper_tube", n: 64 };
+  s.inv[6] = { id: "iron_belt", n: 64 };
+  s.inv[7] = { id: "iron_rod", n: 64 };
+  s.inv[8] = { id: "iron_tube", n: 64 };
   power(s, from);
+  belt(s, from);
   return toggleRoute(s, from, to, material);
 };
 const press = (s: GameState, id: number, times: number) => {
@@ -183,7 +197,7 @@ describe("endless map", () => {
 
 describe("rules", () => {
   it("has a recipe for every S1-1 machine", () => {
-    for (const type of MACHINE_TYPES.filter((t) => t !== WAREHOUSE && t !== MOTOR)) {
+    for (const type of MACHINE_TYPES.filter((t) => t !== WAREHOUSE && t !== MOTOR && t !== BELT_DRIVE)) {
       expect(processOf(type, machineForms(type)[0] ?? "").recipes.length).toBeGreaterThan(0);
     }
   });
@@ -325,7 +339,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "fan", "boots", "pack", "pick"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick"]);
   });
 
   it("makes the chosen form from whichever metal goes in", () => {
@@ -941,23 +955,45 @@ describe("spring power", () => {
     expect(furnace.fuel).toBeNull();
   });
 
-  it("needs a wound motor, not just a connected one", () => {
-    const { s, furnace, store } = setup();
+  /** A motor runs a belt drive, and the drive joins the warehouse's network. */
+  const driven = (s: GameState, store: GameNode, energy: number) => {
     const motor = placeMachine(s, MOTOR, 0, 0)!;
-    expect(connect(s, motor.id, store.id, POWER)).toBeTruthy();
-    expect(hasDrive(s, store.id)).toBe(false);
+    motor.energy = energy;
+    const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
+    expect(connect(s, motor.id, drive.id, POWER)).toBeTruthy();
+    expect(connect(s, drive.id, store.id, DRIVE)).toBeTruthy();
+    return { motor, drive };
+  };
+
+  it("needs a wound motor behind the belt drive, not just a connected one", () => {
+    const { s, furnace, store } = setup();
+    driven(s, store, 0);
     run(s, 5);
     expect(furnace.fuel).toBeNull();
+    expect(beltNetOf(store.id)).toMatchObject({ drives: 1, running: 0, rate: 0 });
   });
 
-  it("spends one unit of force per item and stops when it runs out", () => {
+  it("moves belts on a belt drive, and the drive draws force as it runs", () => {
     const { s, furnace, store } = setup();
+    const { motor } = driven(s, store, SPRING_MAX);
+    run(s, 2);
+    expect(furnace.fuel?.id).toBe("Lg");
+    expect(beltNetOf(furnace.id)).toMatchObject({ drives: 1, running: 1, belts: 1, rate: BELT_MAX });
+    expect(motor.energy).toBeLessThan(SPRING_MAX - 2);
+  });
+
+  it("shares one drive's rate across every belt of its network", () => {
+    const { s, store } = setup();
+    driven(s, store, SPRING_MAX);
+    for (let i = 0; i < 3; i += 1) connect(s, store.id, placeMachine(s, "smelter", 0, 0)!.id, "all");
+    run(s, 1);
+    expect(beltNetOf(store.id)).toMatchObject({ belts: 4, rate: DRIVE_RATE / 4 });
+  });
+
+  it("takes no power line into a warehouse: belts run on a drive instead", () => {
+    const { s, store } = setup();
     const motor = placeMachine(s, MOTOR, 0, 0)!;
-    connect(s, motor.id, store.id, POWER);
-    motor.energy = 1;
-    run(s, 5);
-    expect(furnace.fuel).toEqual({ id: "Lg", n: 1 });
-    expect(motor.energy).toBe(0);
+    expect(routeMaterials(s, motor.id, store.id)).toEqual([]);
   });
 
   it("runs down by itself over time, but never below empty", () => {
@@ -970,24 +1006,21 @@ describe("spring power", () => {
     expect(motor.energy).toBe(0);
   });
 
-  it("carries but can't drive a machine: a spring is too weak a tier for a hammer", () => {
+  it("runs a belt drive but can't drive a machine: a spring is too weak a tier for a hammer", () => {
     const { s, furnace, store } = setup();
     s.stage = 1;
-    const motor = placeMachine(s, MOTOR, 0, 0)!;
-    motor.energy = SPRING_MAX;
+    const { motor } = driven(s, store, SPRING_MAX);
     const hammer = placeMachine(s, "steam_hammer", 0, 0)!;
     hammer.module = true;
-    connect(s, motor.id, store.id, POWER);
     connect(s, motor.id, hammer.id, POWER);
     hammer.ins.iron = { id: "iron", n: 12 };
     run(s, 1);
     expect(hammer.speed).toBe(0);
     expect(hammer.tierLow).toBe(true);
     expect(hammer.outs.iron_plate).toBe(0);
-    // The warehouse's line still carries on the spring.
-    expect(store.carry).toBe(true);
+    // The warehouse's belt still moves on the spring's drive.
     expect(!!furnace.fuel || (furnace.heat ?? 0) > 0).toBe(true);
-    expect(powerLoad(s, motor)).toEqual({ now: 0, connected: CARRY_POWER, limit: 5 });
+    expect(powerLoad(s, motor)).toEqual({ now: 2, connected: 2, limit: 5 });
   });
 
   it("winds by hand up to a limit", () => {
@@ -999,18 +1032,22 @@ describe("spring power", () => {
     expect(windMotor(s, motor.id)).toBe(false);
   });
 
-  it("uses a port for the power line", () => {
+  it("uses a port for the belt drive's line", () => {
     const { s, store } = setup();
-    const motor = placeMachine(s, MOTOR, 0, 0)!;
-    connect(s, motor.id, store.id, POWER);
+    driven(s, store, SPRING_MAX);
     expect(portsUsed(s, store.id)).toBe(2);
   });
 
-  it("only sends power, and only from a motor", () => {
+  it("only sends power, only from a motor, and only to what uses it", () => {
     const { s, store, furnace } = setup();
     const motor = placeMachine(s, MOTOR, 0, 0)!;
-    expect(routeMaterials(s, motor.id, furnace.id)).toEqual([POWER]);
+    const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
+    expect(routeMaterials(s, motor.id, drive.id)).toEqual([POWER]);
+    // A smelter burns fuel and its belts run on a drive, so a power line would do nothing.
+    expect(routeMaterials(s, motor.id, furnace.id)).toEqual([]);
     expect(routeMaterials(s, store.id, motor.id)).toEqual([]);
+    expect(routeMaterials(s, drive.id, store.id)).toEqual([DRIVE]);
+    expect(routeMaterials(s, store.id, drive.id)).toEqual([]);
   });
 
   it("keeps its power line when a machine changes form", () => {
@@ -1036,8 +1073,31 @@ describe("test preset", () => {
 
   it("stocks the parts to build every machine open so far", () => {
     const s = createTestGame(1);
-    expect(s.nodes.filter((n) => n.type === WAREHOUSE).length).toBe(2);
+    // Raw materials, parts, and two shelves of built machines.
+    expect(s.nodes.filter((n) => n.type === WAREHOUSE).length).toBe(4);
     for (const type of machinesAt(s.stage)) expect([type, canAfford(s, type)]).toEqual([type, true]);
+  });
+
+  it("keeps two of every machine open so far, built and ready to install", () => {
+    const s = createTestGame(1);
+    expect(machinesAt(s.stage)).toContain("blast_furnace");
+    for (const type of machinesAt(s.stage)) expect([type, countOf(s, type) >= 2]).toEqual([type, true]);
+  });
+
+  it("runs the smelter's belts on a belt drive driven by the motor", () => {
+    const s = createTestGame(1);
+    const smelter = s.nodes.find((n) => n.type === "smelter")!;
+    const drive = s.nodes.find((n) => n.type === BELT_DRIVE)!;
+    expect(s.lines.some((l) => l.to === drive.id && l.material === POWER)).toBe(true);
+    expect(s.lines.some((l) => l.from === drive.id && l.material === DRIVE)).toBe(true);
+    run(s, 3);
+    expect(beltNetOf(smelter.id)).toMatchObject({ running: 1, belts: 3 });
+    expect(Object.values(smelter.ins).some((slot) => slot) || !!smelter.fuel).toBe(true);
+  });
+
+  it("carries line materials for every layer in the bag", () => {
+    const s = createTestGame(1);
+    for (const id of ["iron_belt", "iron_tube", "iron_rod"]) expect([id, bagCount(s, id) >= 8]).toEqual([id, true]);
   });
 });
 
@@ -1045,34 +1105,74 @@ describe("costly routes", () => {
   it("needs parts to connect anything", () => {
     const s = createGame(1);
     const furnace = placeMachine(s, "smelter", 0, 0)!;
-    expect(canAffordRoute(s, warehouse(s).id, furnace.id)).toBe(false);
+    expect(canAffordRoute(s, warehouse(s).id, "all")).toBe(false);
     expect(toggleRoute(s, warehouse(s).id, furnace.id, "all")).toBe(false);
     expect(s.lines).toEqual([]);
   });
 
-  it("charges the same parts for each line", () => {
+  it("charges a belt for an item line", () => {
     const s = createGame(1);
     const furnace = placeMachine(s, "smelter", 0, 0)!;
     const store = warehouse(s).id;
-    expect(routeCost(s, store, furnace.id)).toEqual({ iron_plate: 1, copper_tube: 1 });
-    s.inv[0] = { id: "iron_plate", n: 1 };
-    s.inv[1] = { id: "copper_tube", n: 1 };
+    expect(routeCost(s, store, "all")).toEqual({ iron_belt: 1 });
+    s.inv[0] = { id: "iron_belt", n: 1 };
     expect(toggleRoute(s, store, furnace.id, "all")).toBe(true);
     expect(s.inv[0]).toBeNull();
-    expect(s.inv[1]).toBeNull();
+  });
+
+  it("puts each line on its layer and charges for it there", () => {
+    // The pump opens in a later stage, so start from the test game with everything open.
+    const s = createTestGame(1);
+    const pump = placeMachine(s, PUMP, 0, 0)!;
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    const motor = placeMachine(s, MOTOR, 0, 0)!;
+    expect(lineLayer(s, warehouse(s).id, "all")).toBe("item");
+    expect(lineLayer(s, kiln.id, "main")).toBe("item");
+    expect(lineLayer(s, pump.id, "main")).toBe("fluid");
+    expect(lineLayer(s, motor.id, POWER)).toBe("power");
+    expect(routeCost(s, pump.id, "main")).toEqual({ tube: 1 });
+    expect(routeCost(s, motor.id, POWER)).toEqual({ iron_rod: 1 });
   });
 
   it("gives the parts back when a route or machine goes", () => {
     const s = createGame(1);
     const furnace = placeMachine(s, "smelter", 0, 0)!;
-    s.inv[0] = { id: "iron_plate", n: 1 };
-    s.inv[1] = { id: "copper_tube", n: 1 };
+    s.inv[0] = { id: "iron_belt", n: 1 };
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
-    expect(countOf(s, "iron_plate")).toBe(1);
+    expect(countOf(s, "iron_belt")).toBe(1);
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
     removeNode(s, furnace.id);
-    expect(countOf(s, "copper_tube")).toBe(1);
+    expect(countOf(s, "iron_belt")).toBe(1);
+  });
+
+  it("pays for a line from the bag, never a warehouse", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    addTo(warehouse(s).store, "iron_belt", 5);
+    expect(canAffordRoute(s, warehouse(s).id, "all")).toBe(false);
+    expect(toggleRoute(s, warehouse(s).id, furnace.id, "all")).toBe(false);
+    expect(countOf(s, "iron_belt")).toBe(5);
+  });
+
+  it("puts a taken-down line's belt in the bag, not a warehouse", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    s.inv[0] = { id: "iron_belt", n: 1 };
+    toggleRoute(s, warehouse(s).id, furnace.id, "all");
+    toggleRoute(s, warehouse(s).id, furnace.id, "all");
+    expect(s.inv[0]).toEqual({ id: "iron_belt", n: 1 });
+    expect(warehouse(s).store.some((slot) => slot?.id === "iron_belt")).toBe(false);
+  });
+
+  it("refuses to take a line down into a full bag", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    s.inv[0] = { id: "iron_belt", n: 1 };
+    toggleRoute(s, warehouse(s).id, furnace.id, "all");
+    s.inv = s.inv.map(() => ({ id: "Lm", n: 64 }));
+    expect(toggleRoute(s, warehouse(s).id, furnace.id, "all")).toBe(false);
+    expect(s.lines).toHaveLength(1);
   });
 });
 
@@ -1572,7 +1672,8 @@ describe("steam power", () => {
     expect(connect(s, engine.id, bench.id, POWER)).toBeNull();
     expect(connect(s, engine.id, steam.id, POWER)).toBeTruthy();
     expect(connect(s, engine.id, pump.id, POWER)).toBeTruthy();
-    expect(connect(s, engine.id, s.nodes[0].id, POWER)).toBeTruthy();
+    // A warehouse's belts run on a belt drive, so it takes no power of its own.
+    expect(connect(s, engine.id, s.nodes[0].id, POWER)).toBeNull();
   });
 
   it("still takes a spring's power without a module", () => {
@@ -1640,14 +1741,16 @@ describe("steam power", () => {
     expect(powerLoad(s, engine)).toEqual({ now: 3, connected: 6, limit: 10 });
   });
 
-  it("carries items along lines on steam", () => {
+  it("carries items along lines on a belt drive run by steam", () => {
     const s = steamStage();
     const engine = engineAt(s);
     const store = s.nodes[0];
     const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
     store.store = store.store.map(() => null);
     store.store[0] = { id: "Lg", n: 4 };
-    connect(s, engine.id, store.id, POWER);
+    const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
+    expect(connect(s, engine.id, drive.id, POWER)).toBeTruthy();
+    connect(s, drive.id, store.id, DRIVE);
     connect(s, store.id, kiln.id, "all");
     run(s, 3);
     expect(kiln.fuel?.n).toBeGreaterThan(0);
@@ -1943,17 +2046,17 @@ describe("blueprints", () => {
   const line = () => {
     const s = createGame(1);
     const motor = placeMachine(s, MOTOR, 10, 10)!;
-    const kiln = placeMachine(s, "brick_kiln", 100, 10)!;
+    const kiln = placeMachine(s, BELT_DRIVE, 100, 10)!;
     connect(s, motor.id, kiln.id, POWER);
-    addTo(s.nodes[0].store, "iron_plate", 8);
-    addTo(s.nodes[0].store, "copper_tube", 8);
+    // Line materials are paid from the bag. Slot 5 keeps clear of the machines tests put in front.
+    s.inv[5] = { id: "iron_rod", n: 8 };
     return { s, motor, kiln };
   };
 
   it("copies nodes and their lines as ghosts that do nothing", () => {
     const { s, motor, kiln } = line();
     const copies = copyToGhosts(s, [motor.id, kiln.id], 50, 60);
-    expect(copies.map((g) => [g.type, g.x, g.y])).toEqual([[MOTOR, 60, 70], ["brick_kiln", 150, 70]]);
+    expect(copies.map((g) => [g.type, g.x, g.y])).toEqual([[MOTOR, 60, 70], [BELT_DRIVE, 150, 70]]);
     expect(s.ghostLines).toEqual([{ from: copies[0].id, to: copies[1].id, material: POWER }]);
     expect(s.nodes).toHaveLength(3);
     run(s, 2);
@@ -1971,8 +2074,8 @@ describe("blueprints", () => {
     const [ghost] = copyToGhosts(s, [kiln.id], 0, 0);
     expect(buildGhost(s, ghost.id)).toBeNull();
     expect(s.ghosts).toHaveLength(1);
-    s.inv[0] = { id: "brick_kiln", n: 1 };
-    expect(buildGhost(s, ghost.id)?.type).toBe("brick_kiln");
+    s.inv[0] = { id: BELT_DRIVE, n: 1 };
+    expect(buildGhost(s, ghost.id)?.type).toBe(BELT_DRIVE);
     expect(s.ghosts).toHaveLength(0);
     expect(s.inv[0]).toBeNull();
   });
@@ -1981,22 +2084,23 @@ describe("blueprints", () => {
     const { s, motor, kiln } = line();
     const copies = copyToGhosts(s, [motor.id, kiln.id], 0, 200);
     s.inv[0] = { id: MOTOR, n: 1 };
-    s.inv[1] = { id: "brick_kiln", n: 1 };
-    const plates = countOf(s, "iron_plate");
+    s.inv[1] = { id: BELT_DRIVE, n: 1 };
+    // A power line is paid in an iron rod.
+    const rods = countOf(s, "iron_rod");
     const a = buildGhost(s, copies[0].id)!;
     expect(s.ghostLines).toHaveLength(1);
     const b = buildGhost(s, copies[1].id)!;
     expect(s.ghostLines).toHaveLength(0);
     expect(s.lines.some((l) => l.from === a.id && l.to === b.id && l.material === POWER)).toBe(true);
-    expect(countOf(s, "iron_plate")).toBe(plates - 1);
+    expect(countOf(s, "iron_rod")).toBe(rods - 1);
   });
 
   it("keeps a planned line waiting when the parts run out", () => {
     const { s, motor, kiln } = line();
     const copies = copyToGhosts(s, [motor.id, kiln.id], 0, 200);
-    s.nodes[0].store = s.nodes[0].store.map(() => null);
+    s.inv[5] = null;
     s.inv[0] = { id: MOTOR, n: 1 };
-    s.inv[1] = { id: "brick_kiln", n: 1 };
+    s.inv[1] = { id: BELT_DRIVE, n: 1 };
     expect(buildAllGhosts(s)).toBe(2);
     expect(s.ghostLines).toHaveLength(1);
     expect(copies).toHaveLength(2);
@@ -2014,7 +2118,7 @@ describe("blueprints", () => {
   it("builds what it can and leaves the rest planned", () => {
     const { s, motor, kiln } = line();
     copyToGhosts(s, [motor.id, kiln.id], 0, 0);
-    s.inv[0] = { id: "brick_kiln", n: 1 };
+    s.inv[0] = { id: BELT_DRIVE, n: 1 };
     expect(buildAllGhosts(s)).toBe(1);
     expect(s.ghosts.map((g) => g.type)).toEqual([MOTOR]);
   });
@@ -2518,7 +2622,9 @@ describe("S1-3", () => {
     const splitter = placeMachine(s, "item_splitter", 0, 0)!;
     const a = placeMachine(s, "brick_kiln", 0, 0)!;
     const b = placeMachine(s, "brick_kiln", 0, 0)!;
-    connect(s, motor.id, store.id, POWER);
+    const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
+    connect(s, motor.id, drive.id, POWER);
+    connect(s, drive.id, store.id, DRIVE);
     expect(connect(s, store.id, splitter.id, "all")).toBeTruthy();
     connect(s, splitter.id, a.id, "all");
     connect(s, splitter.id, b.id, "all");
@@ -2528,13 +2634,19 @@ describe("S1-3", () => {
     expect(a.fuel?.n).toBe(b.fuel?.n);
   });
 
-  it("passes items on without power of its own, and uses none", () => {
+  it("takes no power line, and passes items on along its network's belt drive", () => {
     const { s, motor } = stage3();
     const splitter = placeMachine(s, "item_splitter", 0, 0)!;
     const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
     splitter.store[0] = { id: "Lg", n: 2 };
     connect(s, splitter.id, kiln.id, "all");
-    motor.energy = 0;
+    expect(routeMaterials(s, motor.id, splitter.id)).toEqual([]);
+    run(s, 2);
+    expect(splitter.store[0]).toEqual({ id: "Lg", n: 2 });
+    motor.energy = SPRING_MAX;
+    const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
+    connect(s, motor.id, drive.id, POWER);
+    connect(s, drive.id, kiln.id, DRIVE);
     run(s, 2);
     expect(kiln.fuel?.n).toBe(2);
     expect(splitter.store[0]).toBeNull();

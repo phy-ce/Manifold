@@ -50,6 +50,7 @@
     "spring_motor": { "name": "태엽 동력기", "powerOut": 5, "tier": "spring", "cost": { "iron_plate": 6, "iron_spring": 2, "iron_gear": 4, "copper_tube": 2 }, "work": 20 },
 
     "steam_engine": { "name": "증기기관", "powerOut": 10, "tier": "low", "burn": 1, "cost": { "steam_engine_unit": 1, "iron_plate": 4, "iron_rivet": 8 }, "work": 30 },
+    "belt_drive": { "name": "벨트 구동기", "power": 2, "tier": "spring", "cost": { "iron_plate": 4, "iron_gear": 2, "iron_rod": 4, "iron_belt": 2 }, "work": 15 },
     "steam_manifold": { "name": "증기 배분기", "cost": { "copper_tube": 6, "iron_plate": 2 }, "work": 15 },
     "item_splitter": { "name": "재료 분배기", "cost": { "iron_plate": 4, "copper_tube": 2 }, "work": 15 },
     "drainage_pump": { "name": "강가 펌프", "power": 3, "tier": "spring", "steamReady": true, "cost": { "iron_cylinder": 1, "copper_tube": 8, "iron_plate": 4, "iron_gear": 2, "iron_rivet": 8 }, "work": 25 },
@@ -81,6 +82,7 @@
     { "form": "gear", "machine": "forming_bench", "time": 12, "in": 2, "out": 1, "metals": ["iron", "copper", "steel"] },
     { "form": "gear", "machine": "gear_cutter", "time": 5, "in": 3, "out": 2, "metals": ["iron", "copper", "steel"] },
     { "form": "spring", "machine": "forming_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron", "copper", "steel"] },
+    { "form": "belt", "machine": "forming_bench", "time": 4, "in": 1, "out": 2, "metals": ["iron"] },
     { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] },
     { "form": "boots", "machine": "forming_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
     { "form": "pack", "machine": "forming_bench", "time": 10, "in": 4, "out": 1, "metals": ["iron"] },
@@ -122,7 +124,7 @@
     {
       "id": "S1-1", "name": "증기기관 + 구리 배관",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "Be", "Mu"],
-      "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor"],
+      "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor", "belt_drive"],
       "goal": { "item": "steam_engine_unit", "amount": 1, "perMinute": 0.2 }
     },
     {

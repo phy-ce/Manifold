@@ -97,7 +97,7 @@ const testStart = document.createElement("button");
 testStart.type = "button";
 testStart.className = "tech";
 testStart.textContent = tr("테스트 시작");
-testStart.dataset.tip = tr("지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 원료 창고와 부품 창고와 함께 시작합니다");
+testStart.dataset.tip = tr("지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 벨트 구동기, 제련로, 원료 창고, 부품 창고, 모든 기계 2대씩, 인벤토리의 선 재료와 함께 시작합니다");
 testStart.addEventListener("click", () => {
   if (testStart.dataset.armed !== "1") {
     testStart.dataset.armed = "1";
@@ -163,7 +163,8 @@ function meter(label: string, value: number): string {
 
 const windowView = new MachineWindow(game, redraw);
 const buildView = new BuildWindow(game, redraw);
-const routeView = new RouteWindow(game, redraw);
+// The route window shows the layer the graph is on. The graph is made below, before any window opens.
+const routeView = new RouteWindow(game, redraw, () => graph.layer);
 const saveView = new SaveWindow(game, (loaded) => {
   saving = false; // keep the page's unload save from overwriting what was just loaded
   try {
@@ -210,6 +211,7 @@ const map = new MapView(game, () => {
 });
 
 const itemIndex = new ItemIndex(game, () => windowView.openNode, redraw);
+windowView.showItem = (id) => itemIndex.show(id);
 indexButton.addEventListener("click", () => itemIndex.toggle());
 indexButton.dataset.tip = tr("단축키 G");
 travel.dataset.tip = tr("단축키 M");

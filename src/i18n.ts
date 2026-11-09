@@ -51,7 +51,7 @@ export const EN: Record<string, string> = {
   // Top bar and general
   "새 게임": "New game", "도감": "Index", "저장": "Save", "배속": "x speed", "일시정지": "Pause",
   "테스트 시작": "Test start",
-  "지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 제련로, 원료 창고와 부품 창고와 함께 시작합니다": "Starts with every stage so far open, a wound spring motor, a smelter, and warehouses of raw materials and parts",
+  "지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 벨트 구동기, 제련로, 원료 창고, 부품 창고, 모든 기계 2대씩, 인벤토리의 선 재료와 함께 시작합니다": "Starts with every stage so far open, a wound spring motor, a belt drive, a smelter, warehouses of raw materials and parts, two of every machine, and line materials in the inventory",
   "정말 초기화?": "Really reset?", "조작 도움말 (단축키 ?)": "Controls (shortcut ?)", "조작 도움말": "Controls",
   "단축키 G": "Shortcut G", "단축키 M": "Shortcut M", "인벤토리": "Inventory", "정렬": "Sort", "버리기": "Trash",
   "들고 있는 아이템을 버립니다": "Throws away the held item", "계속하기": "Continue", "지도": "Map", "기지로": "To base",
@@ -73,7 +73,7 @@ export const EN: Record<string, string> = {
   // Machine states
   "출력 막힘": "Output blocked", "작업 대기": "Needs work", "가동 중": "Running", "재료 부족": "Missing materials",
   // Board tools
-  "모든 선": "All lines", "동력": "Power", "강가": "Riverbank", "노드 찾기": "Find node", "복사": "Copy",
+  "모든 선": "All lines", "동력": "Power", "유체": "Fluid", "레이어": "Layer", "L 키로 다음 레이어": "L for the next layer", "보드의 다음 레이어 (재료, 유체, 동력)": "Next board layer (items, fluids, power)", "인벤토리가 가득 차서 선을 거둘 수 없습니다": "The inventory is full, so the line can't come down", "강가": "Riverbank", "노드 찾기": "Find node", "복사": "Copy",
   "Shift+클릭으로 고른 노드를 복사합니다 (Ctrl+C)": "Copies the nodes picked with Shift+click (Ctrl+C)",
   "붙여넣기": "Paste", "복사한 구성을 청사진으로 놓습니다 (Ctrl+V)": "Places the copy as a blueprint (Ctrl+V)",
   "가진 기계로 청사진을 실제로 바꿉니다": "Replaces blueprints with the machines you have",
@@ -144,7 +144,7 @@ export const EN: Record<string, string> = {
   "절연 코일": "Insulated coil", "철심": "Iron core", "증기 발전기": "Steam generator",
   // Game data: machines
   "창고": "Warehouse", "벽돌 가마": "Brick kiln", "제련로": "Smelter", "판금 망치": "Plate hammer", "성형대": "Forming bench", "보일러 제작대": "Boiler bench", "기관 조립대": "Engine bench",
-  "태엽 동력기": "Spring motor", "증기 배분기": "Steam manifold", "재료 분배기": "Item splitter", "강가 펌프": "Riverbank pump", "증기 해머": "Steam hammer", "코크스로": "Coke oven", "고로": "Blast furnace",
+  "태엽 동력기": "Spring motor", "증기 배분기": "Steam manifold", "벨트 구동기": "Belt drive", "완성된 기계는 아이템으로 인벤토리에 들어갑니다. 손에 들고 보드를 클릭하면 설치됩니다": "A finished machine goes in the inventory as an item. Hold it and click the board to install it", "공급": "Supplies", "구동기": "Drives", "대": "", "줄": "", "벨트당": "per belt", "최대": "max", "이 기계로 만드는 것을 도감에서 봅니다": "See what this machine makes in the codex", "내 인벤토리": "My inventory", "안": "contents", "구동": "Drive", "벨트": "Belts", "개/초": "/s", "연결된 벨트 없음": "No belts joined", "받은 동력으로 연결된 물류망의 벨트를 모두 같은 속도로 돌립니다": "Runs every belt of its network at one pace on the power it gets", "이 물류망에 돌아가는 벨트 구동기가 없어 멈춰 있습니다": "No belt drive is running this network, so it stands", "관 (철관, 구리관)": "Tube (iron or copper)", "재료 분배기": "Item splitter", "강가 펌프": "Riverbank pump", "증기 해머": "Steam hammer", "코크스로": "Coke oven", "고로": "Blast furnace",
   "전로": "Converter", "산화 구리광": "Copper oxide ore", "황화 구리광": "Copper sulfide ore", "구리 매트": "Copper matte", "타르 저장조": "Tar tank", "압연기": "Rolling mill", "증기 선반": "Steam lathe", "기어 절삭기": "Gear cutter", "증기 인발기": "Wire drawer", "타르 증류기": "Tar still",
   "코일 권선기": "Coil winder", "철심 프레스": "Core press", "발전기 조립대": "Generator bench",
   // Game data: stages, layers and grades
@@ -154,5 +154,5 @@ export const EN: Record<string, string> = {
   "갈철석": "Limonite", "적철석": "Hematite", "자철석": "Magnetite", "공작석": "Malachite", "휘동석": "Chalcocite", "황동석": "Chalcopyrite", "갈탄": "Lignite", "역청탄": "Bituminous coal",
   "무연탄": "Anthracite", "고령토": "Kaolin", "도보": "On foot", "개량 이동": "Better walking", "철로": "Rail", "자동 운송": "Auto haul",
   // Game data: metals and forms. A part's name is its metal plus its form.
-  "철": "Iron", "구리": "Copper", "판": " plate", "관": " tube", " 실린더": " cylinder", "실린더": "Cylinder", " 드럼통": " drum", "드럼통": "Drum", " 막대": " rod", "막대": "Rod", " 리벳": " rivet", "리벳": "Rivet", " 기어": " gear", " 스프링": " spring", "스프링": "Spring", " 팬": " fan", "팬": "Fan",
+  "철": "Iron", "구리": "Copper", "판": " plate", "관": " tube", " 실린더": " cylinder", "실린더": "Cylinder", " 드럼통": " drum", "드럼통": "Drum", " 막대": " rod", "막대": "Rod", " 리벳": " rivet", "리벳": "Rivet", " 기어": " gear", " 스프링": " spring", "스프링": "Spring", " 팬": " fan", "팬": "Fan", " 운반 벨트": " conveyor belt", "운반 벨트": "Conveyor belt", "운송": "Transport",
 };

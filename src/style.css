@@ -6,7 +6,7 @@
 
   /* Colour roles */
   --bg: #10151c; --panel: #171e27; --line: #2f3b49; --fg: #dfe5ea; --dim: #7c8b9b; --faint: #3c4955; --rock: #4a5966;
-  --fire: #ffb238; --alert: #ff5f56; --water: #4d8fc4; --go: #8fd16f;
+  --fire: #ffb238; --alert: #ff5f56; --water: #4d8fc4; --go: #8fd16f; --power: #ffd24a;
 
   /* Type scale */
   --mono: "JetBrains Mono", "Noto Sans KR", Consolas, monospace;
@@ -192,6 +192,11 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .form-results { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
 .form-results:empty { display: none; }
 .tech.selected { color: var(--bg); background: var(--go); border-color: var(--go); }
+/* Board layers: each button wears its own line colour. */
+.layers .tech[data-layer="fluid"] { color: var(--water); }
+.layers .tech[data-layer="power"] { color: var(--power); }
+.layers .tech[data-layer="fluid"].selected { color: var(--bg); background: var(--water); border-color: var(--water); }
+.layers .tech[data-layer="power"].selected { color: var(--bg); background: var(--power); border-color: var(--power); }
 .demolish { color: var(--dim); }
 .demolish:hover, .demolish.armed { color: var(--alert); border-color: var(--alert); }
 
@@ -202,6 +207,10 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .stack { display: grid; gap: var(--gap); }
 .art { font-size: var(--glyph-machine); line-height: var(--glyph-machine); font-weight: 700; }
 .window-bar { text-align: center; color: var(--fire); min-height: calc(var(--gap) * 2); }
+/* A warehouse's own slots sit in a sunken box; the player's inventory sits below a rule with its own label. */
+.slot-label { color: var(--dim); font-size: var(--text-sm); text-align: center; }
+.store-grid { padding: var(--gap); background: var(--bg); border: 1px solid var(--rock); }
+.inv-box { display: grid; gap: var(--gap-sm); padding-top: var(--gap); border-top: 1px dashed var(--line); }
 .window-bar.stop { color: var(--alert); }
 .win { z-index: 30; text-align: center; }
 .keys { display: flex; justify-content: center; gap: var(--gap); }

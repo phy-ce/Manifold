@@ -1,9 +1,10 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { FORM_CATEGORIES, FUELS, machineBurn, MOTOR, formCategory, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, MODULE, PUMP, TANK, TAR, isStore, machinePower, unitOf } from "../content";
+import { FORM_CATEGORIES, FUELS, machineBurn, MOTOR, formCategory, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
 import {
   GameNode, GameState, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
+import { beltSummary } from "./graphView";
 import { MachineArt } from "./machineArt";
 import { makeSlot, paintSlot } from "./slots";
 
@@ -34,6 +35,10 @@ export class MachineWindow {
   private hitAt = 0;
   private readonly bar = document.createElement("pre");
   private readonly inv = document.createElement("div");
+  /** The player's inventory with its label, set apart from the machine's own slots. */
+  private readonly invBox = document.createElement("section");
+  /** Names a warehouse's own slots, so they don't read as the player's. */
+  private readonly topLabel = document.createElement("div");
   private readonly demolish = document.createElement("button");
   private disarm = 0;
   private readonly invSlots: HTMLButtonElement[] = [];
@@ -117,7 +122,13 @@ export class MachineWindow {
       if (index >= 0 && !e.repeat) this.pressKey(index);
     });
     this.recipe.className = "recipe";
-    panel.append(head, this.modes, this.recipe, this.top, this.bar, this.keys, this.inv);
+    this.topLabel.className = "slot-label";
+    this.invBox.className = "inv-box";
+    const invLabel = document.createElement("div");
+    invLabel.className = "slot-label";
+    invLabel.textContent = tr("내 인벤토리");
+    this.invBox.append(invLabel, this.inv);
+    panel.append(head, this.modes, this.recipe, this.topLabel, this.top, this.bar, this.keys, this.invBox);
     this.root.append(panel);
     this.root.addEventListener("click", (e) => {
       if (e.target === this.root) this.close();
@@ -200,13 +211,18 @@ export class MachineWindow {
     this.stored = [];
     delete this.art.root.dataset.scene;
     if (isStore(node.type)) this.buildWarehouse(node);
-    else if (node.type === MANIFOLD) this.top.className = "machine";
+    else if (node.type === MANIFOLD || node.type === BELT_DRIVE) this.top.className = "machine";
     else if (node.type === TANK) {
       this.top.className = "machine";
       this.top.append(this.art.root);
     }
     else if (node.type === MOTOR) this.buildMotor(node);
     else this.buildMachine(node);
+    // Nothing goes in or out of these by hand, so the player's inventory would only confuse.
+    this.invBox.hidden = node.type === MANIFOLD || node.type === BELT_DRIVE || node.type === MOTOR || node.type === TANK;
+    this.topLabel.hidden = !isStore(node.type);
+    this.topLabel.textContent = `${nodeLabel(this.game(), node)} ${tr("안")}`;
+    this.top.classList.toggle("store-grid", isStore(node.type));
     this.root.hidden = false;
     this.draw(0);
   }
@@ -222,6 +238,7 @@ export class MachineWindow {
     this.modes.replaceChildren();
     this.modes.hidden = forms.length < 2;
     if (forms.length >= 2) this.buildFormPicker(node, forms);
+    this.buildCodexLinks(node);
     if (node.type === PUMP) this.buildRivers(node);
     if (node.type === TANK) this.buildOverflow(node);
   }
@@ -279,6 +296,40 @@ export class MachineWindow {
     });
     this.modes.append(search, results);
   }
+
+  /**
+   * A dropdown like the shape picker's: pointing at it lists what this machine makes in its
+   * current shape, and each opens that item's page in the codex.
+   */
+  private buildCodexLinks(node: GameNode): void {
+    if (isPassive(node.type) || node.type === MOTOR) return;
+    const known = new Set(indexItems(this.game().stage));
+    const made = [...new Set(processOf(node.type, node.form).recipes.map((r) => Object.keys(r.out)[0]))].filter((id) => id && known.has(id));
+    if (!made.length) return;
+    this.modes.hidden = false;
+    const group = document.createElement("div");
+    group.className = "tier";
+    const head = document.createElement("button");
+    head.type = "button";
+    head.className = "tech";
+    head.textContent = `${tr("도감")} ▾`;
+    head.dataset.tip = tr("이 기계로 만드는 것을 도감에서 봅니다");
+    const list = document.createElement("div");
+    list.className = "tier-list";
+    list.append(...made.map((id) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tech";
+      b.innerHTML = `<span style="color:${itemColor(id)}">${itemCode(id)}</span> ${itemName(id)}`;
+      b.addEventListener("click", () => this.showItem?.(id));
+      return b;
+    }));
+    group.append(head, list);
+    this.modes.append(group);
+  }
+
+  /** Opens an item's page in the codex. Set by the game once the codex exists. */
+  showItem?: (id: string) => void;
 
   /** What a tar tank does when it is full. */
   private buildOverflow(node: GameNode): void {
@@ -471,8 +522,10 @@ export class MachineWindow {
       this.bar.textContent = "";
       return;
     }
-    if (node.type === MANIFOLD) {
-      const line = tr("들어온 동력을 연결된 곳으로 나눕니다");
+    if (node.type === MANIFOLD || node.type === BELT_DRIVE) {
+      const line = node.type === BELT_DRIVE
+        ? `${tr("받은 동력으로 연결된 물류망의 벨트를 모두 같은 속도로 돌립니다")} · ${beltSummary(node, true)}`
+        : tr("들어온 동력을 연결된 곳으로 나눕니다");
       if (this.recipe.dataset.line !== line) {
         this.recipe.dataset.line = line;
         this.recipe.textContent = line;
@@ -524,7 +577,9 @@ export class MachineWindow {
     const heat = machineBurn(node.type)
       ? `<span class="card-note fire-left"><span class="gauge" aria-hidden="true"><i style="width:${burnt}%"></i></span>${secondsLeft}${tr("초")}</span>`
       : "";
-    const line = `${parts(current.in, inputRole)} &gt; ${result}${level}${reserve}${use}${heat}<span class="state ${state}">${stateText}</span>`;
+    // The slots already show what goes in and out; the codex dropdown above says how. Only an engine's steam has no slot.
+    const steam = node.type === ENGINE ? `<span class="card-note">${result}</span>` : "";
+    const line = `${steam}${level}${reserve}${use}${heat}<span class="state ${state}">${stateText}</span>`;
     if (this.recipe.dataset.line !== line) {
       this.recipe.dataset.line = line;
       this.recipe.innerHTML = line;
