@@ -1,6 +1,6 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { FORM_CATEGORIES, FUELS, machineBurn, MOTOR, formCategory, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
+import { CONSTRUCTION, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
 import {
   GameNode, GameState, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -234,7 +234,10 @@ export class MachineWindow {
 
   /** The player sets the shape; the metal that goes in decides the rest. */
   private buildForms(node: GameNode): void {
-    const forms = isStore(node.type) ? [] : machineForms(node.type);
+    const all = isStore(node.type) ? [] : machineForms(node.type);
+    // The construction bench offers only the machines open so far.
+    const open = machinesAt(this.game().stage);
+    const forms = node.type === CONSTRUCTION ? all.filter((type) => open.includes(type)) : all;
     this.modes.replaceChildren();
     this.modes.hidden = forms.length < 2;
     if (forms.length >= 2) this.buildFormPicker(node, forms);
@@ -261,9 +264,7 @@ export class MachineWindow {
       b.addEventListener("click", () => pick(form));
       return b;
     };
-    for (const [category, label] of FORM_CATEGORIES) {
-      const inCategory = forms.filter((form) => formCategory(form) === category);
-      if (!inCategory.length) continue;
+    for (const [label, inCategory] of formGroups(node.type, forms, this.game().stage)) {
       const group = document.createElement("div");
       group.className = "tier";
       const head = document.createElement("button");
@@ -279,8 +280,9 @@ export class MachineWindow {
     const search = document.createElement("input");
     search.type = "search";
     search.className = "form-search";
-    search.placeholder = tr("형태 찾기");
-    search.setAttribute("aria-label", tr("형태 찾기"));
+    const hint = node.type === CONSTRUCTION ? tr("기계 찾기") : tr("형태 찾기");
+    search.placeholder = hint;
+    search.setAttribute("aria-label", hint);
     const results = document.createElement("div");
     results.className = "form-results";
     // A shape matches by its own name or by any item it turns out.

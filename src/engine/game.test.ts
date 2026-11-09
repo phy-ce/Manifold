@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { BELT_DRIVE, DRIVE, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
+import { BELT_DRIVE, CONSTRUCTION, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
 import {
-  GameState, GameNode, lineLayer, bagCount, beltNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, cancelProject, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
-  placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, startProject, status, step, takeOutput, walkStep, walkTo, workMachine, workProject,
+  GameState, GameNode, lineLayer, bagCount, beltNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame, mine, moveToNode, nodeById,
+  placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
 import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 
@@ -50,6 +50,15 @@ const power = (s: GameState, id: number) => {
   engine.ins.water = { id: "water", n: 99999 };
   node.module = true;
   connect(s, engine.id, id, POWER);
+};
+/** Makes a machine as a player does: picks it on the construction bench, loads its cost from the bag, works it and takes it. */
+const make = (s: GameState, type: string): boolean => {
+  const bench = s.nodes.find((n) => n.type === CONSTRUCTION)!;
+  setForm(s, bench.id, type);
+  fillFromBag(s, bench.id, recipeOf(bench), 1);
+  if (status(bench) !== "manual") return false;
+  for (let i = 0; i < recipeOf(bench).time; i += 1) workMachine(s, bench.id);
+  return takeOutput(s, bench.id, type);
 };
 /** Joins a node's belt network to a belt drive on a motor that never runs down, unless it has one. */
 const belt = (s: GameState, id: number, motor?: GameNode) => {
@@ -554,26 +563,23 @@ describe("warehouses", () => {
     return s;
   };
   const buildWarehouse = (s: GameState) => {
-    expect(startProject(s, WAREHOUSE)).toBe(true);
-    for (let i = 0; i < 25; i += 1) workProject(s);
+    expect(make(s, WAREHOUSE)).toBe(true);
     return installMachine(s, WAREHOUSE, 0, 0)!;
   };
 
   it("costs metal to build", () => {
-    expect(startProject(withParts(true), WAREHOUSE)).toBe(false);
+    expect(make(withParts(true), WAREHOUSE)).toBe(false);
     const s = withParts();
     buildWarehouse(s);
-    expect(s.inv.slice(0, 3)).toEqual([null, null, null]);
+    for (const id of ["iron_plate", "iron_rod", "iron_rivet"]) expect(countOf(s, id)).toBe(0);
   });
 
-  it("counts and spends what every warehouse holds", () => {
+  it("counts what every warehouse holds", () => {
     const s = withParts();
     const extra = buildWarehouse(s);
     extra.store[0] = { id: "Kn", n: 12 };
     warehouse(s).store[0] = { id: "Kn", n: 8 };
     expect(countOf(s, "clay")).toBe(20);
-    expect(startProject(s, "brick_kiln")).toBe(true);
-    expect(countOf(s, "clay")).toBe(0);
   });
 
   it("overflows into the next warehouse", () => {
@@ -1440,23 +1446,39 @@ describe("building", () => {
     return s;
   };
 
-  it("refuses to start without the materials", () => {
-    const s = withClay(19);
-    expect(canAfford(s, "brick_kiln")).toBe(false);
-    expect(startProject(s, "brick_kiln")).toBe(false);
-    expect(s.inv[0]).toEqual({ id: "Kn", n: 19 });
+  const bench = (s: GameState) => s.nodes.find((n) => n.type === CONSTRUCTION)!;
+
+  it("starts with a construction bench, and keeps the last one", () => {
+    const s = createGame(1);
+    expect(removeNode(s, bench(s).id)).toBe(false);
   });
 
-  it("pays on start and gives a machine item when the work is done", () => {
+  it("won't run until the whole cost is loaded, like any machine", () => {
+    const s = withClay(19);
+    setForm(s, bench(s).id, "brick_kiln");
+    fillFromBag(s, bench(s).id, recipeOf(bench(s)), 1);
+    expect(status(bench(s))).toBe("idle");
+    expect(workMachine(s, bench(s).id)).toBe(false);
+  });
+
+  it("makes a machine item by hand from what is loaded, taking nothing from warehouses", () => {
     const s = withClay(22);
-    expect(startProject(s, "brick_kiln")).toBe(true);
+    warehouse(s).store[0] = { id: "Kn", n: 40 };
+    setForm(s, bench(s).id, "brick_kiln");
+    expect(fillFromBag(s, bench(s).id, recipeOf(bench(s)), 1)).toBe(true);
     expect(s.inv[0]).toEqual({ id: "Kn", n: 2 });
-    for (let i = 0; i < 19; i += 1) workProject(s);
-    expect(countOf(s, "brick_kiln")).toBe(0);
-    workProject(s);
-    expect(countOf(s, "brick_kiln")).toBe(1);
+    expect(warehouse(s).store[0]).toEqual({ id: "Kn", n: 40 });
+    for (let i = 0; i < machineWork("brick_kiln") - 1; i += 1) workMachine(s, bench(s).id);
+    expect(bench(s).outs.brick_kiln).toBe(0);
+    workMachine(s, bench(s).id);
+    expect(bench(s).outs.brick_kiln).toBe(1);
     expect(s.nodes.some((n) => n.type === "brick_kiln")).toBe(false);
-    expect(s.project).toBeNull();
+  });
+
+  it("offers only the machines open so far", () => {
+    const s = createGame(1);
+    expect(setForm(s, bench(s).id, "steam_hammer")).toBe(false);
+    expect(setForm(s, bench(s).id, "smelter")).toBe(true);
   });
 
   it("installs a machine item from the bag or a warehouse, and needs one", () => {
@@ -1479,8 +1501,7 @@ describe("building", () => {
 
   it("keeps a machine item in storage for later", () => {
     const s = withClay(20);
-    startProject(s, "brick_kiln");
-    for (let i = 0; i < 20; i += 1) workProject(s);
+    expect(make(s, "brick_kiln")).toBe(true);
     const index = s.inv.findIndex((slot) => slot?.id === "brick_kiln");
     clickStack(s, s.inv, index, "left");
     clickStack(s, warehouse(s).store, 0, "left");
@@ -1495,27 +1516,28 @@ describe("building", () => {
     expect(s.inv[0]).toEqual({ id: "steam_hammer", n: 1 });
   });
 
-  it("runs one project at a time", () => {
-    const s = withClay(50);
-    expect(startProject(s, "brick_kiln")).toBe(true);
-    expect(startProject(s, "brick_kiln")).toBe(false);
-  });
-
   it("needs the player at the base to work", () => {
     const s = withClay(20);
-    startProject(s, "brick_kiln");
+    setForm(s, bench(s).id, "brick_kiln");
+    fillFromBag(s, bench(s).id, recipeOf(bench(s)), 1);
     walkTo(s, s.sites[0]);
     arrive(s);
-    expect(workProject(s)).toBe(false);
+    expect(workMachine(s, bench(s).id)).toBe(false);
   });
 
-  it("refunds a cancelled project, and a removed machine comes back as an item", () => {
-    const s = withClay(20);
-    startProject(s, "brick_kiln");
-    cancelProject(s);
+  it("gives an older save's build in progress back, and a bench if it had none", () => {
+    const s = createGame(1);
+    s.nodes = s.nodes.filter((n) => n.type !== CONSTRUCTION);
+    Object.assign(s, { project: { type: "brick_kiln", done: 3, paid: [{ id: "Kn", n: 20 }] } });
+    upgradeSave(s);
     expect(countOf(s, "clay")).toBe(20);
-    startProject(s, "brick_kiln");
-    for (let i = 0; i < 20; i += 1) workProject(s);
+    expect("project" in s).toBe(false);
+    expect(s.nodes.filter((n) => n.type === CONSTRUCTION)).toHaveLength(1);
+  });
+
+  it("gives a removed machine back as an item", () => {
+    const s = withClay(20);
+    expect(make(s, "brick_kiln")).toBe(true);
     const kiln = installMachine(s, "brick_kiln", 0, 0)!;
     expect(countOf(s, "brick_kiln")).toBe(0);
     removeNode(s, kiln.id);
@@ -1532,12 +1554,6 @@ describe("building", () => {
     expect(countOf(s, "brick_kiln")).toBe(0);
   });
 
-  it("spends from the warehouse too", () => {
-    const s = withClay(8);
-    warehouse(s).store[0] = { id: "Kn", n: 12 };
-    expect(startProject(s, "brick_kiln")).toBe(true);
-    expect(countOf(s, "clay")).toBe(0);
-  });
 });
 
 describe("steam power", () => {
@@ -2058,7 +2074,8 @@ describe("blueprints", () => {
     const copies = copyToGhosts(s, [motor.id, kiln.id], 50, 60);
     expect(copies.map((g) => [g.type, g.x, g.y])).toEqual([[MOTOR, 60, 70], [BELT_DRIVE, 150, 70]]);
     expect(s.ghostLines).toEqual([{ from: copies[0].id, to: copies[1].id, material: POWER }]);
-    expect(s.nodes).toHaveLength(3);
+    // The warehouse and construction bench every game starts with, and the two copied.
+    expect(s.nodes).toHaveLength(4);
     run(s, 2);
     expect(s.lines).toHaveLength(1);
   });

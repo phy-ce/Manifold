@@ -566,50 +566,68 @@ function itemSplitter(mode: Status, f: number) {
 
 function beltDrive(mode: Status, f: number) {
   const p = pose(mode, f);
-  // A drive pulley on a low frame, with the belt running off to the right over a small idler.
-  rect("#4c5560", 8, 58, 44, 6);
-  rect("#8f9aa6", 8, 58, 44, 2);
-  rect("#3c444e", 12, 64, 5, 8);
-  rect("#3c444e", 43, 64, 5, 8);
-  oval("#5e6b78", 28, 38, 17, 17);
-  oval("#a9b5c1", 28, 38, 13, 13);
-  oval("#3a4550", 28, 38, 4, 4);
-  // Spokes turn with the pose so the pulley reads as spinning.
+  // Solid drive drum on a heavy bed; the shaft comes in from the left, a cleated belt leaves right.
+  rect("#43515e", 8, 65, 58, 7);
+  rect("#a5b2bd", 8, 65, 58, 3);
+  polygon("#596d7b", [[23, 44], [41, 44], [49, 65], [17, 65]]);
+  rect("#a4b8c5", 23, 49, 4, 16);
+  oval("#202b34", 35, 38, 19, 23);
+  rect("#202b34", 35, 15, 41, 9);
+  rect("#202b34", 35, 52, 41, 9);
+  oval("#465b69", 41, 38, 12, 18);
+  rect("#718896", 30, 20, 11, 36);
+  rect("#bbced6", 30, 20, 11, 4);
+  rect("#354956", 30, 51, 11, 5);
+  oval("#c2d0d6", 30, 38, 13, 19);
+  oval("#6f8796", 30, 39, 9, 14);
+  oval("#a9beca", 28, 35, 5, 9);
+  rect("#91a6b3", 2, 34, 28, 8);
+  rect("#dce5e9", 2, 34, 28, 3);
+  rect("#40515e", 2, 40, 28, 3);
+  rect("#a17c49", 9, 29, 8, 18);
+  rect("#e0bd75", 9, 29, 8, 4);
+  rect("#d8b276", 9, 33, 3, 11);
+  rect("#6a7d89", 40, 15, 36, 3);
+  rect("#394b57", 40, 58, 36, 3);
+  // Only the cleats move: out along the top run, back along the bottom.
   for (let i = 0; i < 3; i += 1) {
-    const a = (i * Math.PI * 2) / 3 + p * 0.5;
-    line("#dbe3e9", 2, 28, 38, 28 + Math.cos(a) * 12, 38 + Math.sin(a) * 12);
+    rect("#d8b276", 40 + (i * 12 + p * 3) % 36, 16, 3, 7);
+    rect("#92734d", 40 + (i * 12 + 36 - p * 3) % 36, 53, 3, 7);
   }
-  oval("#6f7b87", 62, 46, 6, 6);
-  oval("#3a4550", 62, 46, 2, 2);
-  line("#2a2f36", 4, 28, 21, 62, 40);
-  line("#2a2f36", 4, 28, 55, 62, 52);
-  if (mode === "run") for (let i = 0; i < 3; i += 1) rect("#c9983f", 34 + ((p * 4 + i * 9) % 26), 24 + ((p * 4 + i * 9) % 26) * 0.5, 3, 2);
   blocked(mode);
 }
 
 function constructionBench(mode: Status, f: number) {
-  const p = pose(mode, f);
-  // A heavy timber bench under a hoist, with a machine frame half put together on it.
-  rect("#6b4a33", 6, 50, 62, 7);
-  rect("#a87c52", 6, 50, 62, 2);
-  rect("#57402d", 10, 57, 6, 15);
-  rect("#57402d", 58, 57, 6, 15);
-  rect("#4c5560", 4, 6, 4, 44);
-  rect("#4c5560", 4, 6, 50, 4);
-  rect("#8f9aa6", 4, 6, 50, 1);
-  const drop = [0, 3, 6, 3][p];
-  line("#c7ced6", 1, 44, 10, 44, 22 + drop);
-  rect("#9ca8b7", 40, 22 + drop, 9, 4);
-  // The part being lowered into the frame.
-  rect("#b9c6d2", 38, 26 + drop, 13, 8);
-  rect("#727f8c", 16, 30, 4, 20);
-  rect("#727f8c", 30, 30, 4, 20);
-  rect("#727f8c", 16, 30, 18, 4);
-  rect("#b9c6d2", 16, 30, 18, 1);
-  if (mode === "run" && p === 2) {
-    line("#ffcd72", 1, 36, 36, 33, 40);
-    line("#ffcd72", 1, 53, 36, 56, 40);
-  }
+  const drop = [0, 4, 8, 4][pose(mode, f)];
+  // Timber assembly bench with a cantilever hoist lowering a part into an open chassis.
+  rect("#59402e", 10, 56, 7, 16);
+  rect("#59402e", 58, 56, 7, 16);
+  rect("#b18a5c", 10, 56, 3, 16);
+  rect("#886342", 16, 65, 43, 4);
+  rect("#624630", 7, 8, 6, 42);
+  rect("#b99263", 7, 8, 2, 42);
+  line("#987249", 5, 12, 27, 29, 10);
+  rect("#785538", 5, 6, 46, 6);
+  rect("#d0aa77", 5, 6, 46, 3);
+  oval("#e0bd75", 38, 13, 5, 5);
+  line("#d8b276", 3, 38, 17, 38, 22 + drop);
+  rect("#647b8a", 30, 22 + drop, 16, 8);
+  rect("#d1dfe5", 30, 22 + drop, 16, 3);
+  rect("#394e5c", 42, 25 + drop, 4, 5);
+  rect("#705039", 5, 50, 65, 8);
+  rect("#c49a68", 5, 50, 65, 3);
+  rect("#463326", 5, 56, 65, 3);
+  rect("#425563", 24, 45, 28, 5);
+  rect("#718897", 24, 34, 5, 11);
+  rect("#718897", 47, 34, 5, 11);
+  rect("#c4d5dd", 24, 34, 3, 11);
+  rect("#b9ccd5", 24, 45, 28, 3);
+  rect("#e0bd75", 34, 41, 8, 4);
+  // A tool rack: an open-ended wrench and a hammer.
+  rect("#77563a", 55, 16, 17, 4);
+  polygon("#c0d0d8", [[56, 23], [59, 23], [59, 28], [62, 28], [62, 23], [65, 23], [65, 32], [62, 34], [62, 43], [58, 43], [58, 34], [56, 32]]);
+  rect("#b58a57", 68, 26, 3, 17);
+  rect("#9db1bf", 65, 23, 10, 5);
   blocked(mode);
 }
 

@@ -1,6 +1,6 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { BELT_DRIVE, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, machineWork, matches, processOf } from "../content";
+import { BELT_DRIVE, CONSTRUCTION, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
 
 export const SAVE_VERSION = 16;
@@ -137,8 +137,8 @@ export interface GhostLine {
   material: string;
 }
 
-/** A facility being built. Materials are paid when work starts. */
-export interface Project {
+/** A machine being built the old way, before the construction bench. Only older saves have one, and it is refunded on load. */
+interface Project {
   type: string;
   done: number;
   paid: Stack[];
@@ -190,7 +190,6 @@ export interface GameState {
   nextId: number;
   /** How many of each machine have ever been built. Codes are never reused. */
   built: Record<string, number>;
-  project: Project | null;
   hp: number;
   hunger: number;
   hungerTimer: number;
@@ -252,7 +251,6 @@ export function createGame(seed: number): GameState {
     groups: [],
     nextId: 1,
     built: {},
-    project: null,
     hp: MAX_VITAL,
     hunger: MAX_VITAL,
     hungerTimer: 0,
@@ -265,6 +263,8 @@ export function createGame(seed: number): GameState {
     announced: null,
   };
   state.nodes.push(newWarehouse(state, 40, 200));
+  // Every machine is made here, so the game starts with one already standing.
+  placeMachine(state, CONSTRUCTION, 40, 40);
   addNearCave(state);
   reveal(state, BASE, BASE_REVEAL);
   return state;
@@ -765,6 +765,11 @@ export const inputCap = (node: GameNode, key: string): number => Math.max(16, ba
 
 export function placeMachine(s: GameState, type: string, x: number, y: number): GameNode | null {
   if (!atBase(s) || !machinesAt(s.stage).includes(type)) return null;
+  return addNode(s, type, x, y);
+}
+
+/** Puts a new node of a type on the board, with no checks. */
+function addNode(s: GameState, type: string, x: number, y: number): GameNode {
   if (type === WAREHOUSE) {
     const store = newWarehouse(s, x, y);
     s.nodes.push(store);
@@ -776,7 +781,8 @@ export function placeMachine(s: GameState, type: string, x: number, y: number): 
     s.nodes.push(node);
     return node;
   }
-  const form = machineForms(type)[0] ?? "";
+  // A new construction bench starts on some other machine than itself.
+  const form = machineForms(type).find((f) => f !== type) ?? "";
   const node: GameNode = {
     id: s.nextId++,
     type,
@@ -808,6 +814,8 @@ function slotsFor(type: string, form: string): Pick<GameNode, "ins" | "outs"> {
 export function setForm(s: GameState, nodeId: number, form: string): boolean {
   const node = nodeById(s, nodeId);
   if (!atBase(s) || !node || node.form === form || !machineForms(node.type).includes(form)) return false;
+  // The construction bench can only make what the stage has opened.
+  if (node.type === CONSTRUCTION && !machinesAt(s.stage).includes(form)) return false;
   const inputs = Object.values(node.ins).filter((stack) => stack !== null);
   const returned: Stack[] = Object.entries(node.outs).filter(([, n]) => n).map(([id, n]) => ({ id, n }));
   node.form = form;
@@ -872,29 +880,9 @@ function refund(s: GameState, stacks: Stack[]): void {
   }
 }
 
-/** Pays for a facility and starts the work. One project runs at a time. */
-export function startProject(s: GameState, type: string): boolean {
-  stowCursor(s);
-  if (!atBase(s) || s.project || !machinesAt(s.stage).includes(type) || !canAfford(s, type)) return false;
-  const paid = Object.entries(machineCost(type)).flatMap(([key, need]) => spend(s, key, need));
-  s.project = { type, done: 0, paid };
-  return true;
-}
-
 /** Puts one item in the bag, or a warehouse if the bag is full. False when neither has room. */
 function giveItem(s: GameState, id: string): boolean {
   return addTo(s.inv, id, 1) > 0 || bank(s, id, 1) > 0;
-}
-
-/** One click of work. The finished machine is an item, to install or store. */
-export function workProject(s: GameState): boolean {
-  const project = s.project;
-  if (!atBase(s) || !project) return false;
-  const work = machineWork(project.type);
-  project.done = Math.min(work, project.done + (isWeak(s) ? WEAK_WORK : 1));
-  // With nowhere to put the machine, the work waits at the last step.
-  if (project.done >= work && giveItem(s, project.type)) s.project = null;
-  return true;
 }
 
 /** A free-looking spot on the board for a new node. */
@@ -1000,13 +988,6 @@ export function buildAllGhosts(s: GameState): number {
   return built.length;
 }
 
-export function cancelProject(s: GameState): boolean {
-  if (!atBase(s) || !s.project) return false;
-  refund(s, s.project.paid);
-  s.project = null;
-  return true;
-}
-
 /** Riverbanks used to be nodes linked to pumps by a line. A pump now just remembers its riverbank. */
 function dropRiverNodes(s: GameState): void {
   const banks = new Map(s.nodes.filter((node) => node.type === "riverbank").map((node) => [node.id, node]));
@@ -1103,8 +1084,16 @@ export function upgradeSave(s: GameState): GameState {
   s.mobs ??= [];
   s.shots ??= [];
   if (!s.sites.some((site) => site.ore === CAVE)) addNearCave(s);
+  // Machines used to be built from the top list, one at a time. A build in progress gives its materials back,
+  // and a game with no construction bench gets one.
+  const building = s as GameState & { project?: Project | null };
+  if (building.project) refund(s, building.project.paid);
+  delete building.project;
+  if (!s.nodes.some((n) => n.type === CONSTRUCTION)) {
+    const spot = nextSpot(s);
+    addNode(s, CONSTRUCTION, spot.x, spot.y);
+  }
   // The stove merged into the brick kiln.
-  if (s.project?.type === "stove") s.project.type = "brick_kiln";
   for (const node of s.nodes) {
     if (node.type === "stove") {
       node.type = "brick_kiln";
@@ -1118,8 +1107,11 @@ export function upgradeSave(s: GameState): GameState {
 
 /** The first warehouse always stays, and a built one must be emptied before demolition. */
 export const isFirstWarehouse = (s: GameState, node: GameNode): boolean => s.nodes.find((n) => n.type === WAREHOUSE) === node;
+/** The last construction bench stays too: without one, no machine could ever be made again. */
+const isLastBench = (s: GameState, node: GameNode): boolean =>
+  node.type === CONSTRUCTION && s.nodes.filter((n) => n.type === CONSTRUCTION).length === 1;
 export const canRemove = (s: GameState, node: GameNode): boolean =>
-  !isFirstWarehouse(s, node) && node.store.every((slot) => !slot);
+  !isFirstWarehouse(s, node) && !isLastBench(s, node) && node.store.every((slot) => !slot);
 
 export function removeNode(s: GameState, id: number): boolean {
   const node = nodeById(s, id);
@@ -2079,7 +2071,7 @@ export function createTestGame(seed: number): GameState {
   raw.forEach(([id, n], i) => {
     store.store[i] = { id, n };
   });
-  const depot = newWarehouse(s, 40, 220);
+  const depot = newWarehouse(s, 40, 360);
   s.nodes.push(depot);
   parts.forEach(([id, n], i) => {
     depot.store[i] = { id, n };
@@ -2090,7 +2082,7 @@ export function createTestGame(seed: number): GameState {
   // Two of every machine open so far, built and ready to install, in machine warehouses of their own.
   const machines = machinesAt(s.stage);
   for (let i = 0; i < machines.length; i += WARE_SLOTS) {
-    const shelf = newWarehouse(s, 40, 400 + (i / WARE_SLOTS) * 180);
+    const shelf = newWarehouse(s, 40, 520 + (i / WARE_SLOTS) * 160);
     s.nodes.push(shelf);
     machines.slice(i, i + WARE_SLOTS).forEach((type, j) => {
       shelf.store[j] = { id: type, n: 2 };
@@ -2100,11 +2092,11 @@ export function createTestGame(seed: number): GameState {
   addLaterVeins(s);
   for (const bank of riverBanks(seed)) reveal(s, bank, REVEAL);
   nameRivers(s);
-  const motor = placeMachine(s, MOTOR, 40, 40)!;
+  const motor = placeMachine(s, MOTOR, 300, 40)!;
   motor.energy = SPRING_MAX;
   const smelter = placeMachine(s, "smelter", 300, 200)!;
   // The motor runs a belt drive, and the drive runs the warehouse's belt network.
-  const drive = placeMachine(s, BELT_DRIVE, 300, 40)!;
+  const drive = placeMachine(s, BELT_DRIVE, 540, 40)!;
   connect(s, motor.id, drive.id, POWER);
   connect(s, drive.id, store.id, DRIVE);
   connect(s, store.id, smelter.id, ALL);

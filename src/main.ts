@@ -3,7 +3,6 @@ import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
 import { GameState, MAX_VITAL, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, currentCave, inCave, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
-import { BuildWindow } from "./ui/buildWindow";
 import { GraphView } from "./ui/graphView";
 import { ItemIndex } from "./ui/itemIndex";
 import { MachineWindow } from "./ui/machineWindow";
@@ -162,7 +161,6 @@ function meter(label: string, value: number): string {
 }
 
 const windowView = new MachineWindow(game, redraw);
-const buildView = new BuildWindow(game, redraw);
 // The route window shows the layer the graph is on. The graph is made below, before any window opens.
 const routeView = new RouteWindow(game, redraw, () => graph.layer);
 const saveView = new SaveWindow(game, (loaded) => {
@@ -187,7 +185,6 @@ function closeWindows(): void {
 /** Windows onto the base. Saving works anywhere, so its window isn't one of them. */
 function closeBaseWindows(): void {
   windowView.close();
-  buildView.close();
   routeView.close();
 }
 const graph = new GraphView(
@@ -195,10 +192,6 @@ const graph = new GraphView(
   (id) => {
     closeWindows();
     windowView.open(id);
-  },
-  (type) => {
-    closeWindows();
-    buildView.open(type);
   },
   (from, to) => {
     closeWindows();
@@ -363,7 +356,7 @@ keepPlaying.addEventListener("click", () => {
 win.firstElementChild!.append(keepPlaying);
 
 document.body.append(itemIndex.root);
-app.append(top, notice, graph.root, map.root, invBox, windowView.root, buildView.root, routeView.root, saveView.root, help.root, win);
+app.append(top, notice, graph.root, map.root, invBox, windowView.root, routeView.root, saveView.root, help.root, win);
 
 travel.addEventListener("click", () => {
   const cave = currentCave(state);
@@ -477,7 +470,6 @@ function tick(): void {
   saveClock += dt;
   frame += 1;
   windowView.draw(frame);
-  buildView.draw(frame);
   routeView.draw();
   if (saveClock > 5000) {
     saveClock = 0;

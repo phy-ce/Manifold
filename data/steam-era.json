@@ -39,6 +39,7 @@
   "kinds": { "water": "liquid", "coal_tar": "liquid", "steam": "gas" },
   "drum": { "empty": "iron_drum", "liters": 100, "fills": { "water": "water_drum" } },
   "machines": {
+    "construction_bench": { "name": "건설대", "difficulty": 1, "manual": "click", "cost": { "iron": 4, "brick": 8 }, "work": 15 },
     "warehouse": { "name": "창고", "cost": { "iron_plate": 6, "iron_rod": 4, "iron_rivet": 8 }, "work": 25 },
     "brick_kiln": { "name": "벽돌 가마", "burn": 1, "cost": { "clay": 20 }, "work": 20 },
     "smelter": { "name": "제련로", "burn": 1.5, "byproductSlots": 2, "cost": { "brick": 16, "clay": 8 }, "work": 40 },
@@ -124,7 +125,7 @@
     {
       "id": "S1-1", "name": "증기기관 + 구리 배관",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "Be", "Mu"],
-      "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor", "belt_drive"],
+      "unlockMachines": ["construction_bench", "brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor", "belt_drive"],
       "goal": { "item": "steam_engine_unit", "amount": 1, "perMinute": 0.2 }
     },
     {

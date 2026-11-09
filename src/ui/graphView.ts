@@ -1,8 +1,8 @@
 // Base screen: machines as nodes, lines drawn between them.
 import { tr } from "../i18n";
-import { BELT_DRIVE, ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, isMachine, unitOf, itemCode, itemColor, itemName, machineName, machineWork } from "../content";
+import { BELT_DRIVE, ENGINE, MANIFOLD, MAX_PORTS, TANK, TAR, PLAYABLE_STAGES, STAGES, isPassive, isStore, formLabel, machineForms, MOTOR, isMachine, unitOf, itemCode, itemColor, itemName, machineName } from "../content";
 import {
-  NAME_MAX, TAR_TANK_CAP, needsModule, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
+  NAME_MAX, TAR_TANK_CAP, addGhost, nextSpot, needsModule, powerLoad, rename, buildAllGhosts, buildGhost, copyToGhosts, countOf, createGroup, installHeld, removeGhost, removeGroup,
   Ghost, Group, GameNode, GameState, LINE_LAYERS, LINE_MS, Line, LineLayer, SPRING_MAX, BELT_MAX, DRIVE_RATE, beltNetOf, lineLayer, nodeById, nodeLabel, nodeProcess, portsUsed, recipeOf, routeMaterials, status,
 } from "../engine/game";
 import { SIZE } from "./theme";
@@ -203,7 +203,6 @@ export class GraphView {
   private readonly rosterList = document.createElement("div");
   private readonly listItems = new Map<number, HTMLButtonElement>();
   private expanded: string | null = null;
-  private readonly projectChip = document.createElement("button");
   private readonly palette = document.createElement("div");
   private readonly board = document.createElement("div");
   private readonly svg = document.createElementNS(SVG, "svg");
@@ -269,7 +268,8 @@ export class GraphView {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "tech";
-        b.addEventListener("click", () => this.build(type));
+        b.dataset.tip = tr("청사진을 놓습니다. 기계는 건설대에서 만듭니다");
+        b.addEventListener("click", () => this.plan(type));
         this.paletteItems.set(type, b);
         list.append(b);
       }
@@ -324,6 +324,14 @@ export class GraphView {
       this.draw();
     });
     this.tools.append(this.search, lines, this.copyButton, this.pasteButton, this.groupButton, this.buildAll, this.zoomButton);
+  }
+
+  /** Lays down a blueprint of a machine at the next free spot. */
+  private plan(type: string): void {
+    const s = this.game();
+    const at = nextSpot(s);
+    addGhost(s, type, at.x, at.y);
+    this.changed();
   }
 
   private setLayer(layer: LineLayer): void {
@@ -714,21 +722,12 @@ export class GraphView {
   constructor(
     private readonly game: () => GameState,
     private readonly open: (id: number) => void,
-    private readonly build: (type: string) => void,
     private readonly openRoute: (from: number, to: number) => void,
     private readonly changed: () => void,
   ) {
     this.root.className = "graph-view";
     this.roster.className = "roster";
     this.roster.setAttribute("aria-label", tr("기지 설비"));
-    this.projectChip.type = "button";
-    this.projectChip.className = "facility building";
-    this.projectChip.hidden = true;
-    this.projectChip.addEventListener("click", () => {
-      const project = this.game().project;
-      if (project) this.build(project.type);
-    });
-    this.roster.append(this.projectChip);
     this.palette.className = "palette";
     this.makeTools();
     this.menu.className = "context-menu";
@@ -1098,7 +1097,7 @@ export class GraphView {
           this.changed();
         });
         this.rosterItems.set(type, b);
-        this.roster.insertBefore(b, this.projectChip);
+        this.roster.append(b);
       }
       const label = `${machineName(type)} ${group.length}`;
       if (b.textContent !== label) b.textContent = label;
@@ -1106,12 +1105,6 @@ export class GraphView {
       b.classList.toggle("open", this.expanded === type);
     }
     this.drawList(s, this.expanded ? counts.get(this.expanded) ?? [] : []);
-    const project = s.project;
-    this.projectChip.hidden = !project;
-    if (project) {
-      const label = `${machineName(project.type)} ${project.done}/${machineWork(project.type)}`;
-      if (this.projectChip.textContent !== label) this.projectChip.textContent = label;
-    }
   }
 
   /** The machines of the open kind, each with its code and state. */

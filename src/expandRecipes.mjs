@@ -2,6 +2,9 @@
 // into concrete items and recipes. Shared by the game and tools/validate-recipes.mjs.
 // Players never pick these recipes: they set a form, and the input metal decides the rest.
 
+/** The machine that makes machines. */
+export const CONSTRUCTION = "construction_bench";
+
 export function expandRecipes(era, materials) {
   const items = { ...era.items };
   const variants = {};
@@ -33,5 +36,18 @@ export function expandRecipes(era, materials) {
     }
   }
 
-  return { items, variants, recipes: [...generated, ...era.recipes] };
+  // Every machine is made on the construction bench: its cost goes in, the machine item comes out.
+  // The machine to make is the bench's form, picked like a shape on the forming bench.
+  const builds = Object.entries(era.machines)
+    .filter(([, machine]) => machine.cost)
+    .map(([type, machine]) => ({
+      id: `build_${type}`,
+      machine: CONSTRUCTION,
+      form: type,
+      time: machine.work ?? 10,
+      in: { ...machine.cost },
+      out: { [type]: 1 },
+    }));
+
+  return { items, variants, recipes: [...generated, ...era.recipes, ...builds] };
 }

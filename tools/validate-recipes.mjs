@@ -12,7 +12,7 @@ const { items, variants, recipes } = expandRecipes(data, materials);
 const { rules, sources, machines, milestones } = data;
 
 const errors = [];
-const name = (id) => items[id] ?? id;
+const name = (id) => items[id] ?? machines[id]?.name ?? id;
 
 // Recipes can ask for a finer group than a family, such as sulfide copper ore. A group is
 // at hand once its family is, if one of its ores can be dug without drilling (layers 0 and 1).
@@ -34,7 +34,7 @@ function recipePorts(recipe) {
 for (const recipe of recipes) {
   if (!machines[recipe.machine]) errors.push(`${recipe.id}: 없는 기계 ${recipe.machine}`);
   for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
-    if (!items[id]) errors.push(`${recipe.id}: 없는 재료 ${id}`);
+    if (!items[id] && !machines[id]) errors.push(`${recipe.id}: 없는 재료 ${id}`);
   }
 }
 for (const [id, machine] of Object.entries(machines)) {
