@@ -131,11 +131,13 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .reserve { visibility: hidden; }
 /* A collapse: over the top of the map for a few seconds. */
 .notice { grid-area: centre; align-self: start; justify-self: center; z-index: 5; margin-top: var(--gap); padding: var(--gap); background: var(--panel); border: 1px solid var(--alert); color: var(--alert); font-weight: 700; }
-/* The tutorial card: what to do next, at the foot of the right column like a notification. Fixed height. */
-.tutorial { flex: none; height: calc(var(--gap) * 12); display: grid; grid-template-rows: auto 1fr; gap: var(--gap-sm); padding: var(--gap); border: 1px dashed var(--fire); overflow: hidden; }
+/* The tutorial card: a notification floating over the foot of the right column, as tall as its text (never cut),
+   over the panels and under windows (it sits in #app, below .window-back). Its width is the column's, less the margin. */
+.tutorial { position: fixed; right: calc(var(--gap) * 2); bottom: calc(var(--gap) * 2); z-index: 15; width: calc(var(--side) - var(--gap) * 2); display: grid; gap: var(--gap); padding: var(--gap-lg); background: var(--panel); border: 1px solid var(--fire); box-shadow: 0 12px 32px rgb(0 0 0 / 55%); }
+.tutorial-next { justify-self: end; }
 .tutorial-head { display: flex; align-items: center; gap: var(--gap); }
 .tutorial-tag { flex: none; padding: 0 var(--gap-sm); color: var(--fire); border: 1px solid var(--fire); }
-.tutorial-text { min-width: 0; line-height: 1.5; overflow: hidden; }
+.tutorial-text { min-width: 0; line-height: 1.6; }
 .tutorial-target { outline: 2px solid var(--fire); outline-offset: 2px; animation: tutorial-pulse 1.6s ease-in-out infinite; }
 @keyframes tutorial-pulse { 50% { outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .tutorial-target { animation: none; } }
@@ -498,3 +500,8 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 
 @keyframes pulse { 50% { background: #3a1a1a; } }
 @media (prefers-reduced-motion: reduce) { .slot.full, .node[data-status="blocked"], .meter.vital.low, .meter.weight.strain { animation: none; } }
+.top .tutorial-target { outline-offset: -2px; }
+/* The section's steps as a checklist: done ones dim, the current one lit. */
+.tutorial-list { display: grid; gap: 2px; padding-bottom: var(--gap-sm); border-bottom: 1px dashed var(--line); color: var(--dim); }
+.tutorial-item.done { color: var(--faint); }
+.tutorial-item.now { color: var(--fire); font-weight: 700; }

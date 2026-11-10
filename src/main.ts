@@ -1,4 +1,4 @@
-import { TUTORIAL, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
+import { SECTIONS, TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
@@ -219,7 +219,18 @@ guideOff.addEventListener("click", () => {
 const guideHead = document.createElement("div");
 guideHead.className = "tutorial-head";
 guideHead.append(guideTag, guideOff);
-guide.append(guideHead, guideText);
+// A step that is only for reading moves on with this.
+const guideNext = document.createElement("button");
+guideNext.type = "button";
+guideNext.className = "tech tutorial-next";
+guideNext.textContent = tr("다음");
+guideNext.addEventListener("click", () => {
+  acknowledgeStep(state);
+  redraw();
+});
+const guideList = document.createElement("div");
+guideList.className = "tutorial-list";
+guide.append(guideHead, guideList, guideText, guideNext);
 const notice = document.createElement("div");
 notice.className = "notice";
 notice.hidden = true;
@@ -512,7 +523,10 @@ map.side.classList.add("left-col");
 graph.side.classList.add("left-col");
 const rightCol = document.createElement("div");
 rightCol.className = "right-col";
-rightCol.append(itemIndex.root, guide);
+rightCol.append(itemIndex.root);
+// The tutorial card floats over the foot of the right column, as tall as its text, never cut short; inside #app so
+// windows still cover it.
+app.append(guide);
 app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
 
 // Escape first closes whatever is open; only with nothing to cancel does it open the menu.
@@ -645,10 +659,20 @@ function redraw(): void {
   }
   const lesson = currentStep(state);
   guide.hidden = !lesson;
+  guideNext.hidden = !lesson?.ack;
+  vitals.classList.toggle("tutorial-target", lesson?.id === "vitals");
   guideAgain.disabled = state.stage > 0;
   if (lesson) {
-    const tag = `${tr("튜토리얼")} ${state.tutorial!.step + 1}/${TUTORIAL.length}`;
+    // One section at a time: its name and number, its steps as a checklist, and what to do for the current one.
+    const at = state.tutorial!.step;
+    const part = SECTIONS.findIndex((p) => p.steps.includes(at));
+    const tag = `${part + 1}/${SECTIONS.length} ${tr(SECTIONS[part].name)}`;
     if (guideTag.textContent !== tag) guideTag.textContent = tag;
+    const list = SECTIONS[part].steps.map((i) => {
+      const mark = i < at ? "[x]" : i === at ? "[>]" : "[ ]";
+      return `<div class="tutorial-item ${i < at ? "done" : i === at ? "now" : ""}">${mark} ${tr(TUTORIAL[i].title)}</div>`;
+    }).join("");
+    if (guideList.dataset.shown !== list) guideList.innerHTML = guideList.dataset.shown = list;
     const text = tr(lesson.text);
     if (guideText.textContent !== text) guideText.textContent = text;
   }

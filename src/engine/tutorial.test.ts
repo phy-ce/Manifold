@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addTo, createGame, loadSave, placeMachine } from "./game";
-import { TUTORIAL, advanceTutorial, currentStep, elsewhere } from "./tutorial";
+import { TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./tutorial";
+import { BASE } from "./world";
 
 const at = (id: string) => TUTORIAL.findIndex((step) => step.id === id);
 
@@ -8,12 +9,35 @@ describe("S0 tutorial", () => {
   it("starts a new game on its first step, which sends the player out to the map", () => {
     const s = createGame(1);
     advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("vitals");
+    // Only to read: nothing in the game moves it on, the card's button does.
+    s.player = { x: BASE.x + 9, y: BASE.y };
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("vitals");
+    acknowledgeStep(s);
     expect(currentStep(s)?.id).toBe("food");
-    expect(elsewhere(s, currentStep(s)!, true)).toBe(true);
-    expect(elsewhere(s, currentStep(s)!, false)).toBe(false);
+    const t = createGame(1);
+    acknowledgeStep(t);
+    expect(currentStep(t)?.id).toBe("walk");
+    expect(elsewhere(t, currentStep(t)!, true)).toBe(true);
+    expect(elsewhere(t, currentStep(t)!, false)).toBe(false);
   });
 
-  it("asks for food first, picked or cooked, then clay", () => {
+  it("teaches walking next: done once the player is 6 cells out, and it stays done back at the base", () => {
+    const s = createGame(1);
+    acknowledgeStep(s);
+    s.player = { x: BASE.x + 5, y: BASE.y };
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("walk");
+    s.player = { x: BASE.x + 6, y: BASE.y };
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("food");
+    s.player = { ...BASE };
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("food");
+  });
+
+  it("asks for food next, picked or cooked, then clay", () => {
     const s = createGame(1);
     addTo(s.inv, "Mu", 3);
     advanceTutorial(s);
