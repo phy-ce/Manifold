@@ -1099,7 +1099,8 @@ function routeTo(s: GameState, target: Point): Point[] {
  */
 export function walkTo(s: GameState, target: Point): boolean {
   if (overloaded(s)) return false;
-  const again = !!s.halt && s.halt.target.x === target.x && s.halt.target.y === target.y;
+  // Going on after a stop: the same destination again, or the stopped-at cell itself (boxed red on the map).
+  const again = !!s.halt && ((s.halt.target.x === target.x && s.halt.target.y === target.y) || (s.halt.x === target.x && s.halt.y === target.y));
   s.passing = again;
   s.halt = null;
   s.path = routeTo(s, target);
@@ -2632,6 +2633,8 @@ function walk(s: GameState): void {
   const ahead = s.safeWalk && !s.passing ? hazardOf(s, s.player, s.path[0]) : null;
   if (ahead) {
     s.halt = { ...ahead, target: s.path.at(-1)! };
+    // The tutorial's safe step asks to be stopped once; it is noted here, as the stop may not last.
+    if (s.tutorial) s.tutorial.halted = true;
     s.path = [];
     return;
   }
