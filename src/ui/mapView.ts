@@ -283,6 +283,8 @@ export class MapView {
   private resultPage = 0;
   private readonly pagerBar = document.createElement("div");
   private readonly canvas = document.createElement("canvas");
+  /** The paused mark over the map. */
+  private readonly paused = document.createElement("div");
   private readonly ctx = this.canvas.getContext("2d")!;
   private readonly panel = document.createElement("div");
   private readonly fight: FightPanel;
@@ -325,6 +327,11 @@ export class MapView {
 
   constructor(private readonly game: () => GameState, private readonly changed: () => void) {
     this.root.className = "box map-box map-view";
+    // While time is stopped, a mark over the top of the map says so; it never takes a click.
+    this.paused.className = "map-paused";
+    this.paused.textContent = `|| ${tr("일시정지")}`;
+    this.paused.hidden = true;
+    this.paused.setAttribute("aria-hidden", "true");
     this.side.className = "map-side";
     this.fight = new FightPanel(game, changed);
     this.canvas.className = "map";
@@ -439,7 +446,7 @@ export class MapView {
     action(this.probe, "", startProbe, tr("멈춰서 주변 바위를 두드려 광맥을 찾습니다 (Q)"));
     this.probe.className = "key-button";
     walkMode.append(this.caveBar);
-    this.root.append(this.canvas);
+    this.root.append(this.canvas, this.paused);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -516,6 +523,11 @@ export class MapView {
     const small = ".,'`:\"_-".includes(ch);
     const [w, h] = small ? [CELL_W / 3, CELL_H / 6] : [CELL_W - 2, CELL_H - 4];
     g.fillRect(vx * CELL_W + (CELL_W - w) / 2, vy * CELL_H + (CELL_H - h) / 2, w, h);
+  }
+
+  /** Shows or hides the paused mark over the map. */
+  setPaused(paused: boolean): void {
+    this.paused.hidden = !paused;
   }
 
   /** C: walks up to the nearest creature in sight. */

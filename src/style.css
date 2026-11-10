@@ -196,7 +196,9 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 /* Map */
 .map-view, .graph-view { min-height: 0; min-width: 0; display: grid; gap: var(--gap-lg); }
 /* The map fills the middle with whole cells (MapView sizes its canvas), centred in its box. */
-.map-view { place-items: center; overflow: hidden; }
+.map-view { place-items: center; overflow: hidden; position: relative; }
+/* While time is stopped: a mark over the top middle of the map, never in the way of a click. */
+.map-paused { position: absolute; top: var(--gap-lg); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); color: var(--fire); background: rgb(16 21 28 / 80%); border: 1px solid var(--fire); font-size: var(--text-lg); font-weight: 700; pointer-events: none; }
 .graph-view { grid-template-rows: minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
