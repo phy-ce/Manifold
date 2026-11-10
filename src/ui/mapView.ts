@@ -667,7 +667,7 @@ export class MapView {
     const s = this.game();
     this.changeLayer();
     // The safe switch and prospecting read as key hints: lit while on.
-    const safeLabel = keyHintHtml("T", tr("안전"), s.safeWalk ? "on" : "off");
+    const safeLabel = keyHintHtml("T", tr("안전 모드"), s.safeWalk ? "on" : "off");
     if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;
     this.safe.setAttribute("aria-pressed", String(s.safeWalk));
     // Where safe mode stopped the walk: what lies ahead, what it costs, and how to go on anyway.
@@ -676,6 +676,8 @@ export class MapView {
     if (this.warn.dataset.shown !== warning) {
       this.warn.dataset.shown = warning;
       this.warn.innerHTML = warning;
+      // The cell it stopped short of blinks on the map, then stays boxed in red until the walk goes on.
+      if (halt) this.emphasize([halt], "strong");
     }
     this.fight.draw();
     this.drawVein(s);
@@ -697,13 +699,21 @@ export class MapView {
     // On the surface the map only changes when the player moves, a cell empties or something blinks; underground creatures move every step.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0) + (site.note ? 31 : 0) + 7 * (site.cells?.filter((c) => c.left <= 0).length ?? 0), 0);
     const live = cave || s.mobs.length || this.marking() ? `${s.time},${Math.floor(performance.now() / 150)}` : "";
-    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${live}`;
+    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(this.viewW / 2);
     this.originY = s.player.y - Math.floor(this.viewH / 2);
     if (cave) this.paintUnder(s, probing);
     else this.paint(s);
+    // Where safe mode stopped: the hazard cell boxed in red, as long as the stop holds.
+    if (s.halt) {
+      const vx = s.halt.x - this.originX;
+      const vy = s.halt.y - this.originY;
+      this.ctx.strokeStyle = COLOR.wolf;
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(vx * CELL_W + 1, vy * CELL_H + 1, CELL_W - 2, CELL_H - 2);
+    }
     // The way home may be off screen, so always say how far away it is: underground, the nearest stair seen.
     const home: Point | undefined = cave ? nearestStair(s) : BASE;
     const steps = home ? Math.max(Math.abs(s.player.x - home.x), Math.abs(s.player.y - home.y)) : 0;
