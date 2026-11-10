@@ -1,6 +1,6 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { machineRhythm, isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
+import { machineRhythm, isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, machinePower, unitOf } from "../content";
 import {
   BLAST, inBlastZone, GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -457,34 +457,29 @@ export class MachineWindow {
   }
 
   /**
-   * A dropdown like the shape picker's: pointing at it lists what this machine makes in its
-   * current shape, and each opens that item's page in the codex.
+   * One click to the index at what this machine is making now (its shape, or the recipe its inputs pick), where
+   * the recipe's + fills the inputs from the bag. Read at the click, so a shape chosen since is followed.
    */
   private buildCodexLinks(node: GameNode): void {
     if (isPassive(node.type) || node.type === MOTOR) return;
     const known = new Set(indexItems(this.game().stage));
-    const made = [...new Set(processOf(node.type, node.form).recipes.map((r) => Object.keys(r.out)[0]))].filter((id) => id && known.has(id));
-    if (!made.length) return;
+    const making = (): string | undefined => {
+      const current = nodeById(this.game(), node.id);
+      if (!current) return undefined;
+      const id = Object.keys(recipeOf(current).out)[0] ?? Object.keys(processOf(current.type, current.form).recipes[0]?.out ?? {})[0];
+      return id && known.has(id) ? id : undefined;
+    };
+    if (!making()) return;
     this.modes.hidden = false;
-    const group = document.createElement("div");
-    group.className = "tier";
-    const head = document.createElement("button");
-    head.type = "button";
-    head.className = "tech";
-    head.textContent = `${tr("도감")} ▾`;
-    head.dataset.tip = tr("이 기계로 만드는 것을 도감에서 봅니다");
-    const list = document.createElement("div");
-    list.className = "tier-list";
-    list.append(...made.map((id) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "tech";
-      b.innerHTML = `<span style="color:${itemColor(id)}">${itemCode(id)}</span> ${itemName(id)}`;
-      b.addEventListener("click", () => this.showItem?.(id));
-      return b;
-    }));
-    group.append(head, list);
-    this.modes.append(group);
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "tech codex-go";
+    go.textContent = tr("도감으로 이동");
+    go.addEventListener("click", () => {
+      const id = making();
+      if (id) this.showItem?.(id);
+    });
+    this.modes.append(go);
   }
 
   /** Opens an item's page in the codex. Set by the game once the codex exists. */
