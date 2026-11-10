@@ -775,7 +775,7 @@ function redraw(): void {
   vitals.classList.toggle("tutorial-target", lesson?.id === "vitals");
   bagKey.classList.toggle("tutorial-target", lesson?.id === "bag");
   itemIndex.root.classList.toggle("tutorial-target", lesson?.id === "index");
-  pointFill(lesson?.id === "fill" && guidePeek === null);
+  const fillPointing = lesson?.id === "fill" && guidePeek === null;
   guideAgain.disabled = state.stage > 0;
   if (lesson) {
     // One section at a time: its name and number, its steps as a checklist, and what to do for the step shown
@@ -805,6 +805,8 @@ function redraw(): void {
   itemIndex.sync();
   if (showBase) graph.draw();
   else map.draw();
+  // Last, after the board, the index and the windows have drawn: a redraw of theirs would wipe the marks.
+  pointFill(fillPointing);
 }
 
 let last = performance.now();
