@@ -280,6 +280,11 @@ export class GraphView {
   private pointer: { x: number; y: number } | null = null;
   private boxFrom: { x: number; y: number } | null = null;
 
+  /** Points the tutorial at every machine of a kind on the board, or at none. */
+  point(type: string | null): void {
+    for (const node of this.game().nodes) this.nodes.get(node.id)?.root.classList.toggle("tutorial-target", node.type === type);
+  }
+
   /** Where on screen a machine of this kind sits, if one is on the board and in view; for the turn of an age. */
   nodeCenter(type: string): { x: number; y: number } | undefined {
     if (this.root.hidden) return undefined;

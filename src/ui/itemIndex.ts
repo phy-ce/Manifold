@@ -57,6 +57,10 @@ export class ItemIndex {
   private cardPage = 0;
   private readonly history: string[] = [];
   private item: string | null = null;
+  /** The item whose page is showing, if any. */
+  get shown(): string | null {
+    return this.item;
+  }
   private tab: Tab = "recipes";
   private synced = "";
   /** The stage the grid and page were drawn for. */
@@ -214,7 +218,7 @@ export class ItemIndex {
     if (!node || !runsRecipe(node, recipe) || !Object.keys(recipe.in).length) return null;
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "tech push";
+    b.className = "tech push fill-plus";
     b.textContent = "+";
     b.disabled = !bagHolds(s, recipe);
     b.dataset.tip = b.disabled ? tr("인벤토리에 재료가 없습니다") : tr("인벤토리에서 넣기 (Shift: 가득)");

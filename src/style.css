@@ -94,7 +94,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
    rest and lit while pointed at, so it stays usable beside the window. The top bar dims with everything else. */
 #app.index-beside > .right-col { position: relative; z-index: 21; filter: brightness(.3); transition: filter .15s; }
 /* Dimmed like everything behind the window, so the screen reads as one layer; pointing at it brings it up. */
-#app.index-beside > .right-col:hover, #app.index-beside > .right-col:focus-within { filter: none; }
+#app.index-beside > .right-col:hover, #app.index-beside > .right-col:focus-within, #app.index-beside.index-lit > .right-col { filter: none; }
 /* The tutorial card floats over that column, so it comes up with it: its steps are often about the window. */
 #app.index-beside > .tutorial, #app.index-beside > .tutorial-mini { z-index: 22; }
 /* I: the bag with the gear, over the middle of the map. */

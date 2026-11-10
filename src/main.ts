@@ -1,7 +1,7 @@
 import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
 import { tr, restart } from "./i18n";
 import "./style.css";
-import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
+import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
 import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
@@ -642,6 +642,27 @@ reset.addEventListener("click", () => {
   restart();
 });
 
+/** What the fill step makes at the workbench. */
+const FILL_FORM = "open_kiln";
+/**
+ * The fill step, one thing lit at a time where it is on screen: the workbench on the board until its window is
+ * open; then the S0 group and its open kiln, until that is chosen; then 도감으로 이동, until the index shows the
+ * open kiln; then the recipe's + in the index. Off, it clears them all.
+ */
+function pointFill(on: boolean): void {
+  const node = windowView.openNode === null ? undefined : state.nodes.find((n) => n.id === windowView.openNode);
+  const bench = on && windowView.isOpen && node?.type === WORKBENCH ? node : undefined;
+  const at = !on ? "" : !bench ? "board" : bench.form !== FILL_FORM ? "form" : itemIndex.shown !== FILL_FORM ? "go" : "plus";
+  graph.point(at === "board" ? WORKBENCH : null);
+  const lit = (selector: string, want: boolean) => document.querySelectorAll(selector).forEach((el) => el.classList.toggle("tutorial-target", want));
+  lit(".machine-window .form-pick", false);
+  lit(`.machine-window .form-pick[data-forms~="${FILL_FORM}"], .machine-window [data-form="${FILL_FORM}"]`, at === "form");
+  lit(".codex-go", at === "go");
+  lit(".dock .fill-plus", at === "plus");
+  // The + is in the index column, dimmed behind the window: while it is the thing to press, the column stays lit.
+  app.classList.toggle("index-lit", at === "plus");
+}
+
 function redraw(): void {
   // Only the screen for the player's current location exists on the page.
   const home = atBase(state);
@@ -754,7 +775,7 @@ function redraw(): void {
   vitals.classList.toggle("tutorial-target", lesson?.id === "vitals");
   bagKey.classList.toggle("tutorial-target", lesson?.id === "bag");
   itemIndex.root.classList.toggle("tutorial-target", lesson?.id === "index");
-  document.querySelector(".codex-go")?.classList.toggle("tutorial-target", lesson?.id === "fill");
+  pointFill(lesson?.id === "fill" && guidePeek === null);
   guideAgain.disabled = state.stage > 0;
   if (lesson) {
     // One section at a time: its name and number, its steps as a checklist, and what to do for the step shown

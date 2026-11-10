@@ -417,6 +417,7 @@ export class MachineWindow {
       const b = document.createElement("button");
       b.type = "button";
       b.className = `tech ${form === node.form ? "selected" : ""}`;
+      b.dataset.form = form;
       b.textContent = formLabel(form);
       b.addEventListener("click", () => pick(form));
       return b;
@@ -426,7 +427,9 @@ export class MachineWindow {
       group.className = "tier";
       const head = document.createElement("button");
       head.type = "button";
-      head.className = `tech ${inCategory.includes(node.form) ? "selected" : ""}`;
+      head.className = `tech form-pick ${inCategory.includes(node.form) ? "selected" : ""}`;
+      // Which shapes the group holds, so the tutorial can point at the group with the one it wants.
+      head.dataset.forms = inCategory.join(" ");
       head.textContent = inCategory.includes(node.form) ? `${label}: ${formLabel(node.form)}` : label;
       const list = document.createElement("div");
       list.className = "tier-list";

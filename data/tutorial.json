@@ -92,11 +92,11 @@
       "id": "fill",
       "section": "가마",
       "title": "재료 넣기",
-      "text": "기지로 돌아와 작업대를 열고 노천 가마를 고르세요. 도감으로 이동을 누르면 도감에 노천 가마 만드는 법이 나옵니다. 거기서 +를 눌러 점토 12개를 넣으세요",
+      "text": "기지로 돌아와 작업대를 여세요. 창 위쪽의 S0 목록에서 노천 가마를 고르고, 도감으로 이동을 누른 뒤, 도감에 나온 만드는 법의 +를 눌러 점토 12개를 넣으세요",
       "en": {
         "section": "Kiln",
         "title": "Put in materials",
-        "text": "Back at the base, open the workbench and pick the open kiln. Open in index shows how the open kiln is made; press + there to put in 12 clay"
+        "text": "Back at the base, open the workbench. Pick the open kiln from the S0 list at the top of its window, press Open in index, then press + on the recipe the index shows to put in 12 clay"
       }
     },
     {
