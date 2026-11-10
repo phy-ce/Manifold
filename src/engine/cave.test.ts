@@ -93,7 +93,7 @@ describe("ore layers", () => {
     expect(count.coal).toBeGreaterThan(count.copper_ore * 1.3);
     expect(count.copper_ore).toBeGreaterThan(count.clay * 1.4);
     expect(food / (ore + food)).toBeLessThan(0.85);
-  });
+  }, 30_000); // thousands of chunks: slow on the CI machine
 });
 
 describe("cave entrances", () => {

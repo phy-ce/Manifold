@@ -2475,7 +2475,7 @@ describe("vein grades", () => {
     const share = all.filter((v) => v.rich === "rich").length / all.length;
     expect(share).toBeGreaterThan(0);
     expect(share).toBeLessThan(0.01);
-  });
+  }, 30_000); // thousands of worlds: slow on the CI machine
 
   it("scales size by grade", () => {
     const all = veins();
