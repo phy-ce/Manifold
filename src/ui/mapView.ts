@@ -311,6 +311,8 @@ export class MapView {
   private pointedFrom = "";
   private readonly safe = document.createElement("button");
   private readonly warn = document.createElement("div");
+  /** What safe mode stopped for, shown for a moment at the top of the screen. */
+  private readonly haltFlash = document.createElement("div");
   private veins = new Map<number, Vein>();
   private hit = 0;
   private drawnVein = "";
@@ -414,6 +416,9 @@ export class MapView {
     walkMode.append(this.safe);
     this.warn.className = "walk-warn";
     this.warn.setAttribute("role", "status");
+    this.haltFlash.className = "hurt halt-flash";
+    this.haltFlash.setAttribute("aria-hidden", "true");
+    document.body.append(this.haltFlash);
     // The cave's buttons share the safe-mode row, so the bar above the map is one row wherever the player is.
     this.caveBar.className = "map-actions";
     const action = (b: HTMLButtonElement, label: string, act: (s: GameState) => boolean, tip?: string) => {
@@ -677,7 +682,14 @@ export class MapView {
       this.warn.dataset.shown = warning;
       this.warn.innerHTML = warning;
       // The cell it stopped short of blinks on the map, then stays boxed in red until the walk goes on.
-      if (halt) this.emphasize([halt], "strong");
+      if (halt) {
+        this.emphasize([halt], "strong");
+        // And says what it saw, over the top of the map like a hit does: "물 감지 -3".
+        this.haltFlash.textContent = `${halt.kind === "water" ? tr("물") : tr("고도 변화")} ${tr("감지")} -${halt.damage}`;
+        this.haltFlash.classList.remove("hit");
+        void this.haltFlash.offsetWidth;
+        this.haltFlash.classList.add("hit");
+      }
     }
     this.fight.draw();
     this.drawVein(s);
