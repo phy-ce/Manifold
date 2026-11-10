@@ -51,6 +51,8 @@ const RULES: Record<string, Rule> = {
   vitals: { ack: true, done: () => false },
   // Getting about first: everything after happens out on the map.
   walk: { where: "map", done: (s) => Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y)) >= WALK_AWAY },
+  // The top bar (time, saving, help) and safe mode: read once out on the map, where they matter.
+  top: { ack: true, done: () => false },
   // Then food: hunger runs down from the start, and food is always laid near the base.
   food: { where: "map", search: true, done: (s) => FOOD.reduce((n, id) => n + countOf(s, id), 0) >= 4 },
   // With food in the bag, how the bag works: every slot (bag, store, machine) is handled the same way.
@@ -82,6 +84,7 @@ export const TUTORIAL: TutorialStep[] = tutorialData.steps.map((words) => {
 const PAST: Record<string, (s: GameState) => boolean> = {
   vitals: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
   walk: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
+  top: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
   food: (s) => has(s, "open_kiln"),
   bag: (s) => has(s, "open_kiln") || countOf(s, "clay") >= 12,
   clay: (s) => has(s, "open_kiln"),

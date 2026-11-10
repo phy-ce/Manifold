@@ -16,7 +16,7 @@ describe("S0 tutorial", () => {
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("vitals");
     acknowledgeStep(s);
-    expect(currentStep(s)?.id).toBe("food");
+    expect(currentStep(s)?.id).toBe("top");
     const t = createGame(1);
     acknowledgeStep(t);
     expect(currentStep(t)?.id).toBe("walk");
@@ -32,6 +32,8 @@ describe("S0 tutorial", () => {
     expect(currentStep(s)?.id).toBe("walk");
     s.player = { x: BASE.x + 6, y: BASE.y };
     advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("top");
+    acknowledgeStep(s);
     expect(currentStep(s)?.id).toBe("food");
     s.player = { ...BASE };
     advanceTutorial(s);
