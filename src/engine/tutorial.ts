@@ -1,7 +1,8 @@
 // The S0 tutorial: one thing to do at a time, each judged from the game state alone, so it works the
 // same however the player gets there. Steps only move forward; a step the player has already gone
 // past (they built the thing it leads to) is skipped.
-import { GameState, atBase, countOf } from "./game";
+import { GameState, atBase, countOf, revealWay } from "./game";
+import { familyOf } from "../content";
 import { BASE } from "./world";
 
 export interface TutorialStep {
@@ -18,6 +19,8 @@ export interface TutorialStep {
   search?: boolean;
   /** Only something to read: it moves on when the player says so (acknowledgeStep), not by anything in the game. */
   ack?: boolean;
+  /** Done once when the step comes up, to help with it (the clay step lights the way to the clay). */
+  onStart?: (s: GameState) => void;
   /** Done: the tutorial moves on. */
   done: (s: GameState) => boolean;
 }
@@ -27,6 +30,15 @@ const has = (s: GameState, type: string): boolean => s.nodes.some((n) => n.type 
 const stands = (s: GameState, type: string): boolean => s.nodes.some((n) => n.type === type);
 /** What counts as food for the first step: picked or cooked. */
 const FOOD = ["Be", "Mu", "Bc", "Mc"];
+/**
+ * The clay step lights the way from the base to the nearest clay vein that still holds any (the one the world
+ * promises near the base), so the search finds it at once and the line on the map shows where to walk.
+ */
+function lightClay(s: GameState): void {
+  const far = (p: { x: number; y: number }) => Math.max(Math.abs(p.x - BASE.x), Math.abs(p.y - BASE.y));
+  const clay = s.sites.filter((v) => familyOf(v.ore) === "clay" && v.left > 0 && !v.z).sort((a, b) => far(a) - far(b))[0];
+  if (clay) revealWay(s, BASE, clay);
+}
 /** How far from the base the first step asks the player to walk, in cells. */
 const WALK_AWAY = 6;
 
@@ -37,7 +49,7 @@ export const TUTORIAL: TutorialStep[] = [
   { id: "walk", section: "기본 조작", title: "걸어 보기", where: "map", text: "M을 눌러 지도로 나가, WASD로 걷거나 지도의 칸을 눌러 걸어가 보세요. 기지에서 6칸 떨어진 곳까지 가면 됩니다. M을 다시 누르면 기지로 돌아옵니다", done: (s) => Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y)) >= WALK_AWAY },
   // Then food: hunger runs down from the start, and food is always laid near the base.
   { id: "food", section: "식량", title: "먹을 것 줍기", where: "map", search: true, text: "왼쪽 찾기 칸에 \"버섯\"이나 \"산딸기\"를 검색하고, 가까운 곳을 눌러 걸어간 뒤 F로 먹을 것 4개를 주우세요. 배가 고프면 가방(I)에서 음식에 마우스를 올리고 E로 먹습니다", done: (s) => FOOD.reduce((n, id) => n + countOf(s, id), 0) >= 4 },
-  { id: "clay", section: "광맥", title: "점토 캐기", where: "map", search: true, text: "찾기 칸에 \"점토\"를 검색하고, 가까운 광맥을 눌러 걸어간 뒤 F(또는 광맥 그림)를 눌러 점토 12개를 캐세요", done: (s) => countOf(s, "clay") >= 12 },
+  { id: "clay", section: "광맥", title: "점토 캐기", where: "map", search: true, onStart: lightClay, text: "기지에서 가까운 점토 광맥까지 길을 밝혀 두었습니다. 찾기 칸에 \"점토\"를 검색하고, 광맥을 눌러 걸어간 뒤 F(또는 광맥 그림)를 눌러 점토 12개를 캐세요", done: (s) => countOf(s, "clay") >= 12 },
   { id: "kiln", section: "가마", title: "노천 가마 만들기", where: "base", text: "기지로 돌아와 작업대를 열고 노천 가마를 고른 뒤, 박자에 맞춰 Space를 눌러 만드세요", done: (s) => has(s, "open_kiln") },
   { id: "place-kiln", section: "가마", title: "가마 설치", where: "base", text: "인벤토리의 노천 가마를 집어 보드 빈 곳을 눌러 설치하세요", done: (s) => stands(s, "open_kiln") },
   { id: "fuel", section: "연료와 벽돌", title: "연료 찾기", where: "map", search: true, text: "석탄과 갈탄은 기지 근처에 없습니다. 지도를 돌아다니며 직접 찾아야 하고, 시간이 좀 걸립니다. 한 번 본 광맥은 찾기 칸에 \"석탄\"이나 \"갈탄\"을 검색하면 나옵니다. 연료 4개를 캐고, 벽돌을 구울 점토도 12개 캐 오세요", done: (s) => countOf(s, "clay") >= 12 && countOf(s, "coal") >= 4 },
@@ -69,6 +81,8 @@ const PAST: Record<string, (s: GameState) => boolean> = {
 export interface TutorialState {
   step: number;
   off: boolean;
+  /** The last step whose start was acted on (onStart), so it happens once. */
+  started?: number;
 }
 
 export const newTutorial = (): TutorialState => ({ step: 0, off: false });
@@ -85,6 +99,11 @@ export function advanceTutorial(s: GameState): void {
     if (PAST[step.id]?.(s)) t.step = Math.max(t.step, i + 1);
   });
   while (t.step < TUTORIAL.length && TUTORIAL[t.step].done(s)) t.step += 1;
+  const now = TUTORIAL[t.step];
+  if (now?.onStart && t.started !== t.step) {
+    t.started = t.step;
+    now.onStart(s);
+  }
 }
 
 /** The sections in order, each with the indexes of its steps. */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addTo, createGame, loadSave, placeMachine } from "./game";
+import { addTo, createGame, isRevealed, loadSave, placeMachine } from "./game";
+import { familyOf } from "../content";
 import { TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./tutorial";
 import { BASE } from "./world";
 
@@ -35,6 +36,18 @@ describe("S0 tutorial", () => {
     s.player = { ...BASE };
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("food");
+  });
+
+  it("lights the way from the base to the promised clay once the clay step comes up", () => {
+    const s = createGame(7);
+    const clay = s.sites.find((v) => familyOf(v.ore) === "clay")!;
+    expect(isRevealed(s, clay.x, clay.y)).toBe(false);
+    addTo(s.inv, "Mu", 4);
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("clay");
+    expect(isRevealed(s, clay.x, clay.y)).toBe(true);
+    const mid = { x: Math.round((BASE.x + clay.x) / 2), y: Math.round((BASE.y + clay.y) / 2) };
+    expect(isRevealed(s, mid.x, mid.y)).toBe(true);
   });
 
   it("asks for food next, picked or cooked, then clay", () => {

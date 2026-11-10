@@ -850,6 +850,15 @@ function forSight(at: Point, facing: Point | null | undefined, around: number, r
 }
 
 /** Marks surface cells in sight from a point as known. A chunk's sites are laid out the first time it is seen. */
+/**
+ * Lights a way across the map: every cell within `width` of the straight line from one point to another, as if
+ * the player had walked it. For the tutorial, which shows the way from the base to the clay it promises.
+ */
+export function revealWay(s: GameState, from: Point, to: Point, width = 1): void {
+  for (const at of [from, ...linePath(from, to)]) reveal(s, at, width);
+  reveal(s, to, width + 1);
+}
+
 function reveal(state: GameState, at: Point, around: number, reach: number = around, facing: Point | null = null): void {
   forSight(at, facing, around, reach, (x, y) => {
     const key = chunkKey(x, y);
