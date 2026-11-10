@@ -572,8 +572,8 @@ win.firstElementChild!.append(keepPlaying);
 // The biome's landscape behind everything, first in the page so all else stands over it.
 const scenery = new Scenery();
 document.body.prepend(scenery.root);
-// Desert and snow weather: over the whole screen except the map.
-const weather = new Weather(() => (map.root.hidden ? null : map.root.getBoundingClientRect()));
+// Desert and snow weather: over the whole screen, the map included.
+const weather = new Weather(() => null);
 document.body.append(weather.canvas);
 // The age's tones (style.css: body.era-s0, body.era-s1). Set once on loading; after that only the turn of an
 // age changes them, under its cover, so a save never replays it.

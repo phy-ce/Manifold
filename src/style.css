@@ -80,7 +80,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
   --r: radial-gradient(circle, var(--era-metal) 0 1px, transparent 1.5px);
   background: var(--r) top left / 4px 4px no-repeat, var(--r) top right / 4px 4px no-repeat, var(--r) bottom left / 4px 4px no-repeat, var(--r) bottom right / 4px 4px no-repeat;
 }
-/* Desert and snow weather (src/ui/weather.ts): over the panels but never the map, under windows; never touchable. */
+/* Desert and snow weather (src/ui/weather.ts): over the panels and the map, under windows; never touchable. */
 .weather { position: fixed; inset: 0; z-index: 4; width: 100%; height: 100%; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 /* The turn of an age (src/ui/eraTransition.ts): over everything; a click skips it and goes no further. */
 .era-turn { position: fixed; inset: 0; z-index: 60; cursor: pointer; }

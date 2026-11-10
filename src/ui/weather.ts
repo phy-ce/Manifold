@@ -1,5 +1,5 @@
 // Weather: blown sand in the desert, falling snow on the snowfield, as faint characters over the whole screen,
-// panels included, but never over the map itself (keepClear), so the map always reads cleanly. Under the panels it
+// panels and the map included (keepClear can still leave a box clear). Under the panels it
 // could hardly be seen. Only on the surface map, never underground or on the base board. The player can never
 // touch it: no pointer, no selection, no drag.
 // One canvas, its own loop at 20 frames a second, stopped while the tab is hidden; none at all with reduced motion.
