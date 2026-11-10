@@ -1098,8 +1098,16 @@ export function walkTo(s: GameState, target: Point): boolean {
  * but keeps the step already under way, so holding a key moves at the normal pace.
  */
 export function walkStep(s: GameState, dx: number, dy: number): boolean {
-  if (overloaded(s) || (!dx && !dy)) return false;
+  if (!dx && !dy) return false;
   const [sx, sy] = [Math.sign(dx), Math.sign(dy)];
+  // The player turns the way they pressed even when they can't go: into rock, or too loaded to move. Turning is
+  // free, and the fan of sight swings round with them.
+  if (s.facing?.x !== sx || s.facing?.y !== sy) {
+    s.facing = { x: sx, y: sy };
+    if (s.z < 0) revealUnder(s, s.player, ...sightOf(s, s.player), s.facing);
+    else reveal(s, s.player, ...sightOf(s, s.player), s.facing);
+  }
+  if (overloaded(s)) return false;
   if (s.z < 0) {
     const rock = (x: number, y: number) => rockAt(s, x, y);
     const { x, y } = s.player;

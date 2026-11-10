@@ -2,7 +2,7 @@
 // underground; and how much of a vein they know of.
 import { describe, expect, it } from "vitest";
 import { CAVE } from "../content";
-import { CAVE_DARK, FAN_DEGREES, REVEAL, SIGHT_AROUND, createGame, enterCave, isRevealed, isVisible, knownReserve, step, underSeenAt, visionAt, walkTo } from "./game";
+import { CAVE_DARK, FAN_DEGREES, REVEAL, SIGHT_AROUND, walkStep, createGame, enterCave, isRevealed, isVisible, knownReserve, step, underSeenAt, visionAt, walkTo } from "./game";
 import { ROCK, Site, terrain, underCell } from "./world";
 
 /** A world with the player on flat open plain, facing east after one step. */
@@ -15,6 +15,17 @@ function facingEast() {
 }
 
 describe("sight", () => {
+  it("turns the player the way a key points even when they can't step, and the fan turns with them", () => {
+    const s = facingEast();
+    const { x, y } = s.player;
+    s.inv[0] = { id: "iron", n: 999 }; // far too heavy to move
+    expect(walkStep(s, -1, 0)).toBe(false);
+    expect(s.player).toEqual({ x, y });
+    expect(s.facing).toEqual({ x: -1, y: 0 });
+    expect(isVisible(s, x - 5, y)).toBe(true);
+    expect(isVisible(s, x + 3, y)).toBe(false);
+  });
+
   it("sees a small circle all round and a fan ahead, the way the player last walked", () => {
     const s = facingEast();
     const { x, y } = s.player;
