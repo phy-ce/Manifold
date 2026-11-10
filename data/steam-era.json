@@ -140,7 +140,7 @@
   ],
   "milestones": [
     {
-      "id": "S0", "name": "손작업",
+      "id": "S0", "name": "신화시대",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "limestone", "Be", "Mu"],
       "unlockMachines": ["workbench", "open_kiln", "bloomery", "hand_forge", "construction_bench"],
       "goal": { "item": "construction_bench", "amount": 1, "perMinute": 0.2 }
