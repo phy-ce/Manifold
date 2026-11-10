@@ -38,7 +38,7 @@
     },
     "snow": {
       "name": "설원", "ground": "#c9d3dc", "glyphs": "  *.", "water": "ice", "hills": 0.72, "maxHeight": 2,
-      "family": { "iron_ore": 1.2 }, "extraOres": ["Mt"], "ores": { "Mt": 3 }, "rich": 2,
+      "family": { "iron_ore": 2.5 }, "extraOres": ["Mt"], "ores": { "Mt": 6 }, "rich": 2,
       "forage": [], "rules": { "winterHunger": 1.5 }
     }
   }
