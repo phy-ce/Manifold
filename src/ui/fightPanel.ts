@@ -13,7 +13,9 @@ const BUFFER_MS = 450;
 /** The most cells a wall ray crosses underground. */
 const RAY_STEPS = 48;
 /** How many cells past the map's sight the surface view still draws, ahead of the player, fading into haze. */
-const VIEW_EXTRA = 5;
+const VIEW_EXTRA = 3;
+/** Over how many cells past the map's sight the land fades into fog. */
+const FOG_DEPTH = 2.5;
 const steps8 = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 /** A hash of a wall cell and a spot on its face, in 0..1. */
@@ -134,6 +136,8 @@ export class FightPanel {
   private readonly motion = matchMedia("(prefers-reduced-motion: reduce)");
   private surfaceKey = "";
   private surfaceRadius = 0;
+  /** How far the player sees on the map now, in cells: the fog begins past it. */
+  private sightReach = 5;
   private surfaceX = 0;
   private surfaceY = 0;
   private surface: (SurfaceCell | undefined)[] = [];
@@ -234,7 +238,8 @@ export class FightPanel {
    * sight is drawn; the view never looks back anyway.
    */
   private sampleSurface(s: GameState): void {
-    const radius = Math.ceil(visionAt(s, s.player)) + VIEW_EXTRA;
+    this.sightReach = visionAt(s, s.player);
+    const radius = Math.ceil(this.sightReach) + VIEW_EXTRA;
     const key = `${s.seed},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${radius}`;
     if (key === this.surfaceKey) return;
     this.surfaceKey = key;
@@ -271,8 +276,14 @@ export class FightPanel {
   }
 
   /** One haze colour joins the sky, unknown ground and distant silhouettes. */
+  /**
+   * One haze colour joins the sky, unknown ground and distant silhouettes. Past the player's sight on the map
+   * (sightReach) the land sinks into fog within FOG_DEPTH cells: what the map can't see, the view can only make out
+   * as shapes, then not at all.
+   */
   private surfacePixel(x: number, y: number, r: number, g: number, b: number, distance: number): void {
-    const light = 1 / (1 + distance * distance * .045);
+    const beyond = Math.max(0, distance - this.sightReach) / FOG_DEPTH;
+    const light = Math.max(0, 1 - beyond) / (1 + distance * distance * .045);
     this.pixel(x, y, 70 + (r - 70) * light, 80 + (g - 80) * light, 92 + (b - 92) * light);
   }
 
