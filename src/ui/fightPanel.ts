@@ -1,7 +1,7 @@
-﻿import { tr } from "../i18n";
-import { GameState, Mob, attack, canStrike, creatureInfo, creaturesInSight, mobVisible, walkTo, weaponOf } from "../engine/game";
+import { tr } from "../i18n";
+import { GameState, Mob, attack, canStrike, creatureInfo, creaturesInSight, isVisible, visionAt, mobVisible, walkTo, weaponOf } from "../engine/game";
 import { BIOMES } from "../content";
-import { biomeAt, underCell, ROCK } from "../engine/world";
+import { biomeAt, terrain, underCell, ROCK } from "../engine/world";
 import { SOUND } from "./sound";
 import { keyHint, setKeyHint } from "./keyHint";
 
@@ -13,6 +13,28 @@ const BUFFER_MS = 450;
 /** The most cells a wall ray crosses underground. */
 const RAY_STEPS = 48;
 const steps8 = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+/** A hash of a wall cell and a spot on its face, in 0..1. */
+const grain = (cell: number, a: number, b: number): number =>
+  ((Math.imul(cell ^ a, 2654435761) ^ Math.imul(b + 0x9e37, 83492791)) >>> 0) / 4294967296;
+
+/**
+ * The tone of raw rock at texel (u, v) of a wall cell's 32×32 face: lumps at two sizes and grit, laid in
+ * slanted beds whose tilt each cell picks, cut by the odd crack that wanders. No straight seams, so it reads as
+ * rock and not as bricks.
+ */
+function rockTone(mx: number, my: number, u: number, v: number): number {
+  const cell = Math.imul(mx, 73856093) ^ Math.imul(my, 19349663);
+  const tilt = (grain(cell, 7, 7) - 0.5) * 1.2;
+  const bed = Math.floor((v + u * tilt) / 6 + grain(cell, 9, 9) * 4);
+  const lump = grain(cell, (u + bed) >> 2, v >> 2);
+  const grit = grain(cell + 1, u, v);
+  let tone = 38 + lump * 16 + grit * 7 + (bed & 1 ? 5 : 0);
+  // A crack: a line that steps up or down every few texels, on about half the cells.
+  const crackAt = Math.floor(grain(cell, 3, 3) * 26) + 3 + Math.floor(grain(cell, u >> 2, 5) * 3) - 1;
+  if (grain(cell, 4, 4) < 0.5 && v === crackAt) tone = 24;
+  return tone;
+}
 const PALETTES = {
   melee: [[0, 0, 0], [55, 27, 25], [106, 47, 35], [150, 65, 43], [191, 140, 77], [207, 171, 119]],
   ranged: [[0, 0, 0], [37, 25, 49], [77, 43, 94], [116, 64, 131], [179, 124, 177], [209, 167, 110]],
@@ -85,6 +107,13 @@ const SPRITES = {
   yeti: [sprite("yeti", 0), sprite("yeti", 1), sprite("yeti", 2)],
 };
 
+/** Visible map samples are cached so rays and pixels never regenerate terrain. */
+interface SurfaceCell {
+  x: number; y: number; r: number; g: number; b: number;
+  height: number; water: boolean; ice: boolean; snow: boolean;
+  plant: number; z: number; lateral: number;
+}
+
 export class FightPanel {
   readonly root = document.createElement("div");
   private readonly head = document.createElement("div");
@@ -101,6 +130,12 @@ export class FightPanel {
   private readonly depth = new Float32Array(W * H);
   private readonly picks = new Int32Array(W * H);
   private readonly motion = matchMedia("(prefers-reduced-motion: reduce)");
+  private surfaceKey = "";
+  private surfaceRadius = 0;
+  private surfaceX = 0;
+  private surfaceY = 0;
+  private surface: (SurfaceCell | undefined)[] = [];
+  private readonly plants: SurfaceCell[] = [];
   private angle = 0;
   private last = 0;
   /** The layer last drawn: the view snaps round when the player changes layer. */
@@ -190,35 +225,155 @@ export class FightPanel {
     data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
   }
 
-  /**
-   * Open ground, nothing to cast against: a dim sky over the biome's ground (`near`, its colour close by), both
-   * fading into haze toward the horizon. Flecks are fixed to the ground, so they slide as the view turns.
-   */
-  private paintOpen(px: number, py: number, dx: number, dy: number, near: [number, number, number]): void {
-    const haze = [92, 100, 112];
+  /** Remembered cells stay in fog; visibility is refreshed only when its inputs change. */
+  private sampleSurface(s: GameState): void {
+    const radius = Math.ceil(visionAt(s, s.player)) + 1;
+    const key = `${s.seed},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${radius}`;
+    if (key === this.surfaceKey) return;
+    this.surfaceKey = key;
+    this.surfaceRadius = radius;
+    this.surfaceX = s.player.x - radius;
+    this.surfaceY = s.player.y - radius;
+    const size = radius * 2 + 1;
+    this.surface.length = size * size;
+    this.surface.fill(undefined);
+    this.plants.length = 0;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const wx = this.surfaceX + x, wy = this.surfaceY + y;
+      if (!isVisible(s, wx, wy)) continue;
+      const [glyph, cls, height] = terrain(wx, wy, s.seed);
+      const id = biomeAt(wx, wy, s.seed), biome = BIOMES[id];
+      const color = parseInt(biome.ground.slice(1), 16);
+      const cell: SurfaceCell = {
+        x: wx, y: wy, r: (color >> 16) * .8, g: ((color >> 8) & 255) * .8, b: (color & 255) * .8,
+        height: cls === "t-hill" ? height * .4 : 0,
+        water: cls === "t-water", ice: cls === "t-ice", snow: id === "snow" || id === "mountain",
+        plant: glyph === "T" ? 2 : glyph === "t" ? 1 : id === "marsh" && glyph === '"' ? 3 : 0,
+        z: 0, lateral: 0,
+      };
+      this.surface[y * size + x] = cell;
+      if (cell.plant && (wx !== s.player.x || wy !== s.player.y)) this.plants.push(cell);
+    }
+  }
+
+  private surfaceAt(x: number, y: number): SurfaceCell | undefined {
+    x -= this.surfaceX; y -= this.surfaceY;
+    const size = this.surfaceRadius * 2 + 1;
+    return x >= 0 && y >= 0 && x < size && y < size ? this.surface[y * size + x] : undefined;
+  }
+
+  /** One haze colour joins the sky, unknown ground and distant silhouettes. */
+  private surfacePixel(x: number, y: number, r: number, g: number, b: number, distance: number): void {
+    const light = 1 / (1 + distance * distance * .045);
+    this.pixel(x, y, 70 + (r - 70) * light, 80 + (g - 80) * light, 92 + (b - 92) * light);
+  }
+
+  /** Floor and hill projection share the creatures' half-cell eye height. */
+  private paintOpen(s: GameState, px: number, py: number, dx: number, dy: number): void {
+    this.sampleSurface(s);
     for (let y = 0; y < H; y++) {
-      const fade = Math.abs(y - H / 2 + .5) / (H / 2);
       if (y < H / 2) {
-        const r = 24 + (haze[0] - 24) * (1 - fade) ** 2, g = 30 + (haze[1] - 30) * (1 - fade) ** 2, b = 44 + (haze[2] - 44) * (1 - fade) ** 2;
-        for (let x = 0; x < W; x++) this.pixel(x, y, r, g, b);
+        const fade = (y / (H / 2)) ** 2;
+        for (let x = 0; x < W; x++) this.pixel(x, y, 24 + 46 * fade, 30 + 50 * fade, 44 + 48 * fade);
         continue;
       }
-      // A floor row's distance; nearer rows are brighter snow.
-      const row = (H / 2) / Math.max(.5, y - H / 2 + .5);
-      const close = Math.min(1, fade * 1.6);
-      const base = [0, 1, 2].map((i) => haze[i] + (near[i] - haze[i]) * close);
+      const row = FOCAL * .5 / (y + .5 - H / 2);
       for (let x = 0; x < W; x++) {
         const plane = (x + .5 - W / 2) / FOCAL;
-        const gx = Math.floor((px + (dx - dy * plane) * row) * 4), gy = Math.floor((py + (dy + dx * plane) * row) * 4);
-        const fleck = ((Math.imul(gx, 73856093) ^ Math.imul(gy, 19349663)) >>> 0) % 23 === 0 ? 14 * close : 0;
-        this.pixel(x, y, base[0] - fleck, base[1] - fleck, base[2] - fleck * .6);
+        const gx = px + (dx - dy * plane) * row, gy = py + (dy + dx * plane) * row;
+        const cell = this.surfaceAt(Math.floor(gx), Math.floor(gy));
+        if (!cell) { this.pixel(x, y, 70, 80, 92); continue; }
+        const hash = (Math.imul(Math.floor(gx * 12), 73856093) ^ Math.imul(Math.floor(gy * 12), 19349663)) >>> 0;
+        const fleck = hash % 17 < 2 ? -10 : hash % 29 === 0 ? 7 : 0;
+        if (cell.water || cell.ice) {
+          const glint = (Math.floor(gy * 18) + Math.floor(gx * 3)) % 7 === 0 ? 17 : 0;
+          this.surfacePixel(x, y, (cell.ice ? 133 : 32) + glint, (cell.ice ? 153 : 52) + glint, (cell.ice ? 166 : 61) + glint, row);
+        } else this.surfacePixel(x, y, cell.r + fleck, cell.g + fleck, cell.b + fleck, row);
+      }
+    }
+    // Keep stepping past low blocks so farther peaks rise over them.
+    for (let x = 0; x < W; x++) {
+      const plane = (x + .5 - W / 2) / FOCAL;
+      const rx = dx - dy * plane, ry = dy + dx * plane;
+      let mx = Math.floor(px), my = Math.floor(py);
+      const sx = rx < 0 ? -1 : 1, sy = ry < 0 ? -1 : 1;
+      const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry);
+      let tx = ddx * .5, ty = ddy * .5;
+      for (let step = 0; step < this.surfaceRadius * 4; step++) {
+        let entry: number, side: number;
+        if (tx < ty) { entry = tx; tx += ddx; mx += sx; side = 0; }
+        else { entry = ty; ty += ddy; my += sy; side = 1; }
+        const cell = this.surfaceAt(mx, my);
+        if (!cell) break;
+        if (!cell.height) continue;
+        const exit = Math.min(tx, ty);
+        const front = H / 2 + (.5 - cell.height) * FOCAL / entry;
+        const back = H / 2 + (.5 - cell.height) * FOCAL / exit;
+        const bottom = H / 2 + .5 * FOCAL / entry;
+        for (let y = Math.max(0, Math.ceil(Math.min(front, back) - .5)); y + .5 < Math.min(H, bottom); y++) {
+          const slope = (y + .5 - H / 2) / FOCAL;
+          const top = y + .5 < front;
+          const z = top ? (.5 - cell.height) / slope : entry;
+          if (z < entry || z > exit || z >= this.depth[y * W + x]) continue;
+          const wx = px + rx * z, wy = py + ry * z;
+          // The same raw rock as cave walls, so a hill up close is stone and not a checkerboard: across the face
+          // and up its height on a side, across the ground on top.
+          const across = Math.floor((top || side === 1 ? wx : wy) * 32) & 31;
+          const up = Math.floor((top ? wy : .5 - slope * z) * 32) & 31;
+          const grain = (rockTone(cell.x, cell.y, across, up) - 46) * .8;
+          const cap = cell.snow && (top || .5 - slope * z > cell.height - .09);
+          const shade = top ? 1.08 : side === 0 ? .64 : .82;
+          this.surfacePixel(x, y, (cap ? 173 : cell.r + 14) * shade + grain, (cap ? 185 : cell.g + 8) * shade + grain, (cap ? 194 : cell.b) * shade + grain, z);
+          this.depth[y * W + x] = z;
+        }
+      }
+    }
+    this.paintPlants(px, py, dx, dy);
+  }
+
+  /** Static layered silhouettes leave gaps; only opaque pixels write depth. */
+  private paintPlants(px: number, py: number, dx: number, dy: number): void {
+    for (const cell of this.plants) {
+      const ax = cell.x + .5 - px, ay = cell.y + .5 - py;
+      cell.z = ax * dx + ay * dy;
+      cell.lateral = -ax * dy + ay * dx;
+    }
+    this.plants.sort((a, b) => b.z - a.z);
+    for (const cell of this.plants) {
+      const z = cell.z;
+      if (z <= .08) continue;
+      const reed = cell.plant === 3;
+      const scale = FOCAL / z;
+      const width = scale * (reed ? .55 : cell.plant === 2 ? .95 : .75);
+      const height = scale * (reed ? .38 : cell.plant === 2 ? 1.65 : 1.3);
+      const left = W / 2 + cell.lateral * scale - width / 2;
+      const bottom = H / 2 + scale / 2, top = bottom - height;
+      for (let x = Math.max(0, Math.ceil(left)); x < Math.min(W, left + width); x++) {
+        const u = Math.floor((x - left) / width * 24), a = Math.abs(u - 11.5);
+        for (let y = Math.max(0, Math.ceil(top)); y < Math.min(H, bottom); y++) {
+          const v = Math.floor((y - top) / height * 28), p = y * W + x;
+          if (z >= this.depth[p]) continue;
+          let trunk = false, leaf = false;
+          if (reed) trunk = (u % 5 === 1 && v > 4 + u % 7) || (v > 14 && v < 19 && (u + v) % 7 === 0);
+          else {
+            trunk = a < 1.7 && v > 15;
+            leaf = cell.snow
+              ? v >= 1 && v < 22 && a < Math.min(v * .65, 3 + (v - 1) % 7)
+              : (v >= 2 && v < 10 && a < 5 + Math.min(v - 2, 9 - v)) || (v >= 8 && v < 17 && a < 8 + Math.min(v - 8, 16 - v) * .6) || (v >= 16 && v < 22 && a < 9 - (v - 16));
+          }
+          if (!trunk && !leaf) continue;
+          const shade = ((u * 3 + v * 5) % 11 < 3 ? -9 : 0) + (u < 10 ? 7 : 0);
+          const snow = leaf && cell.snow && v % 7 < 2;
+          this.surfacePixel(x, y, (snow ? 163 : leaf ? 43 : reed ? 92 : 70) + shade, (snow ? 178 : leaf ? 71 : reed ? 91 : 53) + shade, (snow ? 186 : leaf ? 49 : reed ? 57 : 39) + shade, z);
+          this.depth[p] = z;
+        }
       }
     }
   }
 
   draw(): void {
     const s = this.game();
-    // Underground the walls are the rock around; on the surface there is nothing to cast against.
+    // Underground casts rock walls; the surface casts visible terrain and plants.
     const cave = s.z < 0;
     const seen = creaturesInSight(s);
     const weapon = weaponOf(s);
@@ -272,9 +427,8 @@ export class FightPanel {
       }
     } else {
       this.walls.fill(Infinity);
-      const ground = BIOMES[biomeAt(s.player.x, s.player.y, s.seed)].ground;
-      const near: [number, number, number] = [1, 3, 5].map((i) => parseInt(ground.slice(i, i + 2), 16)) as [number, number, number];
-      this.paintOpen(px, py, dx, dy, near);
+      // Surface silhouettes have varying heights and gaps, so they use per-pixel depth.
+      this.paintOpen(s, px, py, dx, dy);
     }
     // DDA ray lengths are perpendicular camera depths, shared with billboard projection.
     for (let x = 0; cave && x < W; x++) {
@@ -300,9 +454,7 @@ export class FightPanel {
       const light = (side === 0 ? .68 : .9) / (1 + distance * .15);
       for (let y = Math.max(0, Math.ceil(top)); y < Math.min(H, top + height); y++) {
         const v = Math.floor((y - top) / height * 32);
-        const hash = (Math.imul(mx, 73856093) ^ Math.imul(my, 19349663) ^ Math.imul(u >> 1, 83492791) ^ Math.imul(v >> 1, 2654435761)) >>> 0;
-        const seam = v % 8 === 0 || (u + ((v >> 3) % 2) * 8) % 16 === 0;
-        const tone = seam ? 30 : 49 + (hash % 4) * 8;
+        const tone = rockTone(mx, my, u, v);
         this.pixel(x, y, tone * light, (tone + 7) * light, (tone + 13) * light);
       }
     }
@@ -340,13 +492,14 @@ export class FightPanel {
         }
         // Bars and reach marks obey the same occlusion as the creature.
         for (let y = barY; y < Math.min(H, barY + 2); y++) {
+          if (!cave && z >= this.depth[y * W + x]) continue;
           const filled = (x - left) / width <= mob.hp / creatureInfo(mob.kind).hp;
           this.pixel(x, y, filled ? 121 : 29, filled ? 75 : 27, filled ? 68 : 31);
           this.depth[y * W + x] = z;
           this.picks[y * W + x] = mob.id;
         }
         const foot = Math.floor(bottom + 1);
-        if (inReach && foot < H && (u < 5 || u > 18)) {
+        if (inReach && foot < H && (u < 5 || u > 18) && (cave || z < this.depth[foot * W + x])) {
           this.pixel(x, foot, 113, 111, 78);
           this.depth[foot * W + x] = z;
           this.picks[foot * W + x] = mob.id;
