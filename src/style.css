@@ -89,8 +89,13 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .era-title b { font-size: calc(var(--text-lg) * 2); line-height: 1; color: #ffb238; }
 .era-title span { font-size: var(--text-lg); }
 .era-title small { margin-top: var(--gap-lg); font-size: var(--text-sm); color: #94a2b0; }
-/* Machine and line windows leave the right column uncovered, so the index stays usable beside them. The menu, help and saves centre on the whole screen. */
-.window-back.beside-index { right: calc(var(--side) + var(--gap)); }
+/* The dark back covers the whole screen; a machine or line window centres in the space left of the index, and
+   while one is open the index column is lifted above the dark back (main.ts sets #app.index-beside) so it stays
+   usable beside the window. The top bar dims with everything else, so no edge cuts across it. */
+.window-back.beside-index { padding-right: calc(var(--side) + var(--gap) * 3); }
+#app.index-beside > .right-col { position: relative; z-index: 21; }
+/* The tutorial card floats over that column, so it comes up with it: its steps are often about the window. */
+#app.index-beside > .tutorial, #app.index-beside > .tutorial-mini { z-index: 22; }
 /* I: the bag with the gear, over the middle of the map. */
 .inv-pop { grid-area: centre; align-self: center; justify-self: center; z-index: 10; display: grid; gap: var(--gap); background: var(--panel); border-color: var(--dim); box-shadow: 0 12px 40px rgb(0 0 0 / 60%); }
 .inv-pop .bar-row { margin: 0; flex-wrap: nowrap; }

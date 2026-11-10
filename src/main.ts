@@ -704,6 +704,8 @@ function redraw(): void {
   if (wasHidden && !held.hidden) held.style.transform = `translate(${pointer.x + 6}px, ${pointer.y + 6}px)`;
   trashButton.disabled = !state.cursor;
   win.hidden = !state.announced || eraTurn.running;
+  // With a machine or line window open, the index column sits above the dark back (style.css).
+  app.classList.toggle("index-beside", windowView.isOpen || routeView.isOpen);
   if (state.announced && win.dataset.stage !== state.announced) {
     win.dataset.stage = state.announced;
     win.querySelector("h2")!.textContent = `${state.announced} ${tr("완료")}`;
