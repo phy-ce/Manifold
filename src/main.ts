@@ -15,6 +15,8 @@ import { HelpWindow } from "./ui/helpWindow";
 import { SaveWindow } from "./ui/saveWindow";
 import { MenuWindow } from "./ui/menuWindow";
 import { Scenery } from "./ui/scenery";
+import { Weather } from "./ui/weather";
+import { EraTransition } from "./ui/eraTransition";
 import { setSound, soundOn } from "./ui/sound";
 import { MapView } from "./ui/mapView";
 import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
@@ -393,7 +395,16 @@ const bagSlot = (i: number) => {
 };
 const invSlots = state.inv.map((_, i) => bagSlot(i));
 const hotSlots = state.inv.map((_, i) => bagSlot(i));
-hotbar.append(...hotSlots);
+// The hotbar's own key: [I] opens the bag with the gear; it is a button too.
+const bagKey = document.createElement("button");
+bagKey.type = "button";
+bagKey.className = "key-button";
+bagKey.innerHTML = keyHintHtml("I", tr("가방"), "on");
+bagKey.addEventListener("click", () => {
+  invBox.hidden = !invBox.hidden;
+  redraw();
+});
+hotbar.append(...hotSlots, bagKey);
 
 const sortButton = document.createElement("button");
 sortButton.type = "button";
@@ -478,14 +489,31 @@ win.firstElementChild!.append(keepPlaying);
 // The biome's landscape behind everything, first in the page so all else stands over it.
 const scenery = new Scenery();
 document.body.prepend(scenery.root);
+// Desert and snow weather: over the whole screen except the map.
+const weather = new Weather(() => (map.root.hidden ? null : map.root.getBoundingClientRect()));
+document.body.append(weather.canvas);
+// The age's tones (style.css: body.era-s0, body.era-s1). Set once on loading; after that only the turn of an
+// age changes them, under its cover, so a save never replays it.
+const setEra = (stage: number) => {
+  document.body.classList.toggle("era-s0", stage === 0);
+  document.body.classList.toggle("era-s1", stage >= 1);
+};
+setEra(state.stage);
+const eraTurn = new EraTransition();
+document.body.append(eraTurn.root);
+/** The stage last drawn, to see S0 end during play. */
+let drawnStage = state.stage;
 // The screen (docs/design/interface.md): one bar along the top; the left column for the map's tools, the map in
 // the middle, the item index on the right with the tutorial card at its foot; the bag's hotbar under the map.
 // At the base the board takes the left column and the middle together.
+windowView.root.classList.add("beside-index");
+routeView.root.classList.add("beside-index");
 map.side.classList.add("left-col");
+graph.side.classList.add("left-col");
 const rightCol = document.createElement("div");
 rightCol.className = "right-col";
 rightCol.append(itemIndex.root, guide);
-app.append(top, map.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
+app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
 
 // Escape first closes whatever is open; only with nothing to cancel does it open the menu.
 // This runs in the capture phase, before the windows' own Escape handlers close them.
@@ -536,7 +564,23 @@ function redraw(): void {
   wasHome = home;
   if (!home) closeBaseWindows();
   const showBase = home && screen === "base";
+  weather.canvas.hidden = menu.isOpen || !!document.querySelector(".window-back:not([hidden])");
+  if (underground(state) || showBase) weather.clear();
+  else weather.show(world.biomeAt(state.player.x, state.player.y, state.seed));
+  // S0 ending in play turns the age: from the window the player made it in, else the goal machine on the board,
+  // else the middle of the screen. The turn takes the place of S0's "complete" window.
+  if (drawnStage === 0 && state.stage >= 1 && !eraTurn.running) {
+    const open = windowView.isOpen ? windowView.root.querySelector(".window")?.getBoundingClientRect() : undefined;
+    const origin = open ? { x: open.left + open.width / 2, y: open.top + open.height / 2 }
+      : graph.nodeCenter(STAGES[0].goal.item) ?? { x: innerWidth / 2, y: innerHeight / 2 };
+    eraTurn.play(origin, () => setEra(state.stage), () => {
+      if (state.announced === STAGES[0].id) state.announced = null;
+      redraw();
+    });
+  }
+  drawnStage = state.stage;
   graph.root.hidden = !showBase;
+  graph.side.hidden = !showBase;
   map.root.hidden = showBase;
   map.side.hidden = showBase;
 
@@ -592,7 +636,7 @@ function redraw(): void {
   if (state.cursor) paintSlot(heldSlot, state.cursor);
   if (wasHidden && !held.hidden) held.style.transform = `translate(${pointer.x + 6}px, ${pointer.y + 6}px)`;
   trashButton.disabled = !state.cursor;
-  win.hidden = !state.announced;
+  win.hidden = !state.announced || eraTurn.running;
   if (state.announced && win.dataset.stage !== state.announced) {
     win.dataset.stage = state.announced;
     win.querySelector("h2")!.textContent = `${state.announced} ${tr("완료")}`;
@@ -630,7 +674,7 @@ function tick(): void {
   const dt = now - last;
   last = now;
   // The menu stops the world while it is open, as a pause would; the chosen speed comes back when it closes.
-  const pace = menu.isOpen ? 0 : speed;
+  const pace = menu.isOpen || eraTurn.running ? 0 : speed;
   backlog = Math.min(backlog + dt * pace, MAX_CATCH_UP_MS * Math.max(1, pace));
   while (backlog >= STEP_MS) {
     keyWalk();

@@ -229,6 +229,8 @@ interface LineView {
 
 export class GraphView {
   readonly root = document.createElement("section");
+  /** The board's tools, in the left column of the screen: build list, find, layers, looks, copy and paste, machines. */
+  readonly side = document.createElement("div");
   private readonly roster = document.createElement("nav");
   private readonly rosterItems = new Map<string, HTMLButtonElement>();
   private readonly rosterList = document.createElement("div");
@@ -277,6 +279,20 @@ export class GraphView {
   private readonly lookButtons = new Map<Look, HTMLButtonElement>();
   private pointer: { x: number; y: number } | null = null;
   private boxFrom: { x: number; y: number } | null = null;
+
+  /** Where on screen a machine of this kind sits, if one is on the board and in view; for the turn of an age. */
+  nodeCenter(type: string): { x: number; y: number } | undefined {
+    if (this.root.hidden) return undefined;
+    const view = this.view.getBoundingClientRect();
+    for (const node of this.game().nodes) {
+      if (node.type !== type) continue;
+      const box = this.nodes.get(node.id)?.root.getBoundingClientRect();
+      if (!box) continue;
+      const at = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      if (at.x >= view.left && at.x <= view.right && at.y >= view.top && at.y <= view.bottom) return at;
+    }
+    return undefined;
+  }
 
   /** Fills the build list with what the current stage has opened. */
   setStage(stage: number): void {
@@ -803,7 +819,22 @@ export class GraphView {
     this.view.append(this.board);
     this.rosterList.className = "roster-list";
     this.rosterList.hidden = true;
-    this.root.append(this.roster, this.rosterList, this.palette, this.tools, this.view, this.menu);
+    // Each block keeps its place in the column; the machine list drops down from the roster over the board.
+    this.side.className = "map-side board-side";
+    const place = document.createElement("div");
+    place.className = "box map-line";
+    place.textContent = tr("기지");
+    const build = document.createElement("div");
+    build.className = "box";
+    build.append(this.palette);
+    const tools = document.createElement("div");
+    tools.className = "box";
+    tools.append(this.tools);
+    const roster = document.createElement("div");
+    roster.className = "box roster-box";
+    roster.append(this.roster);
+    this.side.append(place, build, tools, roster, this.rosterList);
+    this.root.append(this.view, this.menu);
     this.board.addEventListener("contextmenu", (e) => this.openMenu(e));
     this.board.addEventListener("click", (e) => {
       if (e.target !== this.board && e.target !== this.svg) return;
@@ -1194,7 +1225,7 @@ export class GraphView {
     const anchor = this.expanded ? this.rosterItems.get(this.expanded) : undefined;
     if (anchor) {
       const box = anchor.getBoundingClientRect();
-      const root = this.root.getBoundingClientRect();
+      const root = this.side.getBoundingClientRect();
       this.rosterList.style.left = `${box.left - root.left}px`;
       this.rosterList.style.top = `${box.bottom - root.top}px`;
     }
