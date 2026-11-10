@@ -89,10 +89,9 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .era-title b { font-size: calc(var(--text-lg) * 2); line-height: 1; color: #ffb238; }
 .era-title span { font-size: var(--text-lg); }
 .era-title small { margin-top: var(--gap-lg); font-size: var(--text-sm); color: #94a2b0; }
-/* The dark back covers the whole screen; a machine or line window centres in the space left of the index, and
+/* The dark back covers the whole screen and a machine or line window sits in the middle of it, like any window;
    while one is open the index column sits above the dark back (main.ts sets #app.index-beside), dimmed like the
    rest and lit while pointed at, so it stays usable beside the window. The top bar dims with everything else. */
-.window-back.beside-index { padding-right: calc(var(--side) + var(--gap) * 3); }
 #app.index-beside > .right-col { position: relative; z-index: 21; filter: brightness(.3); transition: filter .15s; }
 /* Dimmed like everything behind the window, so the screen reads as one layer; pointing at it brings it up. */
 #app.index-beside > .right-col:hover, #app.index-beside > .right-col:focus-within { filter: none; }
