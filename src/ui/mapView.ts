@@ -1,7 +1,7 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
-import { BIOMES, CAVE, CAVES, WATER, YETI, categoryNames, forageSeasons, itemCode, itemColor, itemName } from "../content";
+import { BIOMES, CAVE, CAVES, WATER, YETI, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
 import { GameState, NOTE_MAX, actionKey, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, groundColor, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { CLICK, keyHintHtml } from "./keyHint";
@@ -16,6 +16,20 @@ const MAX_VIEW_W = 120;
 const MAX_VIEW_H = 50;
 const CELL_W = 9;
 const CELL_H = 18;
+/**
+ * The map's zoom steps. At 1 and 2 the pixel font is drawn at 12px and 24px, the sizes it is crisp at; at 0.5 a
+ * glyph would be 6px and unreadable, so cells are drawn as small blocks of the glyph's colour, like a minimap.
+ */
+const ZOOMS = [0.5, 1, 2];
+const ZOOM_KEY = "manifold-map-zoom";
+const savedZoom = (): number => {
+  try {
+    const kept = Number(localStorage.getItem(ZOOM_KEY));
+    return ZOOMS.includes(kept) ? kept : 1;
+  } catch {
+    return 1;
+  }
+};
 /** Height of one search result row and the gap under it, matching .route-row in style.css (--control + --gap-sm). */
 const RESULT_ROW = 36;
 /**
@@ -41,6 +55,32 @@ const COLOR: Record<string, string> = {
   cave: "#c9a27a", rock: "#2b3541", probe: "#ffb238", wolf: "#ff5f56", spitter: "#c678dd", yeti: "#8fe3ff", shot: "#ff8c5a",
   stone: "#5b6670",
 };
+/**
+ * A surface cell's back: the dark map back tinted by the biome's ground (BACK_TINT), lighter the higher a hill
+ * stands (HILL_LIFT a level), bluer on water. Remembered cells take half the tint and sit darker, as before. Kept
+ * dark so the glyph on it always reads. Worked out once per kind of cell, not per cell.
+ */
+const BACK_TINT = 0.22;
+const HILL_LIFT = 0.07;
+const backs = new Map<string, string>();
+function groundBack(s: GameState, x: number, y: number, seen: boolean): string {
+  const [, cls, height] = terrain(x, y, s.seed);
+  const biome = biomeAt(x, y, s.seed);
+  const key = `${biome}|${cls}|${height}|${seen}`;
+  let back = backs.get(key);
+  if (!back) {
+    const base = hexRgb(seen ? COLOR.seenBg : COLOR.memoryBg);
+    const tint = hexRgb(cls === "t-water" ? COLOR["t-water"] : cls === "t-ice" ? COLOR["t-ice"] : BIOMES[biome].ground);
+    const amount = (seen ? BACK_TINT : BACK_TINT / 2) * (cls === "t-water" || cls === "t-ice" ? 1.3 : 1);
+    const lift = cls === "t-hill" ? height * HILL_LIFT * (seen ? 1 : 0.5) : 0;
+    const mix = base.map((b, i) => Math.round(b + (tint[i] - b) * amount + (255 - b) * lift));
+    back = `rgb(${mix.join(",")})`;
+    backs.set(key, back);
+  }
+  return back;
+}
+const hexRgb = (hex: string): number[] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
 /** Where ore has been dug out: bare stone ground on the surface, stone floor in a cave. */
 const STONE = "_";
 
@@ -238,6 +278,7 @@ export class MapView {
   readonly side = document.createElement("div");
   private viewW = 60;
   private viewH = 20;
+  private zoom = savedZoom();
   /** Which page of search results shows; the list never scrolls. */
   private resultPage = 0;
   private readonly pagerBar = document.createElement("div");
@@ -286,18 +327,21 @@ export class MapView {
     this.canvas.setAttribute("aria-label", tr("지도, 칸을 클릭해 이동"));
     this.setView(this.viewW, this.viewH);
     // The map takes as many whole cells as fit in the middle of the screen.
-    new ResizeObserver(() => {
-      const box = this.root.getBoundingClientRect();
-      if (!box.width) return; // hidden while the base shows
-      const pad = parseFloat(getComputedStyle(this.root).paddingLeft) * 2 + 2;
-      const w = Math.min(MAX_VIEW_W, Math.max(20, Math.floor((box.width - pad) / CELL_W)));
-      const h = Math.min(MAX_VIEW_H, Math.max(10, Math.floor((box.height - pad) / CELL_H)));
-      if (w !== this.viewW || h !== this.viewH) {
-        this.setView(w, h);
-        this.drawnMap = "";
-        this.draw();
+    new ResizeObserver(() => this.fit()).observe(this.root);
+    // The wheel zooms the map in and out, a step at a time (ZOOMS), and the choice is kept.
+    this.canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const at = ZOOMS.indexOf(this.zoom);
+      const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, at + (e.deltaY < 0 ? 1 : -1)))];
+      if (next === this.zoom) return;
+      this.zoom = next;
+      try {
+        localStorage.setItem(ZOOM_KEY, String(next));
+      } catch {
+        // Only a convenience.
       }
-    }).observe(this.root);
+      this.fit(true);
+    }, { passive: false });
     this.canvas.addEventListener("click", (e) => {
       const [x, y] = this.cellAt(e);
       const s = this.game();
@@ -422,18 +466,49 @@ export class MapView {
     this.side.append(this.place, walkMode, this.warn, this.fight.root, this.panel, finder);
   }
 
-  /** Sizes the map canvas to so many cells, sharp on high-density screens. */
+  /** As many whole cells at the current zoom as fit in the box; redraws if that changed or `force`. */
+  private fit(force = false): void {
+    const box = this.root.getBoundingClientRect();
+    if (!box.width) return; // hidden while the base shows
+    const pad = parseFloat(getComputedStyle(this.root).paddingLeft) * 2 + 2;
+    const w = Math.min(Math.round(MAX_VIEW_W / this.zoom), Math.max(10, Math.floor((box.width - pad) / (CELL_W * this.zoom))));
+    const h = Math.min(Math.round(MAX_VIEW_H / this.zoom), Math.max(5, Math.floor((box.height - pad) / (CELL_H * this.zoom))));
+    if (!force && w === this.viewW && h === this.viewH) return;
+    this.setView(w, h);
+    this.drawnMap = "";
+    this.draw();
+  }
+
+  /**
+   * Sizes the map canvas to so many cells, sharp on high-density screens. Drawing is always in cells of
+   * CELL_W×CELL_H; the zoom only scales the canvas, so the pixel font lands on 12px or 24px and stays crisp.
+   */
   private setView(w: number, h: number): void {
-    const scale = window.devicePixelRatio || 1;
+    const scale = (window.devicePixelRatio || 1) * this.zoom;
     this.viewW = w;
     this.viewH = h;
-    this.canvas.width = w * CELL_W * scale;
-    this.canvas.height = h * CELL_H * scale;
-    this.canvas.style.width = `${w * CELL_W}px`;
-    this.canvas.style.height = `${h * CELL_H}px`;
+    this.canvas.width = Math.round(w * CELL_W * scale);
+    this.canvas.height = Math.round(h * CELL_H * scale);
+    this.canvas.style.width = `${w * CELL_W * this.zoom}px`;
+    this.canvas.style.height = `${h * CELL_H * this.zoom}px`;
     this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
     this.ctx.textBaseline = "middle";
     this.ctx.textAlign = "center";
+  }
+
+  /**
+   * Draws one cell's glyph in the current fill colour: as text, or zoomed out as a block of that colour, a dot for
+   * ground marks (`.,'`) so open land stays quiet next to what matters.
+   */
+  private glyph(ch: string, vx: number, vy: number): void {
+    const g = this.ctx;
+    if (this.zoom >= 1) {
+      g.fillText(ch, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+      return;
+    }
+    const small = ".,'`:\"_-".includes(ch);
+    const [w, h] = small ? [CELL_W / 3, CELL_H / 6] : [CELL_W - 2, CELL_H - 4];
+    g.fillRect(vx * CELL_W + (CELL_W - w) / 2, vy * CELL_H + (CELL_H - h) / 2, w, h);
   }
 
   /** C: walks up to the nearest creature in sight. */
@@ -444,8 +519,8 @@ export class MapView {
   private cellAt(e: MouseEvent): [number, number] {
     const box = this.canvas.getBoundingClientRect();
     return [
-      this.originX + Math.floor((e.clientX - box.left) / CELL_W),
-      this.originY + Math.floor((e.clientY - box.top) / CELL_H),
+      this.originX + Math.floor((e.clientX - box.left) / (CELL_W * this.zoom)),
+      this.originY + Math.floor((e.clientY - box.top) / (CELL_H * this.zoom)),
     ];
   }
 
@@ -654,7 +729,7 @@ export class MapView {
         const y = this.originY + vy;
         if (!isRevealed(s, x, y)) continue;
         const seen = isVisible(s, x, y);
-        g.fillStyle = seen ? COLOR.seenBg : COLOR.memoryBg;
+        g.fillStyle = groundBack(s, x, y, seen);
         g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
         const key = `${x},${y}`;
         const spot = veins.get(key);
@@ -678,7 +753,7 @@ export class MapView {
         if (glyph === " ") continue;
         g.globalAlpha = seen ? 1 : 0.45;
         g.fillStyle = color;
-        g.fillText(glyph, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+        this.glyph(glyph, vx, vy);
         g.globalAlpha = 1;
       }
     }
@@ -692,7 +767,7 @@ export class MapView {
       g.fillStyle = COLOR.seenBg;
       g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
       g.fillStyle = COLOR.yeti;
-      g.fillText("Y", vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+      this.glyph("Y", vx, vy);
     }
   }
 
@@ -712,7 +787,7 @@ export class MapView {
       g.font = "12px GalmuriMono11, 'JetBrains Mono', Consolas, monospace";
       return;
     }
-    g.fillText("!", vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+    this.glyph("!", vx, vy);
   }
 
   /**
@@ -750,7 +825,7 @@ export class MapView {
         if (this.markCell(vx, vy, key)) color = "#10151c";
         if (glyph) {
           g.fillStyle = color;
-          g.fillText(glyph, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+          this.glyph(glyph, vx, vy);
         }
         g.globalAlpha = 1;
       }
@@ -763,7 +838,7 @@ export class MapView {
       g.fillStyle = COLOR.memoryBg;
       g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
       g.fillStyle = color;
-      g.fillText(glyph, vx * CELL_W + CELL_W / 2, vy * CELL_H + CELL_H / 2);
+      this.glyph(glyph, vx, vy);
       g.globalAlpha = 1;
     };
     // The player's notes, on whichever layer they were written: the outcrop above, a vein found down here.
@@ -823,7 +898,7 @@ export class MapView {
     const matching = s.sites
       .filter((v) => here(v) || !!v.note)
       // By name, code or place name, or by category: "점토" finds every clay vein, "연료" every coal.
-      .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v), v.note ?? "", ...categoryNames(v.ore)].some((t) => t.toLowerCase().includes(query)));
+      .filter((v) => itemMatches(v.ore, query, [siteName(s, v), v.note ?? ""]));
     const all = orderSites(matching, steps, this.hideEmpty);
     const pages = Math.max(1, Math.ceil(all.length / perPage));
     this.resultPage = Math.min(this.resultPage, pages - 1);
