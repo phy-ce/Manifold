@@ -33,16 +33,18 @@ describe("sight", () => {
     expect(s.facing).toEqual({ x: 1, y: 0 });
     expect(SIGHT_AROUND.surface).toBe(2);
     expect(FAN_DEGREES).toBe(90);
-    expect(visionAt(s, s.player)).toBe(REVEAL);
+    // Open plain sees two cells further than the base REVEAL (biomes.json rules.vision).
+    expect(visionAt(s, s.player)).toBe(REVEAL + 2);
     expect(REVEAL).toBe(5);
-    // Ahead at 5: seen. Behind at 3: not. Beside at 2: seen.
+    // Ahead at 5 and 7: seen. Behind at 3: not. Beside at 2: seen.
     expect(isVisible(s, x + 5, y)).toBe(true);
     expect(isVisible(s, x - 3, y)).toBe(false);
     expect(isVisible(s, x - 2, y)).toBe(true);
     expect(isVisible(s, x, y + 1)).toBe(true);
     // Off to the side, past the circle, is outside the fan; past the reach ahead too.
     expect(isVisible(s, x, y + 3)).toBe(false);
-    expect(isVisible(s, x + 6, y)).toBe(false);
+    expect(isVisible(s, x + 7, y)).toBe(true);
+    expect(isVisible(s, x + 8, y)).toBe(false);
     // Walking reveals the fan on the map as well.
     expect(isRevealed(s, x + 5, y)).toBe(true);
   });
