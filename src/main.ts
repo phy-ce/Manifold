@@ -692,6 +692,7 @@ function redraw(): void {
   map.root.hidden = showBase;
   map.side.hidden = showBase;
   map.setPaused(speed === 0);
+  graph.setPaused(speed === 0);
 
   const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : underground(state) ? (stairHere(state) ? tr("나가기") : tr("출구로")) : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;

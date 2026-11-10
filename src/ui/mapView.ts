@@ -328,7 +328,7 @@ export class MapView {
   constructor(private readonly game: () => GameState, private readonly changed: () => void) {
     this.root.className = "box map-box map-view";
     // While time is stopped, a mark over the top of the map says so; it never takes a click.
-    this.paused.className = "map-paused";
+    this.paused.className = "paused-mark";
     this.paused.textContent = `|| ${tr("일시정지")}`;
     this.paused.hidden = true;
     this.paused.setAttribute("aria-hidden", "true");

@@ -231,6 +231,8 @@ export class GraphView {
   readonly root = document.createElement("section");
   /** The board's tools, in the left column of the screen: build list, find, layers, looks, copy and paste, machines. */
   readonly side = document.createElement("div");
+  /** The paused mark over the board. */
+  private readonly paused = document.createElement("div");
   private readonly roster = document.createElement("nav");
   private readonly rosterItems = new Map<string, HTMLButtonElement>();
   private readonly rosterList = document.createElement("div");
@@ -279,6 +281,11 @@ export class GraphView {
   private readonly lookButtons = new Map<Look, HTMLButtonElement>();
   private pointer: { x: number; y: number } | null = null;
   private boxFrom: { x: number; y: number } | null = null;
+
+  /** Shows or hides the paused mark over the board. */
+  setPaused(paused: boolean): void {
+    this.paused.hidden = !paused;
+  }
 
   /** Points the tutorial at every machine of a kind on the board, or at none. */
   point(type: string | null): void {
@@ -839,7 +846,12 @@ export class GraphView {
     roster.className = "box roster-box";
     roster.append(this.roster);
     this.side.append(place, build, tools, roster, this.rosterList);
-    this.root.append(this.view, this.menu);
+    // While time is stopped, the same mark as on the map, over the top of the board.
+    this.paused.className = "paused-mark";
+    this.paused.textContent = `|| ${tr("일시정지")}`;
+    this.paused.hidden = true;
+    this.paused.setAttribute("aria-hidden", "true");
+    this.root.append(this.view, this.menu, this.paused);
     this.board.addEventListener("contextmenu", (e) => this.openMenu(e));
     this.board.addEventListener("click", (e) => {
       if (e.target !== this.board && e.target !== this.svg) return;
