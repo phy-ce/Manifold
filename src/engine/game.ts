@@ -1,9 +1,11 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
-import { BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, stageOpening, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
-import { BASE, CELL_ASPECT, CHUNK, CaveMap, HABITAT, Point, ROCK, Site, caveCell, caveMap, caveSites, cellInChunk, hash, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain } from "./world";
+import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
+import { FORAGE, namesItem, BIOMES, Biome, YETI, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
-export const SAVE_VERSION = 18;
+/** Version 19 put the caves into one underground layer under the surface. */
+export const SAVE_VERSION = 19;
 /** Saves older than this are not converted: the boiler took the fire out of the steam engine (version 18). */
 export const OLDEST_SAVE = 18;
 /** Most a spring can hold, and how much one wind adds. Moving one item uses 1. */
@@ -24,14 +26,27 @@ export const LINE_MS = 500;
 export const OUTPUT_CAP = 16;
 /** Longest name that still fits on a node. */
 export const NAME_MAX = 12;
-/** What a machine's tank holds, in litres. Two drums' worth. */
+/** What a machine's tank holds, in litres. */
 export const TANK_CAP = 200;
 /** What a tar tank stores, in litres. */
 export const TAR_TANK_CAP = 1000;
-export const REVEAL = 4;
+/** How often the tutorial checks whether its step is done, in ms. */
+const TUTORIAL_MS = 500;
+/**
+ * Sight. The player sees a small circle all round (`SIGHT_AROUND`, less underground) and, the way they last
+ * walked, a fan `FAN_DEGREES` wide reaching `visionAt`: REVEAL on flat open ground, further from a hill, less
+ * in a forest, CAVE_DARK less underground. Before the first step there is no way ahead, so the reach is all round.
+ */
+export const REVEAL = 5;
+export const SIGHT_AROUND = { surface: 2, under: 1 };
+export const FAN_DEGREES = 90;
+/** How much less the fan reaches underground than on open ground. */
+export const CAVE_DARK = 2;
 export const BASE_REVEAL = 9;
 
 export const SEASON_NAMES = [tr("봄"), tr("여름"), tr("가을"), tr("겨울")];
+/** The index of winter in the year. */
+const WINTER = 3;
 export const SEASON_MS = 240000;
 
 export const MAX_VITAL = 100;
@@ -202,7 +217,12 @@ export interface GameState {
   path: Point[];
   walkTimer: number;
   /** Route around known hazards instead of walking straight. */
+  /** Safe mode: walks stop short of known hazards. */
   safeWalk: boolean;
+  /** The hazard safe mode last stopped the player at, until the next walk. */
+  halt?: (Hazard & { target: Point }) | null;
+  /** Crossing a hazard the player was warned of, until back on safe ground. */
+  passing?: boolean;
   inv: Slots;
   /** The stack the player has picked up and is moving with the pointer. */
   cursor: Stack | null;
@@ -211,13 +231,24 @@ export interface GameState {
   sites: Site[];
   /** Explored cells by chunk. A chunk's veins are generated when it first appears here. */
   revealed: Record<string, number[]>;
-  /** The cave the player is in, by its entrance site's id; null on the surface. Inside, `player` is a cave cell. */
-  cave: number | null;
-  /** Explored cells of each cave, by entrance id. */
-  caveSeen: Record<string, number[]>;
+  /**
+   * The layer the player is on: 0 the surface, -1 the underground right below it. `player` is the same x and y
+   * on either: going down a cave entrance keeps the player over the same spot.
+   */
+  z: number;
+  /** Explored underground cells by chunk, as `revealed` is for the surface. */
+  underSeen: Record<string, number[]>;
+  /** The way the player last stepped, one cell in each axis: the fan of sight opens that way. */
+  facing?: Point | null;
   /** When prospecting began, if it is under way. */
   probe: number | null;
-  /** Creatures in the cave the player is in, and spines in flight. Empty on the surface. */
+  /** Game time when the player's next blow is ready. */
+  strikeReady?: number;
+  /** When the player last went underground. Creatures come out more the longer they stay. */
+  caveSince?: number;
+  /** The last loud thing done underground, prospecting or mining: where and when. It draws creatures. */
+  noise?: { x: number; y: number; at: number } | null;
+  /** Creatures around the player, underground or a yeti on the surface, and spines in flight. */
   mobs: Mob[];
   shots: Shot[];
   nodes: GameNode[];
@@ -245,6 +276,8 @@ export interface GameState {
   goalBase?: number;
   /** A stage just finished, until the screen has shown it. */
   announced: string | null;
+  /** How far the S0 tutorial has got, and whether the player turned it off. */
+  tutorial?: TutorialState;
 }
 
 /** "manual" means loaded and waiting for the player to work it. */
@@ -279,8 +312,8 @@ export function createGame(seed: number): GameState {
     gear: {},
     sites: generateSites(seed),
     revealed: {},
-    cave: null,
-    caveSeen: {},
+    z: 0,
+    underSeen: {},
     probe: null,
     mobs: [],
     shots: [],
@@ -301,11 +334,14 @@ export function createGame(seed: number): GameState {
     stage: 0,
     made: {},
     announced: null,
+    tutorial: newTutorial(),
   };
   state.nodes.push(newWarehouse(state, 40, 200));
   // Every machine is made here, so the game starts with one already standing.
   placeMachine(state, WORKBENCH, 40, 40);
   addNearCave(state);
+  // Water shows from the start like everything else on the map; it is only useful once there are drums and pumps.
+  addRivers(state);
   reveal(state, BASE, BASE_REVEAL);
   return state;
 }
@@ -313,94 +349,133 @@ export function createGame(seed: number): GameState {
 /** Every world has one cave entrance a short walk from the base. */
 function addNearCave(s: GameState): void {
   const at = nearCave(s.seed);
-  if (s.sites.some((site) => site.x === at.x && site.y === at.y && site.cave === undefined)) return;
+  if (s.sites.some((site) => site.ore === CAVE && site.x === at.x && site.y === at.y)) return;
   s.sites.push({ ...at, id: s.sites.length, ore: CAVE, total: 0, left: 0, seed: s.seed * 7 + 101 });
 }
 
-// ---- Caves
+// ---- The underground
 
-/** The cave the player is in: its entrance on the map and its layout. */
-export function currentCave(s: GameState): { door: Site; map: CaveMap } | null {
-  if (s.cave === null) return null;
-  const door = s.sites.find((site) => site.id === s.cave);
-  return door ? { door, map: caveMap(door.seed) } : null;
-}
-export const inCave = (s: GameState): boolean => s.cave !== null;
+/** Whether the player is underground. */
+export const underground = (s: GameState): boolean => s.z < 0;
+/** A cave entrance at a cell. Underground the same cell is a stair up. */
+const entranceAt = (s: GameState, x: number, y: number): Site | undefined =>
+  s.sites.find((site) => site.ore === CAVE && site.x === x && site.y === y);
 /** The cave entrance the player stands on, on the surface. */
 export function caveDoorHere(s: GameState): Site | undefined {
-  if (s.cave !== null || s.path.length) return undefined;
-  return s.sites.find((site) => site.ore === CAVE && site.x === s.player.x && site.y === s.player.y);
+  if (s.z < 0 || s.path.length) return undefined;
+  return entranceAt(s, s.player.x, s.player.y);
 }
-/** Whether the player stands at a cave's way out. */
-export function atCaveExit(s: GameState): boolean {
-  const cave = currentCave(s);
-  return !!cave && !s.path.length && s.player.x === cave.map.entry.x && s.player.y === cave.map.entry.y;
+/** The stair the player stands on underground: any cave entrance's cell leads up. */
+export function stairHere(s: GameState): Site | undefined {
+  if (s.z >= 0 || s.path.length) return undefined;
+  return entranceAt(s, s.player.x, s.player.y);
 }
-export const caveSeenAt = (s: GameState, x: number, y: number): boolean => {
-  const cave = currentCave(s);
-  return !!cave && s.caveSeen[String(s.cave)]?.[y * cave.map.width + x] === 1;
-};
+/** Whether the player has seen an underground cell. */
+export const underSeenAt = (s: GameState, x: number, y: number): boolean => s.underSeen[chunkKey(x, y)]?.[cellInChunk(x, y)] === 1;
+/** Whether an underground cell is rock: no walking into it, and no seeing or shooting through it. */
+const rockAt = (s: GameState, x: number, y: number): boolean => underCell(x, y, s.seed) === ROCK;
 
-function revealCave(s: GameState, at: Point, radius: number): void {
-  const cave = currentCave(s);
-  if (!cave) return;
-  const { width, height } = cave.map;
-  const seen = (s.caveSeen[String(s.cave)] ??= new Array(width * height).fill(0));
-  const reach = Math.ceil(radius * CELL_ASPECT);
-  for (let y = Math.max(0, at.y - reach); y <= Math.min(height - 1, at.y + reach); y += 1) {
-    for (let x = Math.max(0, at.x - radius); x <= Math.min(width - 1, at.x + radius); x += 1) {
-      if (Math.hypot(x - at.x, (y - at.y) / CELL_ASPECT) <= radius) seen[y * width + x] = 1;
+/** The nearest stair up the player has seen underground: where the way home starts. */
+export function nearestStair(s: GameState): Site | undefined {
+  return s.sites.filter((site) => site.ore === CAVE && underSeenAt(s, site.x, site.y))
+    .sort((a, b) => steps8(a, s.player) - steps8(b, s.player))[0];
+}
+
+/**
+ * Marks underground cells in sight as known. The first time a chunk is seen, its own veins are laid out, and so
+ * are the surface chunks around it: what lies above decides which veins run on down here and where the stairs are.
+ */
+function revealUnder(s: GameState, at: Point, around: number, reach: number, facing: Point | null = null): void {
+  forSight(at, facing, around, reach, (x, y) => {
+    const key = chunkKey(x, y);
+    if (!s.underSeen[key]) {
+      s.underSeen[key] = new Array(CHUNK * CHUNK).fill(0);
+      openUnderChunk(s, x, y);
+    }
+    s.underSeen[key][cellInChunk(x, y)] = 1;
+  });
+}
+
+function openUnderChunk(s: GameState, x: number, y: number): void {
+  const cx = chunkOf(x);
+  const cy = chunkOf(y);
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      const key = `${cx + dx},${cy + dy}`;
+      if (s.revealed[key]) continue;
+      s.revealed[key] = new Array(CHUNK * CHUNK).fill(0);
+      addChunkSites(s, (cx + dx) * CHUNK, (cy + dy) * CHUNK);
     }
   }
+  for (const site of underSites(s.seed, cx, cy, layerOres(CAVES.layer, s.stage))) addSite(s, site);
 }
 
-/** Steps down into the cave whose entrance the player stands on. Its veins are laid out the first time. */
+/** Goes down the cave entrance the player stands on, to the same spot underground. */
 export function enterCave(s: GameState): boolean {
-  const door = caveDoorHere(s);
-  if (!door) return false;
-  if (!s.sites.some((site) => site.cave === door.id)) {
-    for (const vein of caveSites(door.seed, door.id, layerOres(CAVES.layer, s.stage))) s.sites.push({ ...vein, id: s.sites.length });
-  }
-  s.cave = door.id;
-  const map = caveMap(door.seed);
-  s.player = { ...map.entry };
+  if (!caveDoorHere(s)) return false;
+  s.z = -1;
   s.path = [];
   s.probe = null;
-  spawnMobs(s, door, map);
-  revealCave(s, s.player, REVEAL);
+  s.caveSince = s.time;
+  s.noise = null;
+  revealUnder(s, s.player, ...sightOf(s, s.player), s.facing);
+  spawnMobs(s);
   return true;
 }
 
-/** Climbs back out, onto the entrance on the map. */
+/** Climbs the stair the player stands on, out onto that entrance on the surface. */
 export function leaveCave(s: GameState): boolean {
-  const cave = currentCave(s);
-  if (!cave || !atCaveExit(s)) return false;
-  s.cave = null;
-  s.player = { x: cave.door.x, y: cave.door.y };
+  if (!stairHere(s)) return false;
+  s.z = 0;
   s.probe = null;
   s.mobs = [];
   s.shots = [];
+  // A stair may come up somewhere never seen from above.
+  reveal(s, s.player, ...sightOf(s, s.player), s.facing);
+  nameRivers(s);
   return true;
 }
 
 /** Starts prospecting: the player stops and listens to the rock for a moment. */
 export function startProbe(s: GameState): boolean {
-  if (!inCave(s) || s.path.length || s.probe !== null) return false;
+  if (s.z >= 0 || s.path.length || s.probe !== null) return false;
   s.probe = s.time;
+  makeNoise(s);
   return true;
+}
+
+/** Knocking on rock or digging is heard: creatures are likelier to come out for a while, and nearer it. */
+function makeNoise(s: GameState): void {
+  if (s.z < 0) s.noise = { x: s.player.x, y: s.player.y, at: s.time };
 }
 
 // ---- Cave creatures
 
 /** A wolf runs the player down and bites; a spine salamander keeps its distance and shoots. */
+/** A cell that hurts to step on: where it is, how much, and what it is. */
+export interface Hazard {
+  x: number;
+  y: number;
+  damage: number;
+  kind: "water" | "hill";
+  height: number;
+}
+
 export interface Mob {
   id: number;
-  kind: "melee" | "ranged";
+  /** Cave creatures bite or shoot; a yeti lives on the surface, in its own biome. */
+  kind: "melee" | "ranged" | "yeti";
   x: number;
   y: number;
   /** Time until it may move again, and until it may bite or shoot again. */
   wait: number;
   cool: number;
+  /** Health left; at zero it dies. */
+  hp: number;
+  /** A yeti that has noticed the player and is after them. */
+  hunting?: boolean;
+  /** How long a yeti has been without the player in its biome and near; it gives up at YETI.giveUpMs. */
+  lost?: number;
 }
 /** A spine in flight. It moves a fraction of a cell each step, so it can be dodged. */
 export interface Shot {
@@ -414,73 +489,172 @@ const MOBS = CAVES.creatures;
 const SHOT_LIFE = 30;
 const steps8 = (a: Point, b: Point) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
-/** Whether nothing but open cave lies between two cells. */
-export function clearLine(map: CaveMap, a: Point, b: Point): boolean {
+/** Whether nothing but open underground lies between two cells. */
+export function clearLine(seed: number, a: Point, b: Point): boolean {
   const n = steps8(a, b);
   for (let i = 1; i < n; i += 1) {
     const x = Math.round(a.x + ((b.x - a.x) * i) / n);
     const y = Math.round(a.y + ((b.y - a.y) * i) / n);
-    if (caveCell(map, x, y) === ROCK) return false;
+    if (underCell(x, y, seed) === ROCK) return false;
   }
   return true;
 }
 
-/** Whether the player can see or hear a creature: near enough, with open cave between. */
-export function mobVisible(s: GameState, mob: Mob): boolean {
-  const cave = currentCave(s);
-  return !!cave && steps8(mob, s.player) <= MOBS.sight && clearLine(cave.map, mob, s.player);
+/** Whether a cell lies in the chunks around the player (three by three): only there does underground life go on. */
+export const nearPlayer = (s: GameState, at: Point): boolean =>
+  Math.abs(chunkOf(at.x) - chunkOf(s.player.x)) <= 1 && Math.abs(chunkOf(at.y) - chunkOf(s.player.y)) <= 1;
+
+/** Den cells in the chunks around the player. */
+function densAround(s: GameState): Point[] {
+  const dens: Point[] = [];
+  const cx = chunkOf(s.player.x);
+  const cy = chunkOf(s.player.y);
+  for (let y = (cy - 1) * CHUNK; y < (cy + 2) * CHUNK; y += 1) {
+    for (let x = (cx - 1) * CHUNK; x < (cx + 2) * CHUNK; x += 1) if (underCell(x, y, s.seed) === HABITAT) dens.push({ x, y });
+  }
+  return dens;
 }
 
-/** Creatures come out of their dens each time the player goes in, never near the way out. */
-function spawnMobs(s: GameState, door: Site, map: CaveMap): void {
-  const rng = rngFrom(Math.imul(door.seed + 3, 2654435761) ^ Math.floor(s.time / 1000));
-  const dens = [...map.cells.keys()].filter((i) => map.cells[i] === HABITAT);
-  const [fewest, most] = MOBS.count;
-  const count = fewest + Math.floor(rng() * (most - fewest + 1));
+/** Whether a cell is near enough a stair to be safe ground: creatures never come out or step there. */
+const byStair = (s: GameState, at: Point, reach: number): boolean => nearEntrance(s.seed, at.x, at.y, reach);
+
+/** Dens a creature may come out of now: far enough off, out of the player's sight, away from the stairs, and free. */
+function openDens(s: GameState): Point[] {
+  const rule = MOBS.spawn;
+  return densAround(s).filter((at) =>
+    steps8(at, s.player) >= rule.minAway && !byStair(s, at, MOBS.safeRadius + 4) &&
+    !(steps8(at, s.player) <= MOBS.sight && clearLine(s.seed, at, s.player)) &&
+    !s.mobs.some((m) => m.x === at.x && m.y === at.y));
+}
+
+/** A creature's name and full health, by kind. */
+export function creatureInfo(kind: Mob["kind"]): { name: string; hp: number } {
+  return kind === "yeti" ? YETI : MOBS[kind];
+}
+
+/**
+ * Whether the player can see or hear a creature: near enough, with open cave between. The surface is open
+ * ground with nothing to hide behind, so there it is only a matter of distance.
+ */
+export function mobVisible(s: GameState, mob: Mob): boolean {
+  if (mob.kind === "yeti") return s.z === 0 && steps8(mob, s.player) <= YETI.sight;
+  return s.z < 0 && steps8(mob, s.player) <= MOBS.sight && clearLine(s.seed, mob, s.player);
+}
+
+/** A few creatures come out of the dens around the player as they come down, out of sight and never by a stair. */
+function spawnMobs(s: GameState): void {
+  const rng = rngFrom(Math.imul(s.seed + 3, 2654435761) ^ Math.imul(s.player.x + 101, 40503) ^ Math.imul(s.player.y + 7, 19349663) ^ Math.floor(s.time / 1000));
   s.mobs = [];
   s.shots = [];
+  const dens = openDens(s);
+  const [fewest, most] = MOBS.count;
+  const count = fewest + Math.floor(rng() * (most - fewest + 1));
   for (let i = 0; i < count && dens.length; i += 1) {
-    const [cell] = dens.splice(Math.floor(rng() * dens.length), 1);
-    const at = { x: cell % map.width, y: Math.floor(cell / map.width) };
-    if (steps8(at, map.entry) <= MOBS.safeRadius + 4) continue;
-    s.mobs.push({ id: i, kind: rng() < MOBS.rangedShare ? "ranged" : "melee", ...at, wait: 0, cool: 1000 });
+    const [at] = dens.splice(Math.floor(rng() * dens.length), 1);
+    const kind = rng() < MOBS.rangedShare ? "ranged" : "melee";
+    s.mobs.push({ id: i, kind, ...at, wait: 0, cool: 1000, hp: MOBS[kind].hp });
   }
 }
 
-/** A cell a creature may step onto: open, free, and outside the safe ground by the way out. */
-function mobCanStand(s: GameState, map: CaveMap, mob: Mob, x: number, y: number): boolean {
-  if (caveCell(map, x, y) === ROCK || steps8({ x, y }, map.entry) <= MOBS.safeRadius) return false;
+/**
+ * While the player stays in, creatures keep coming out, always somewhere out of sight and well away. Every
+ * so often a den is tried: likelier the longer the player has been in, and likelier still just after a noise,
+ * when the den nearest the noise is picked. Never more than a few at once; those left far behind are forgotten.
+ */
+function comeOut(s: GameState): void {
+  const rule = MOBS.spawn;
+  s.mobs = s.mobs.filter((m) => steps8(m, s.player) <= rule.forgetAway);
+  if (s.time % rule.everyMs !== 0 || s.mobs.length >= rule.cap) return;
+  const rng = rngFrom(Math.imul(s.seed + 7, 2654435761) ^ Math.floor(s.time / 100));
+  const minutes = (s.time - (s.caveSince ?? s.time)) / 60000;
+  const noisy = !!s.noise && s.time - s.noise.at <= rule.noiseMs;
+  const chance = Math.min(rule.most, rule.chance + rule.perMinute * minutes + (noisy ? rule.noiseBonus : 0));
+  if (rng() >= chance) return;
+  const dens = openDens(s);
+  if (!dens.length) return;
+  const at = noisy
+    ? dens.sort((a, b) => steps8(a, s.noise!) - steps8(b, s.noise!))[0]
+    : dens[Math.floor(rng() * dens.length)];
+  const kind = rng() < MOBS.rangedShare ? "ranged" : "melee";
+  const id = s.mobs.reduce((top, m) => Math.max(top, m.id), -1) + 1;
+  // It stops in its den mouth for a moment before setting off.
+  s.mobs.push({ id, kind, ...at, wait: 1000, cool: 1000, hp: MOBS[kind].hp });
+}
+
+/** A cell a creature may step onto: open, free, and outside the safe ground round a stair. */
+function mobCanStand(s: GameState, mob: Mob, x: number, y: number): boolean {
+  if (rockAt(s, x, y) || byStair(s, { x, y }, MOBS.safeRadius)) return false;
   if (x === s.player.x && y === s.player.y) return false;
   return !s.mobs.some((other) => other !== mob && other.x === x && other.y === y);
 }
 
-function mobStep(s: GameState, map: CaveMap, mob: Mob, way: "toward" | "away" | "wander"): void {
+function mobStep(s: GameState, mob: Mob, way: "toward" | "away" | "wander"): void {
   let next: Point | undefined;
   if (way === "toward") {
     // The first step of the way round the rock to the player.
-    next = safePath(mob, s.player, () => 0, (x, y) => caveCell(map, x, y) === ROCK)[0];
+    next = safePath(mob, s.player, () => 0, (x, y) => rockAt(s, x, y))[0];
   } else if (way === "away") {
     const dx = s.player.x - mob.x;
     const dy = s.player.y - mob.y;
     next = { x: mob.x - Math.sign(dx), y: mob.y - Math.sign(dy) };
   }
-  if (!next || !mobCanStand(s, map, mob, next.x, next.y)) {
+  if (!next || !mobCanStand(s, mob, next.x, next.y)) {
     // Blocked or idle: shuffle to a neighbouring cell.
     const r = hash(mob.id * 31 + mob.x, mob.y, Math.floor(s.time / 100));
     const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(r * 4)];
     next = { x: mob.x + dx, y: mob.y + dy };
-    if (!mobCanStand(s, map, mob, next.x, next.y)) return;
+    if (!mobCanStand(s, mob, next.x, next.y)) return;
   }
   mob.x = next.x;
   mob.y = next.y;
 }
 
-/** One step of cave life: creatures move, bite and shoot, and spines fly. */
+/** Bare hands, when no weapon is worn: weak, but never nothing. */
+export const FISTS = { damage: 1, range: 1, cooldown: 900 };
+/** A creature struck reels and holds still this long before it can move again. */
+const STAGGER_MS = 300;
+
+/** What the player fights with: the worn weapon, or bare hands. */
+export function weaponOf(s: GameState): { damage: number; range: number; cooldown: number } {
+  const id = s.gear.weapon;
+  const gear = id ? gearOf(id) : undefined;
+  return gear?.damage ? { damage: gear.damage, range: gear.range ?? 1, cooldown: gear.cooldown ?? FISTS.cooldown } : FISTS;
+}
+
+/** Whether the player's next blow is ready. */
+export const canStrike = (s: GameState): boolean => s.time >= (s.strikeReady ?? 0);
+
+/**
+ * Strikes a creature within the weapon's reach. A blow takes its damage (half while weak), staggers the
+ * creature, and the weapon needs its cooldown before the next. At no health the creature dies.
+ */
+export function attack(s: GameState, mobId: number): boolean {
+  const mob = s.mobs.find((m) => m.id === mobId);
+  const weapon = weaponOf(s);
+  if (!mob || !canStrike(s) || steps8(mob, s.player) > weapon.range || !mobVisible(s, mob)) return false;
+  s.strikeReady = s.time + weapon.cooldown;
+  // No weapon of the early age wounds a yeti: the blow only makes it reel.
+  if (mob.kind !== "yeti" || !YETI.immune) mob.hp -= isWeak(s) ? Math.max(1, Math.floor(weapon.damage / 2)) : weapon.damage;
+  mob.wait = Math.max(mob.wait, STAGGER_MS);
+  if (mob.hp <= 0) s.mobs = s.mobs.filter((m) => m !== mob);
+  return true;
+}
+
+/** Strikes the nearest creature in reach, if there is one. */
+export function attackNearest(s: GameState): boolean {
+  const reach = weaponOf(s).range;
+  const target = s.mobs.filter((m) => steps8(m, s.player) <= reach && mobVisible(s, m)).sort((a, b) => steps8(a, s.player) - steps8(b, s.player))[0];
+  return !!target && attack(s, target.id);
+}
+
+/**
+ * One step of underground life: creatures move, bite and shoot, and spines fly. Only creatures in the chunks
+ * around the player act; any further off hold still until the player comes near or they are forgotten.
+ */
 function creatures(s: GameState): void {
-  const cave = currentCave(s);
-  if (!cave) return;
-  const { map } = cave;
+  comeOut(s);
   for (const mob of s.mobs) {
+    if (!nearPlayer(s, mob)) continue;
     mob.wait = Math.max(0, mob.wait - STEP_MS);
     mob.cool = Math.max(0, mob.cool - STEP_MS);
     // They smell the player round corners within hunting range; shooting needs a clear line.
@@ -491,12 +665,12 @@ function creatures(s: GameState): void {
       if (near <= 1 && mob.cool <= 0) {
         mob.cool = MOBS.melee.attackMs;
         hurt(s, MOBS.melee.damage);
-        if (s.cave === null) return;
+        if (s.z === 0) return;
         continue;
       }
       if (mob.wait > 0 || near <= 1) continue;
       mob.wait = MOBS.melee.moveMs;
-      mobStep(s, map, mob, hunting ? "toward" : "wander");
+      mobStep(s, mob, hunting ? "toward" : "wander");
     } else {
       const { range, keep, fireMs, shotSpeed, moveMs } = MOBS.ranged;
       if (aware && near <= range && mob.cool <= 0) {
@@ -509,9 +683,9 @@ function creatures(s: GameState): void {
       if (mob.wait > 0) continue;
       mob.wait = moveMs;
       // Close in until in range with a clear shot, then hold off at a distance.
-      if (hunting && (!aware || near > keep[1])) mobStep(s, map, mob, "toward");
-      else if (aware && near < keep[0]) mobStep(s, map, mob, "away");
-      else if (!hunting) mobStep(s, map, mob, "wander");
+      if (hunting && (!aware || near > keep[1])) mobStep(s, mob, "toward");
+      else if (aware && near < keep[0]) mobStep(s, mob, "away");
+      else if (!hunting) mobStep(s, mob, "wander");
     }
   }
   // Spines fly straight until they hit rock or the player, or run out.
@@ -521,8 +695,8 @@ function creatures(s: GameState): void {
     shot.life -= 1;
     const x = Math.round(shot.x);
     const y = Math.round(shot.y);
-    if (shot.life <= 0 || caveCell(map, x, y) === ROCK) return false;
-    if (x === s.player.x && y === s.player.y && s.cave !== null) {
+    if (shot.life <= 0 || rockAt(s, x, y)) return false;
+    if (x === s.player.x && y === s.player.y && s.z < 0) {
       hurt(s, MOBS.ranged.damage);
       return false;
     }
@@ -530,61 +704,309 @@ function creatures(s: GameState): void {
   });
 }
 
-/** Prospecting done: the rock around is known, and any veins in it are found. */
+// ---- The snowfield's yeti
+
+/** The last stage at which yetis are still believed in, found by its id so new stages don't shift it. */
+const YETI_LAST = STAGES.findIndex((m) => m.id === YETI.lastStage);
+/** Perceptions change with the ages: once past the early age, the yeti is no longer seen. */
+export const yetiBelieved = (s: GameState): boolean => s.stage <= YETI_LAST;
+const inYetiLand = (s: GameState, at: Point): boolean => biomeAt(at.x, at.y, s.seed) === YETI.biome;
+
+function yetiCanStand(s: GameState, mob: Mob, x: number, y: number): boolean {
+  if (x === s.player.x && y === s.player.y) return false;
+  return inYetiLand(s, { x, y }) && !s.mobs.some((other) => other !== mob && other.x === x && other.y === y);
+}
+
+/** Now and then, while the player is in the snow, one comes out somewhere a fair way off and out of sight. */
+function yetiComesOut(s: GameState): void {
+  if (s.time % YETI.everyMs !== 0 || s.mobs.length || !inYetiLand(s, s.player)) return;
+  const rng = rngFrom(Math.imul(s.seed + 13, 2654435761) ^ Math.floor(s.time / 100));
+  if (rng() >= YETI.chance) return;
+  const [near, far] = YETI.away;
+  // A handful of tries around the player is enough; it is no matter if none fits this time.
+  for (let tries = 0; tries < 60; tries += 1) {
+    const angle = rng() * Math.PI * 2;
+    const reach = near + rng() * (far - near);
+    const at = { x: Math.round(s.player.x + Math.cos(angle) * reach), y: Math.round(s.player.y + Math.sin(angle) * reach) };
+    const d = steps8(at, s.player);
+    if (d < Math.max(near, YETI.sight + 1) || d > far || isVisible(s, at.x, at.y) || !inYetiLand(s, at)) continue;
+    s.mobs.push({ id: 0, kind: "yeti", ...at, wait: 1000, cool: 1000, hp: YETI.hp });
+    return;
+  }
+}
+
+/** One step toward the player, or a shuffle, never off the snow. Next to the edge it just stands. */
+function yetiStep(s: GameState, mob: Mob, chase: boolean): void {
+  if (chase) {
+    const span = (p: Point) => Math.hypot(p.x - s.player.x, p.y - s.player.y);
+    const best = AROUND.map(([dx, dy]) => ({ x: mob.x + dx, y: mob.y + dy }))
+      .filter((p) => yetiCanStand(s, mob, p.x, p.y))
+      .sort((a, b) => span(a) - span(b))[0];
+    if (best && span(best) < span(mob)) {
+      mob.x = best.x;
+      mob.y = best.y;
+    }
+    return;
+  }
+  const r = hash(mob.id * 31 + mob.x, mob.y, Math.floor(s.time / 100));
+  const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(r * 4)];
+  if (yetiCanStand(s, mob, mob.x + dx, mob.y + dy)) {
+    mob.x += dx;
+    mob.y += dy;
+  }
+}
+
+/**
+ * Surface life: the yeti roams its snowfield, hunts the player once it notices them, and strikes at a player
+ * in the snow beside it. It never leaves the snow, so getting out of it is the way to escape: with the player
+ * out of the snow or far off long enough, it gives up and is gone.
+ */
+function yetis(s: GameState): void {
+  if (!yetiBelieved(s)) {
+    if (s.mobs.length) s.mobs = [];
+    return;
+  }
+  yetiComesOut(s);
+  if (!s.mobs.length) return;
+  const home = inYetiLand(s, s.player);
+  for (const mob of s.mobs) {
+    mob.wait = Math.max(0, mob.wait - STEP_MS);
+    mob.cool = Math.max(0, mob.cool - STEP_MS);
+    const near = steps8(mob, s.player);
+    if (home && near <= YETI.sight) mob.hunting = true;
+    mob.lost = home && near <= YETI.forgetAway ? 0 : (mob.lost ?? 0) + STEP_MS;
+    if (home && near <= 1 && mob.cool <= 0) {
+      mob.cool = YETI.attackMs;
+      hurt(s, YETI.damage);
+      // A collapse sends the player home and clears the surface.
+      if (!s.mobs.includes(mob)) return;
+      continue;
+    }
+    if (mob.wait > 0 || near <= 1) continue;
+    mob.wait = YETI.moveMs;
+    yetiStep(s, mob, !!mob.hunting);
+  }
+  s.mobs = s.mobs.filter((m) => (m.lost ?? 0) < YETI.giveUpMs);
+}
+
+/**
+ * Prospecting done: the rock around is known, and the vein cells in it are found, cell by cell. A vein is
+ * found once any cell the player could see is: cells buried in rock are found too but show nothing yet.
+ */
 function finishProbe(s: GameState): void {
   s.probe = null;
   const radius = CAVES.probeRadius;
-  revealCave(s, s.player, radius);
+  revealUnder(s, s.player, radius, radius);
+  const near = (p: Point) => Math.hypot(p.x - s.player.x, (p.y - s.player.y) / CELL_ASPECT) <= radius;
   for (const site of s.sites) {
-    if (site.cave !== s.cave || site.found) continue;
-    if (Math.hypot(site.x - s.player.x, (site.y - s.player.y) / CELL_ASPECT) <= radius) site.found = true;
+    if (!site.cells?.some((cell) => layerOf(cell) === s.z)) continue;
+    for (const cell of site.cells) if (layerOf(cell) === s.z && near(cell)) cell.found = true;
+    site.found = site.cells.some((cell) => layerOf(cell) < 0 && cell.found && !cell.buried);
   }
+}
+
+/**
+ * A new site fitted among those already in the world, or null if it can't be. Cells on one layer never overlap:
+ * a site whose own spot or any surface cell is taken is not placed; underground cells already taken are left off
+ * it, and its total shrinks by what they held.
+ */
+function fitSite(s: GameState, site: Omit<Site, "id">): Omit<Site, "id"> | null {
+  const reach = CHUNK * 2;
+  const used = new Set<string>();
+  for (const other of s.sites) {
+    if (Math.abs(other.x - site.x) > reach || Math.abs(other.y - site.y) > reach) continue;
+    for (const c of cellsOf(other)) used.add(`${layerOf(c)},${c.x},${c.y}`);
+  }
+  const taken = (c: { x: number; y: number; z?: number }) => used.has(`${layerOf(c)},${c.x},${c.y}`);
+  if (taken({ x: site.x, y: site.y, z: site.z })) return null;
+  if (!site.cells) return site;
+  if (site.cells.some((c) => layerOf(c) === 0 && taken(c))) return null;
+  if (!site.cells.some(taken)) return site;
+  const cells = site.cells.filter((c) => !taken(c));
+  const total = cells.reduce((n, c) => n + (c.total ?? c.left), 0);
+  return { ...site, cells, total, left: cells.reduce((n, c) => n + c.left, 0) };
+}
+
+function addSite(s: GameState, site: Omit<Site, "id">): void {
+  const fitted = fitSite(s, site);
+  if (fitted) s.sites.push({ ...fitted, id: s.sites.length });
 }
 
 function addChunkSites(state: GameState, x: number, y: number): void {
-  for (const site of chunkSites(state.seed, chunkOf(x), chunkOf(y), laterOres(state.stage))) {
-    const taken = state.sites.some((other) => other.x === site.x && other.y === site.y);
-    if (!taken) state.sites.push({ ...site, id: state.sites.length });
+  for (const site of chunkSites(state.seed, chunkOf(x), chunkOf(y), laterOres(state.stage))) addSite(state, site);
+}
+
+/** Calls `visit` for every cell in sight from a point (see `inSight`). */
+function forSight(at: Point, facing: Point | null | undefined, around: number, reach: number, visit: (x: number, y: number) => void): void {
+  const rows = Math.ceil(reach * CELL_ASPECT);
+  for (let y = at.y - rows; y <= at.y + rows; y += 1) {
+    for (let x = at.x - reach; x <= at.x + reach; x += 1) if (inSight(at, facing, around, reach, x, y)) visit(x, y);
   }
 }
 
-function reveal(state: GameState, at: Point, radius: number): void {
-  const reach = Math.ceil(radius * CELL_ASPECT);
-  for (let y = at.y - reach; y <= at.y + reach; y += 1) {
-    for (let x = at.x - radius; x <= at.x + radius; x += 1) {
-      if (Math.hypot(x - at.x, (y - at.y) / CELL_ASPECT) > radius) continue;
-      const key = chunkKey(x, y);
-      if (!state.revealed[key]) {
-        state.revealed[key] = new Array(CHUNK * CHUNK).fill(0);
-        addChunkSites(state, x, y);
-      }
-      state.revealed[key][cellInChunk(x, y)] = 1;
+/** Marks surface cells in sight from a point as known. A chunk's sites are laid out the first time it is seen. */
+function reveal(state: GameState, at: Point, around: number, reach: number = around, facing: Point | null = null): void {
+  forSight(at, facing, around, reach, (x, y) => {
+    const key = chunkKey(x, y);
+    if (!state.revealed[key]) {
+      state.revealed[key] = new Array(CHUNK * CHUNK).fill(0);
+      addChunkSites(state, x, y);
     }
-  }
+    state.revealed[key][cellInChunk(x, y)] = 1;
+  });
 }
 
-export const atBase = (s: GameState): boolean => s.cave === null && s.player.x === BASE.x && s.player.y === BASE.y && !s.path.length;
+export const atBase = (s: GameState): boolean => s.z === 0 && s.player.x === BASE.x && s.player.y === BASE.y && !s.path.length;
 export const nodeById = (s: GameState, id: number): GameNode | undefined => s.nodes.find((n) => n.id === id);
 export const isRevealed = (s: GameState, x: number, y: number): boolean => s.revealed[chunkKey(x, y)]?.[cellInChunk(x, y)] === 1;
 
-/** Higher ground sees further. */
-export const visionAt = (s: GameState, at: Point): number => REVEAL + terrain(at.x, at.y, s.seed)[2] * 2;
+/** The rules of the biome the player stands in. Underground there are none. */
+export const biomeRules = (s: GameState): NonNullable<Biome["rules"]> =>
+  s.z === 0 ? BIOMES[biomeAt(s.player.x, s.player.y, s.seed)].rules ?? {} : {};
+
+/** How far the fan of sight reaches: higher ground sees further, a forest less, and underground CAVE_DARK less. */
+export const visionAt = (s: GameState, at: Point): number =>
+  s.z < 0
+    ? Math.max(1, REVEAL - CAVE_DARK)
+    : Math.max(1, REVEAL + terrain(at.x, at.y, s.seed)[2] * 2 + (BIOMES[biomeAt(at.x, at.y, s.seed)].rules?.vision ?? 0));
+
+/** How far the player sees all round, and how far the fan ahead reaches, from a point on their layer. */
+const sightOf = (s: GameState, at: Point): [number, number] => {
+  const reach = visionAt(s, at);
+  return [Math.min(reach, s.z < 0 ? SIGHT_AROUND.under : SIGHT_AROUND.surface), reach];
+};
+
+/**
+ * Whether a cell lies in sight from a point: within the small circle all round, or within the fan that opens
+ * the way the player is facing. With no facing yet, the fan's reach goes all round.
+ */
+function inSight(at: Point, facing: Point | null | undefined, around: number, reach: number, x: number, y: number): boolean {
+  const dx = x - at.x;
+  const dy = (y - at.y) / CELL_ASPECT;
+  const d = Math.hypot(dx, dy);
+  if (d <= (facing ? around : reach)) return true;
+  if (!facing || d > reach) return false;
+  const turn = Math.atan2(dy, dx) - Math.atan2(facing.y / CELL_ASPECT, facing.x);
+  return Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) <= (FAN_DEGREES / 2) * (Math.PI / 180);
+}
 
 /** Whether the player can see a cell right now, rather than remember it. */
 export const isVisible = (s: GameState, x: number, y: number): boolean =>
-  Math.hypot(x - s.player.x, (y - s.player.y) / CELL_ASPECT) <= visionAt(s, s.player);
+  inSight(s.player, s.facing, ...sightOf(s, s.player), x, y);
 
 export const isWeak = (s: GameState): boolean => s.time < s.weakUntil;
 
-export function siteHere(s: GameState): Site | undefined {
-  if (s.path.length) return undefined;
-  // A cave entrance is a place, not a vein: it has its own button, never a vein panel.
-  return s.sites.find((site) => site.x === s.player.x && site.y === s.player.y && site.ore !== CAVE && onThisMap(s, site));
+/** A vein cell and the site it belongs to. For a site without cells, the cell is a stand-in. */
+export interface VeinSpot {
+  site: Site;
+  cell: VeinCell;
 }
 
-/** Whether a site is on the map the player is on, and known there: cave veins need finding first. */
-export const onThisMap = (s: GameState, site: Site): boolean =>
-  (site.cave ?? null) === s.cave && (site.cave === undefined || !!site.found);
+/** Whether the player knows of a cell: surface cells always, underground cells once prospecting found them. Buried ones never show. */
+const cellKnown = (cell: VeinCell): boolean => layerOf(cell) === 0 || (!!cell.found && !cell.buried);
+
+/**
+ * Whether a cell can be worked at all now. This is the one place that says so: today ore set deep in rock
+ * is out of reach, and boring into rock, when it comes, opens it here.
+ */
+export const workable = (_s: GameState, cell: VeinCell): boolean => !cell.buried;
+
+/** The known vein cell at a place on the layer the player is on, if any. Cave entrances aren't veins. */
+export function veinCellAt(s: GameState, x: number, y: number): VeinSpot | undefined {
+  for (const site of s.sites) {
+    if (site.ore === CAVE) continue;
+    const cell = cellsOf(site).find((c) => c.x === x && c.y === y && layerOf(c) === s.z);
+    if (cell && cellKnown(cell)) return { site, cell };
+  }
+  return undefined;
+}
+
+/**
+ * The vein cell an action works now: the one underfoot if it has anything left; otherwise, underground, a
+ * wall cell beside the player that does, straight neighbours before diagonal ones. Nothing while walking.
+ */
+export function harvestTarget(s: GameState): VeinSpot | undefined {
+  if (s.path.length) return undefined;
+  const ready = (spot: VeinSpot | undefined) => !!spot && spot.cell.left > 0 && workable(s, spot.cell);
+  const here = veinCellAt(s, s.player.x, s.player.y);
+  if (ready(here)) return here;
+  if (s.z === 0) return undefined;
+  for (const [dx, dy] of AROUND) {
+    const beside = veinCellAt(s, s.player.x + dx, s.player.y + dy);
+    if (beside?.cell.wall && ready(beside)) return beside;
+  }
+  return undefined;
+}
+
+/** The vein the player is at: the one an action would work, or else the one whose cell is underfoot, even emptied. */
+export function siteHere(s: GameState): Site | undefined {
+  if (s.path.length) return undefined;
+  return (harvestTarget(s) ?? veinCellAt(s, s.player.x, s.player.y))?.site;
+}
+
+/** Whether the player has seen a vein cell: on the surface, ground they have looked at; underground, cells prospecting found. Buried ones never. */
+const cellSeen = (s: GameState, cell: VeinCell): boolean =>
+  layerOf(cell) < 0 ? !!cell.found && !cell.buried : isRevealed(s, cell.x, cell.y);
+
+/**
+ * How much a vein holds as far as the player knows it: what is left and what there was, counting only the cells
+ * they have seen, on the surface and underground alike. A vein seen in part is counted in part; the rest adds in
+ * as it is found.
+ */
+export function knownReserve(s: GameState, site: Site): { left: number; total: number } {
+  const seen = cellsOf(site).filter((cell) => !site.cells || cellSeen(s, cell));
+  return {
+    left: seen.reduce((n, cell) => n + Math.max(0, cell.left), 0),
+    total: seen.reduce((n, cell) => n + (cell.total ?? cell.left), 0),
+  };
+}
+
+/**
+ * The nearest cell of a vein the player could still work on the layer they are on, apart from where they
+ * stand. When the cell underfoot runs out, this is where to go next.
+ */
+export function nextVeinCell(s: GameState, site: Site): VeinCell | undefined {
+  const d = (c: VeinCell) => Math.hypot(c.x - s.player.x, (c.y - s.player.y) / CELL_ASPECT);
+  return cellsOf(site)
+    .filter((c) => layerOf(c) === s.z && c.left > 0 && cellKnown(c) && workable(s, c) && !(c.x === s.player.x && c.y === s.player.y))
+    .sort((a, b) => d(a) - d(b))[0];
+}
+
+/** Open floor beside an underground cell, the nearest to the player: where to stand to work ore in a wall. */
+export function standBeside(s: GameState, x: number, y: number): Point | undefined {
+  if (s.z === 0) return undefined;
+  const d = (p: Point) => Math.hypot(p.x - s.player.x, (p.y - s.player.y) / CELL_ASPECT);
+  return AROUND.map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+    .filter((p) => !rockAt(s, p.x, p.y))
+    .sort((a, b) => d(a) - d(b))[0];
+}
+
+/** Whether any vein cell lies at a place on the surface: the ore covers the ground there, so it is safe to step on. */
+const surfaceVeinAt = (s: GameState, x: number, y: number): boolean =>
+  s.sites.some((site) => cellsOf(site).some((c) => c.x === x && c.y === y && layerOf(c) === 0));
+
+/**
+ * Whether the player knows a site on the layer they are on: on the surface every site is (search still asks
+ * whether its spot has been seen); underground, a stair once its cell has been seen, and a vein once prospecting
+ * has found a cell of it there that is not buried.
+ */
+export const onThisMap = (s: GameState, site: Site): boolean => {
+  if (s.z === 0) return (site.z ?? 0) === 0;
+  if (site.ore === CAVE) return underSeenAt(s, site.x, site.y);
+  return !!site.cells?.some((c) => layerOf(c) === s.z && cellKnown(c));
+};
+
+/**
+ * Where a site is on the layer the player is on: its own spot when it lies there, else the nearest of its known
+ * cells there. Undefined when it isn't known on this layer.
+ */
+export function siteSpotHere(s: GameState, site: Site): VeinCell | Point | undefined {
+  if (!onThisMap(s, site)) return undefined;
+  // A cave entrance is the same cell on both layers: a stair underground.
+  if ((site.z ?? 0) === s.z || site.ore === CAVE) return { x: site.x, y: site.y };
+  const d = (c: VeinCell) => Math.hypot(c.x - s.player.x, (c.y - s.player.y) / CELL_ASPECT);
+  return cellsOf(site).filter((c) => layerOf(c) === s.z && cellKnown(c)).sort((a, b) => d(a) - d(b))[0];
+}
 
 /** What the player is carrying, including anything in hand. */
 export function carried(s: GameState): number {
@@ -603,31 +1025,54 @@ export const carryLimit = (s: GameState): number => MAX_CARRY + worn(s).reduce((
 
 export const overloaded = (s: GameState): boolean => carried(s) > carryLimit(s);
 
-/** A full load takes twice as long to carry as an empty bag. */
+/** How much longer each step takes with a full load: 0.6 means 60% longer than with an empty bag. */
+export const LOAD_SLOW = 0.6;
+/** A full load slows each step by LOAD_SLOW, a half load by half that. */
 export const walkTime = (s: GameState): number =>
-  WALK_MS * (1 + Math.min(carried(s), carryLimit(s)) / carryLimit(s)) * (isWeak(s) ? WEAK_WALK : 1) *
-  worn(s).reduce((pace, gear) => pace * (gear.walk ?? 1), 1);
+  WALK_MS * (1 + (LOAD_SLOW * Math.min(carried(s), carryLimit(s))) / carryLimit(s)) * (isWeak(s) ? WEAK_WALK : 1) *
+  worn(s).reduce((pace, gear) => pace * (gear.walk ?? 1), 1) * (biomeRules(s).walk ?? 1);
 
-/** What stepping on a cell would cost, as far as the player knows. Unseen ground looks safe. */
-function knownDamage(s: GameState, x: number, y: number): number {
+/**
+ * What one step on the surface costs: going into water hurts; on land, climbing or coming down hurts by how much
+ * the height changes, so walking along a ridge costs nothing. Ore covering the ground, and the base, are safe footing.
+ */
+function stepDamage(s: GameState, from: Point, to: Point): number {
+  if ((to.x === BASE.x && to.y === BASE.y) || surfaceVeinAt(s, to.x, to.y)) return 0;
+  const [, kind, height] = terrain(to.x, to.y, s.seed);
+  if (kind === "t-water") return WATER_DAMAGE;
+  return Math.abs(height - terrain(from.x, from.y, s.seed)[2]);
+}
+
+/** What a step would cost, as far as the player knows. Unseen ground looks safe. */
+function knownDamage(s: GameState, from: Point, to: Point): number {
   // Underground the danger moves about, so no cell is known to hurt.
-  if (s.cave !== null) return 0;
-  if (!isRevealed(s, x, y) || (x === BASE.x && y === BASE.y)) return 0;
-  if (s.sites.some((site) => site.x === x && site.y === y)) return 0;
-  const [, kind, height] = terrain(x, y, s.seed);
-  return kind === "t-water" ? WATER_DAMAGE : kind === "t-hill" ? 1 + height : 0;
+  if (s.z < 0 || !isRevealed(s, to.x, to.y)) return 0;
+  return stepDamage(s, from, to);
+}
+
+/** What a hazard one step ahead is called: water or a change of height, and what the step would cost. */
+function hazardOf(s: GameState, from: Point, to: Point): Hazard | null {
+  const damage = knownDamage(s, from, to);
+  if (!damage) return null;
+  const [, kind, height] = terrain(to.x, to.y, s.seed);
+  return { x: to.x, y: to.y, damage, kind: kind === "t-water" ? "water" : "hill", height };
 }
 
 function routeTo(s: GameState, target: Point): Point[] {
-  const cave = currentCave(s);
-  // Underground the route always goes round rock; walking straight only stops avoiding creatures.
-  if (cave) return safePath(s.player, target, (x, y) => (s.safeWalk ? knownDamage(s, x, y) : 0), (x, y) => caveCell(cave.map, x, y) === ROCK);
-  return s.safeWalk ? safePath(s.player, target, (x, y) => knownDamage(s, x, y)) : linePath(s.player, target);
+  // Underground the route goes round rock. On the surface the player walks straight; safe mode stops at hazards instead.
+  if (s.z < 0) return safePath(s.player, target, () => 0, (x, y) => rockAt(s, x, y));
+  return linePath(s.player, target);
 }
 
-/** Starts walking. Too heavy a load keeps the player where they are. */
+/**
+ * Starts walking. Too heavy a load keeps the player where they are. Asking again for the walk that safe
+ * mode just stopped goes on into the hazard: the player has seen the warning.
+ */
 export function walkTo(s: GameState, target: Point): boolean {
   if (overloaded(s)) return false;
+  const again = !!s.halt && s.halt.target.x === target.x && s.halt.target.y === target.y;
+  s.passing = again;
+  s.halt = null;
   s.path = routeTo(s, target);
   s.walkTimer = 0;
   return true;
@@ -640,21 +1085,24 @@ export function walkTo(s: GameState, target: Point): boolean {
 export function walkStep(s: GameState, dx: number, dy: number): boolean {
   if (overloaded(s) || (!dx && !dy)) return false;
   const [sx, sy] = [Math.sign(dx), Math.sign(dy)];
-  const cave = currentCave(s);
-  if (cave) {
-    const rock = (x: number, y: number) => caveCell(cave.map, x, y) === ROCK;
+  if (s.z < 0) {
+    const rock = (x: number, y: number) => rockAt(s, x, y);
     const { x, y } = s.player;
     if (rock(x + sx, y + sy) || (sx && sy && (rock(x + sx, y) || rock(x, y + sy)))) return false;
   }
-  s.path = [{ x: s.player.x + sx, y: s.player.y + sy }];
+  const next = { x: s.player.x + sx, y: s.player.y + sy };
+  // The same step again, right after safe mode stopped it, goes ahead.
+  const again = !!s.halt && s.halt.x === next.x && s.halt.y === next.y;
+  s.passing = again || (!!s.passing && !!s.path.length);
+  s.halt = null;
+  s.path = [next];
   return true;
 }
 
-/** Switches between going around hazards and walking straight, for the rest of the walk too. */
+/** Turns safe mode on or off: with it on, a walk stops short of a known hazard and says what it is. */
 export function setSafeWalk(s: GameState, on: boolean): void {
   s.safeWalk = on;
-  const target = s.path.at(-1);
-  if (target) s.path = routeTo(s, target);
+  s.halt = null;
 }
 
 /** Adds up to n of an item and returns how many fit. */
@@ -682,11 +1130,122 @@ export const yearAt = (time: number): number => Math.floor(time / (SEASON_MS * S
 
 export const seasonAt = (time: number): number => Math.floor(time / SEASON_MS) % SEASON_NAMES.length;
 
-/** Seasonal food can only be picked in its season. Ore is always there. */
+// ---- Harvesting: digging ore, picking food and filling a drum at water are one action with three kinds.
+
+type HarvestKindId = "ore" | "forage" | "water";
+interface HarvestKind {
+  /** Whether it can be worked now, apart from having enough left. */
+  ready: (s: GameState, site: Site) => boolean;
+  /** How much one action takes from the cell. */
+  takes: number;
+  /** Hands the player what one action gives; false if it can't be carried, and then nothing changes. */
+  give: (s: GameState, site: Site) => boolean;
+  /** The weight one action adds to the load. */
+  adds: (site: Site) => number;
+  /** When what was taken comes back: food as its season starts, water a little at a time, ore never. */
+  refill?: "season" | "tick";
+  /** Digging is heard underground. */
+  noisy?: boolean;
+}
+
+/** Gives one of the site's own item, if the player can carry it. */
+const giveOne = (s: GameState, site: Site): boolean =>
+  carried(s) + itemWeight(site.ore) <= carryLimit(s) && addTo(s.inv, site.ore, 1) === 1;
+
+const ownWeight = (site: Site): number => itemWeight(site.ore);
+
+const HARVEST: Record<HarvestKindId, HarvestKind> = {
+  ore: { ready: () => true, takes: 1, give: giveOne, adds: ownWeight, noisy: true },
+  forage: { ready: (s, site) => inSeason(s, site), takes: 1, give: giveOne, adds: ownWeight, refill: "season" },
+  water: { ready: (s) => holdsEmptyDrum(s), takes: DRUM.liters, give: drumFromWater, adds: () => itemWeight(DRUM.fills[WATER]) - itemWeight(DRUM.empty), refill: "tick" },
+};
+
+/** Whether the only thing stopping the next dig, pick or fill is the load: one more would be too heavy to carry. */
+export function tooHeavyToWork(s: GameState): boolean {
+  const spot = harvestTarget(s);
+  const kind = spot && harvestKind(spot.site);
+  return !!spot && !!kind && canWork(s, spot) && carried(s) + HARVEST[kind].adds(spot.site) > carryLimit(s);
+}
+
+const harvestKind = (site: Site): HarvestKindId | null =>
+  site.ore === CAVE ? null : site.ore === WATER ? "water" : FORAGE.includes(site.ore) ? "forage" : "ore";
+
+const inSeason = (s: GameState, site: Site): boolean => forageSeasons(site.ore)?.includes(s.season) ?? true;
+const holdsEmptyDrum = (s: GameState): boolean => s.cursor?.id === DRUM.empty || s.inv.some((slot) => slot?.id === DRUM.empty);
+
+/** Seasonal food can only be picked in its season. Ore is always there. Water is filled, not harvested. */
 export function canHarvest(s: GameState, site: Site): boolean {
-  if (site.ore === WATER || site.ore === CAVE) return false;
-  const seasons = forageSeasons(site.ore);
-  return !seasons || seasons.includes(s.season);
+  const kind = harvestKind(site);
+  return (kind === "ore" || kind === "forage") && HARVEST[kind].ready(s, site);
+}
+
+/** Whether the player can fill a drum here by hand: a riverbank with a drum's worth of water, and an empty drum in hand or bag. */
+export function canScoop(s: GameState, site: Site): boolean {
+  return harvestKind(site) === "water" && site.left >= DRUM.liters && holdsEmptyDrum(s);
+}
+
+/** Whether the action would do something at this vein cell now, carrying aside. */
+export function canWork(s: GameState, spot: VeinSpot): boolean {
+  const kind = harvestKind(spot.site);
+  return !!kind && workable(s, spot.cell) && spot.cell.left >= HARVEST[kind].takes && HARVEST[kind].ready(s, spot.site);
+}
+
+/**
+ * Swaps one empty drum for a full one of water, the one in hand first. The full drum goes in the bag, or
+ * into an empty hand. Nothing happens if it would be too heavy to carry or there is nowhere to put it.
+ */
+function drumFromWater(s: GameState): boolean {
+  const full = DRUM.fills[WATER];
+  if (!full || !holdsEmptyDrum(s)) return false;
+  if (carried(s) + itemWeight(full) - itemWeight(DRUM.empty) > carryLimit(s)) return false;
+  const fromHand = s.cursor?.id === DRUM.empty;
+  const slot = fromHand ? -1 : s.inv.findIndex((stack) => stack?.id === DRUM.empty);
+  const take = (n: number) => {
+    const stack = fromHand ? s.cursor! : s.inv[slot]!;
+    stack.n += n;
+    if (stack.n <= 0) {
+      if (fromHand) s.cursor = null;
+      else s.inv[slot] = null;
+    }
+  };
+  take(-1);
+  if (!addTo(s.inv, full, 1)) {
+    if (s.cursor) {
+      // Put the empty drum back where it was.
+      if (fromHand) s.cursor.n += 1;
+      else if (s.inv[slot]) s.inv[slot]!.n += 1;
+      else s.inv[slot] = { id: DRUM.empty, n: 1 };
+      return false;
+    }
+    s.cursor = { id: full, n: 1 };
+  }
+  return true;
+}
+
+/** Takes from one cell of a site. The site's own count is the sum of its cells, so it goes down too. */
+function takeFrom(spot: VeinSpot, n: number): void {
+  if (spot.site.cells) spot.cell.left -= n;
+  spot.site.left -= n;
+}
+
+/**
+ * The one action at a vein: dig ore, pick food or fill a drum, from the cell `harvestTarget` picks. One
+ * action always takes one ore or one food, whatever the player wears.
+ */
+export function mine(s: GameState): boolean {
+  const spot = harvestTarget(s);
+  if (!spot || !canWork(s, spot)) return false;
+  const kind = HARVEST[harvestKind(spot.site)!];
+  s.probe = null;
+  if (!kind.give(s, spot.site)) return false;
+  takeFrom(spot, kind.takes);
+  if (kind.noisy) makeNoise(s);
+  return true;
+}
+
+/** Fills a site back toward its total. Only food and water refill, and they are single cells, so there are no shares to fill. */
+function refillSite(site: Site, upTo = site.total): void {
+  site.left = Math.max(site.left, Math.min(site.total, upTo));
 }
 
 /** Food grows back as its season begins. */
@@ -695,7 +1254,8 @@ function turnSeason(s: GameState): void {
   if (season === s.season) return;
   s.season = season;
   for (const site of s.sites) {
-    if (forageSeasons(site.ore)?.includes(season)) site.left = site.total;
+    const kind = harvestKind(site);
+    if (kind && HARVEST[kind].refill === "season" && forageSeasons(site.ore)?.includes(season)) refillSite(site);
   }
 }
 
@@ -712,11 +1272,7 @@ function addRivers(s: GameState): void {
 function addLaterVeins(s: GameState): void {
   for (const ore of laterOres(s.stage)) {
     if (s.sites.some((site) => site.ore === ore)) continue;
-    for (const vein of laterVeins(s.seed, ore)) {
-      if (s.sites.some((site) => site.x === vein.x && site.y === vein.y)) continue;
-      if (vein.x === BASE.x && vein.y === BASE.y) continue;
-      s.sites.push({ ...vein, id: s.sites.length });
-    }
+    for (const vein of laterVeins(s.seed, ore)) addSite(s, vein);
   }
 }
 
@@ -772,22 +1328,12 @@ export function riverOf(s: GameState, pump: GameNode): Site | undefined {
   return pump.siteId === undefined ? undefined : s.sites[pump.siteId];
 }
 
+/** Water seeps back into a riverbank or pond, a little at a time. */
 function refillRivers(s: GameState): void {
   for (const site of s.sites) {
-    if (site.ore === WATER) site.left = Math.min(site.total, site.left + 1);
+    const kind = harvestKind(site);
+    if (kind && HARVEST[kind].refill === "tick") refillSite(site, site.left + 1);
   }
-}
-
-export function mine(s: GameState): boolean {
-  const site = siteHere(s);
-  if (!site || site.left <= 0 || !canHarvest(s, site)) return false;
-  s.probe = null;
-  const strike = Math.max(1, ...worn(s).map((gear) => gear.mine ?? 1));
-  const room = Math.floor((carryLimit(s) - carried(s)) / itemWeight(site.ore));
-  const taken = addTo(s.inv, site.ore, Math.min(strike, site.left, room));
-  if (!taken) return false;
-  site.left -= taken;
-  return true;
 }
 
 /** Equips what is in hand, swapping out what was there. With empty hands, takes the item off. */
@@ -813,13 +1359,23 @@ export const nodeProcess = (node: GameNode) => processOf(node.type, node.form);
 /** The recipe the machine's current inputs select. */
 export function recipeOf(node: GameNode): Recipe {
   const { recipes, slots } = nodeProcess(node);
-  // The recipe for exactly what went in comes first: pig iron makes pig iron plates, though it fits iron's too.
+  // The recipe for exactly what went in comes first: pyrite has a roast of its own though it is an iron ore,
+  // and pig iron makes pig iron plates, though it fits iron's too.
+  const named = (r: Recipe) =>
+    Object.keys(r.in).some((ingredient, i) => {
+      const stack = node.ins[slots[i].key];
+      return !!stack && namesItem(stack.id, ingredient);
+    }) &&
+    Object.keys(r.in).every((ingredient, i) => {
+      const stack = node.ins[slots[i].key];
+      return !stack || matches(stack.id, ingredient, false);
+    });
   const fits = (r: Recipe, inherit: boolean) =>
     Object.keys(r.in).every((ingredient, i) => {
       const stack = node.ins[slots[i].key];
       return !stack || matches(stack.id, ingredient, inherit);
     });
-  return recipes.find((r) => fits(r, false)) ?? recipes.find((r) => fits(r, true)) ?? recipes[0];
+  return recipes.find(named) ?? recipes.find((r) => fits(r, false)) ?? recipes.find((r) => fits(r, true)) ?? recipes[0];
 }
 
 /** Amount of one batch for a slot. */
@@ -1084,11 +1640,18 @@ export function loadSave(raw: unknown): GameState | null {
   if (!old || typeof old.seed !== "number" || typeof old.version !== "number" || old.version > SAVE_VERSION || old.version < OLDEST_SAVE) return null;
   if (!Array.isArray(old.nodes) || !Array.isArray(old.sites)) return null;
   const s = { ...createGame(old.seed), ...old } as GameState;
+  // A save from before the tutorial starts without it once past S0, and with it while still in S0.
+  if (!old.tutorial) s.tutorial = { step: 0, off: (old.stage ?? 0) > 0 };
   // A save from before stages has to work its stage out from what it did have.
   if (old.stage === undefined) delete (s as Partial<GameState>).stage;
   dropRiverNodes(s);
-  // Machines that no longer exist go, and their lines with them.
-  s.nodes = s.nodes.filter((node) => node.type === "stove" || isMachine(node.type));
+  // Machines that no longer exist go, and their lines with them. What they held goes to the warehouse.
+  const gone = s.nodes.filter((node) => node.type !== "stove" && !isMachine(node.type));
+  s.nodes = s.nodes.filter((node) => !gone.includes(node));
+  for (const node of gone) {
+    for (const stack of [...Object.values(node.ins ?? {}), ...(node.store ?? [])]) if (stack) bank(s, stack.id, stack.n);
+    for (const [id, n] of Object.entries(node.outs ?? {})) if (n > 0) bank(s, id, n);
+  }
   const live = new Set(s.nodes.map((node) => node.id));
   s.lines = (s.lines ?? []).filter((line) => live.has(line.from) && live.has(line.to));
   for (const line of s.lines) {
@@ -1120,8 +1683,74 @@ export function loadSave(raw: unknown): GameState | null {
   return s;
 }
 
+/** Items that changed: hematite gave way to pyrite. */
+const RENAMED_ITEMS: Record<string, string> = { Hm: "Py" };
+
+/** Renames items everywhere a save keeps them: veins, the bag, the hand, stores, machine slots and counts. */
+function renameItems(s: GameState, renamed: Record<string, string>): void {
+  const fix = (stack: Stack | null | undefined) => {
+    if (stack && renamed[stack.id]) stack.id = renamed[stack.id];
+  };
+  for (const site of s.sites ?? []) if (renamed[site.ore]) site.ore = renamed[site.ore];
+  (s.inv ?? []).forEach(fix);
+  fix(s.cursor);
+  for (const node of s.nodes ?? []) {
+    (node.store ?? []).forEach(fix);
+    Object.values(node.ins ?? {}).forEach(fix);
+    for (const [from, to] of Object.entries(renamed)) {
+      if (node.outs?.[from] === undefined) continue;
+      node.outs[to] = (node.outs[to] ?? 0) + node.outs[from];
+      delete node.outs[from];
+    }
+  }
+  for (const [from, to] of Object.entries(renamed)) {
+    if (s.made?.[from] === undefined) continue;
+    s.made[to] = (s.made[to] ?? 0) + s.made[from];
+    delete s.made[from];
+  }
+}
+
+/**
+ * Before version 19 every cave was a map of its own behind its entrance. Now there is one underground under the
+ * whole surface. A player inside a cave comes out at its entrance. Its veins can't be moved into the new
+ * underground, so they go, and what ore they still held is put in the warehouse. Entrances that no longer stand
+ * over the underground's stairs (the land has changed since) go too. Sites are numbered again from 0.
+ */
+function intoOneUnderground(s: GameState): void {
+  const old = s as GameState & { cave?: number | null; caveSeen?: unknown };
+  const door = typeof old.cave === "number" ? s.sites.find((site) => site.id === old.cave) : undefined;
+  if (typeof old.cave === "number") {
+    s.player = door ? { x: door.x, y: door.y } : { ...BASE };
+    s.path = [];
+    s.mobs = [];
+    s.shots = [];
+  }
+  delete old.cave;
+  delete old.caveSeen;
+  s.z ??= 0;
+  s.underSeen ??= {};
+  const inOldCave = (site: Site) => (site as Site & { cave?: number }).cave !== undefined;
+  for (const site of s.sites.filter(inOldCave)) if (site.ore !== CAVE && site.left > 0) bank(s, site.ore, site.left);
+  const stays = (site: Site) => !inOldCave(site) &&
+    (site.ore !== CAVE || entrancesIn(s.seed, chunkOf(site.x), chunkOf(site.y)).some((e) => e.x === site.x && e.y === site.y));
+  if (s.sites.every(stays)) return;
+  const renumber = new Map<number, number>();
+  s.sites = s.sites.filter(stays).map((site, i) => {
+    renumber.set(site.id, i);
+    return { ...site, id: i };
+  });
+  for (const holder of [...s.nodes, ...(s.ghosts ?? [])]) {
+    if (holder.siteId === undefined) continue;
+    const id = renumber.get(holder.siteId);
+    if (id === undefined) delete holder.siteId;
+    else holder.siteId = id;
+  }
+  addNearCave(s);
+}
+
 /** Brings a save from an older layout up to date. */
 export function upgradeSave(s: GameState): GameState {
+  renameItems(s, RENAMED_ITEMS);
   s.ghosts ??= [];
   s.ghostLines ??= [];
   // Springs could once feed a manifold.
@@ -1149,14 +1778,15 @@ export function upgradeSave(s: GameState): GameState {
   }
   // S0 came in before S1-1 with save version 17, so an older save is one stage further on.
   if (s.version < 17) s.stage += 1;
-  if (s.stage >= stageOpening(WATER)) addRivers(s);
+  intoOneUnderground(s);
+  addRivers(s);
   addLaterVeins(s);
-  // Caves came with save version 15. Prospecting under way is not kept across a load.
-  s.cave ??= null;
-  s.caveSeen ??= {};
+  // Prospecting under way is not kept across a load.
   s.probe = null;
   s.mobs ??= [];
   s.shots ??= [];
+  // A yeti is not kept across a load: surface creatures come and go.
+  if (s.z === 0) s.mobs = [];
   if (!s.sites.some((site) => site.ore === CAVE)) addNearCave(s);
   // Machines used to be built from the top list, one at a time. A build in progress gives its materials back,
   // and a game past S0 with no construction bench gets one. Every game keeps a workbench.
@@ -1328,6 +1958,19 @@ export function nodeLabel(_s: GameState, node: GameNode): string {
   return `${machineName(node.type)}${form} ${node.code}`;
 }
 
+/** Longest note on a map place. */
+export const NOTE_MAX = 40;
+
+/** Writes the player's note on a map place. A blank note removes it. */
+export function setNote(s: GameState, siteId: number, text: string): boolean {
+  const site = s.sites.find((v) => v.id === siteId);
+  if (!site) return false;
+  const note = text.trim().slice(0, NOTE_MAX);
+  if (note) site.note = note;
+  else delete site.note;
+  return true;
+}
+
 /** Names a node or group. A blank name goes back to the default. */
 export function rename(s: GameState, id: number, name: string): boolean {
   const target = nodeById(s, id) ?? s.groups.find((g) => g.id === id);
@@ -1425,6 +2068,9 @@ function tendFire(node: GameNode): boolean {
   if (!burn) return true;
   if ((node.heat ?? 0) <= 1e-9) {
     if (!node.fuel || readiness(node) !== "ready") return false;
+    // A hand furnace's fire only catches for a fresh batch once the bellows have blown it up into the green.
+    // Mid-batch it takes the next piece by itself, as any fire does.
+    if (machineManual(node.type) === "bellows" && node.progress <= 0 && (node.blast ?? 0) < BLAST.low) return false;
     node.heat = fuelValue(node.fuel.id);
     node.heatFull = node.heat;
     node.fuel.n -= 1;
@@ -1681,7 +2327,7 @@ function checkGoal(s: GameState): void {
   // The next goal counts from here, so nothing made ahead of time fills it.
   const next = STAGES[Math.min(s.stage, STAGES.length - 1)].goal.item;
   s.goalBase = s.made[next] ?? 0;
-  if (s.stage >= stageOpening(WATER)) addRivers(s);
+  addRivers(s);
   addLaterVeins(s);
 }
 
@@ -1940,27 +2586,33 @@ function walk(s: GameState): void {
   if (s.walkTimer < walkTime(s)) return;
   s.walkTimer = 0;
   // A creature in the way stops the walk; there's no walking through it.
-  if (s.cave !== null && s.mobs.some((mob) => mob.x === s.path[0].x && mob.y === s.path[0].y)) {
+  if (s.mobs.some((mob) => mob.x === s.path[0].x && mob.y === s.path[0].y)) {
     s.path = [];
     return;
   }
-  s.player = s.path.shift()!;
-  const cave = currentCave(s);
-  if (cave) {
-    revealCave(s, s.player, REVEAL);
+  // Safe mode stops short of a hazard the player knows of, and says what it is. Once told and asked
+  // again, the player crosses that stretch of hazard; the next one stops them again.
+  const ahead = s.safeWalk && !s.passing ? hazardOf(s, s.player, s.path[0]) : null;
+  if (ahead) {
+    s.halt = { ...ahead, target: s.path.at(-1)! };
+    s.path = [];
     return;
   }
-  reveal(s, s.player, visionAt(s, s.player));
-  if (s.stage >= stageOpening(WATER)) nameRivers(s);
-  // New ground can show a hazard on the way, so the safe route is worked out again.
-  const target = s.path.at(-1);
-  if (s.safeWalk && target && s.path.some((cell) => knownDamage(s, cell.x, cell.y) > 0)) s.path = routeTo(s, target);
-  const onSite = s.sites.some((site) => site.x === s.player.x && site.y === s.player.y);
-  const atHome = s.player.x === BASE.x && s.player.y === BASE.y;
-  if (onSite || atHome) return;
-  const [, kind, height] = terrain(s.player.x, s.player.y, s.seed);
-  if (kind === "t-water") hurt(s, WATER_DAMAGE);
-  else if (kind === "t-hill") hurt(s, 1 + height);
+  const next = s.path.shift()!;
+  const from = s.player;
+  // The way the player walks is the way they look: the fan of sight opens ahead.
+  s.facing = { x: Math.sign(next.x - from.x), y: Math.sign(next.y - from.y) };
+  s.player = next;
+  if (s.z < 0) {
+    revealUnder(s, s.player, ...sightOf(s, s.player), s.facing);
+    return;
+  }
+  const cost = stepDamage(s, from, next);
+  // A step that cost nothing is safe ground again: safe mode warns of the next hazard.
+  if (s.passing && !cost) s.passing = false;
+  reveal(s, s.player, ...sightOf(s, s.player), s.facing);
+  nameRivers(s);
+  if (cost) hurt(s, cost);
 }
 
 function hurt(s: GameState, amount: number): void {
@@ -1973,11 +2625,10 @@ function hurt(s: GameState, amount: number): void {
 function collapse(s: GameState): void {
   stowCursor(s);
   // The further from home, the more is dropped. At the base nothing is.
-  // In a cave, the way home runs through its entrance.
-  const cave = currentCave(s);
-  const span = (a: Point, b: Point) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-  const steps = cave ? span(cave.door, BASE) + span(s.player, cave.map.entry) : span(s.player, BASE);
-  s.cave = null;
+  // Underground, the way home runs up the stair that makes it shortest.
+  const stairs = s.z < 0 ? s.sites.filter((site) => site.ore === CAVE) : [];
+  const steps = stairs.length ? Math.min(...stairs.map((st) => steps8(s.player, st) + steps8(st, BASE))) : steps8(s.player, BASE);
+  s.z = 0;
   s.probe = null;
   s.mobs = [];
   s.shots = [];
@@ -2000,7 +2651,9 @@ function collapse(s: GameState): void {
 }
 
 function survive(s: GameState): void {
-  s.hungerTimer += STEP_MS;
+  // A desert makes the player hungry faster, and the snow does in winter.
+  const rules = biomeRules(s);
+  s.hungerTimer += STEP_MS * (rules.hunger ?? 1) * (s.season === WINTER ? rules.winterHunger ?? 1 : 1);
   if (s.hungerTimer >= HUNGER_MS) {
     s.hungerTimer = 0;
     s.hunger = Math.max(0, s.hunger - 1);
@@ -2197,21 +2850,30 @@ export function trashCursor(s: GameState): void {
   s.cursor = null;
 }
 
+/** How far around the base the test game shows the map, in cells: far enough to reach every biome. */
+const TEST_REVEAL = 160;
+
 /**
- * A running start for trying things out: every playable stage open, a wound motor driving a smelter
- * from a warehouse of raw materials, a second warehouse of parts for building any machine so far,
- * and belts and tubes for lines in the bag.
+ * A running start for trying things out, on a world of its own: every playable stage open, a wound motor
+ * driving a brick kiln from a warehouse of raw materials, warehouses of metals, parts and field kit, two of
+ * every machine, the player fully equipped, line materials in the bag, and the map shown far enough out
+ * to see every biome. No tutorial.
  */
 export function createTestGame(seed: number): GameState {
   const s = createGame(seed);
+  if (s.tutorial) s.tutorial.off = true;
   const store = s.nodes[0];
-  // Ores and fuels. This one feeds the smelter, so it holds nothing a line shouldn't carry off.
+  // Every ore and fuel there is. This one feeds the kiln, so it holds nothing a line shouldn't carry off: no food.
   const raw: [string, number][] = [
-    ["Lm", 64], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Kn", 64], ["Lg", 64], ["Bt", 64], ["coke", 64],
+    ["Kn", 64], ["Lm", 64], ["Py", 64], ["Mt", 32], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Lg", 64], ["Bt", 64], ["An", 32], ["coke", 64],
   ];
-  // Metals and bricks, from the bloom to steel.
+  // Metals and bricks, from the bloom to steel, and the by-products that come with them.
   const metals: [string, number][] = [
-    ["iron", 64], ["pig_iron", 32], ["copper", 64], ["steel", 32], ["brick", 64], ["bloom", 8],
+    ["iron", 64], ["bloom", 16], ["pig_iron", 32], ["copper", 64], ["steel", 32], ["brick", 64], ["slag", 16], ["sulfur", 16],
+  ];
+  // For going out: spare weapons, drums empty and full, and cooked food.
+  const kit: [string, number][] = [
+    ["iron_spear", 1], ["iron_blade", 1], ["iron_drum", 8], ["water_drum", 8], ["Bc", 16], ["Mc", 16],
   ];
   // Building parts: enough for a few of each S0 to S1-3 machine, and the steam engine's pieces. One warehouse holds 12.
   const parts: [string, number][] = [
@@ -2229,14 +2891,20 @@ export function createTestGame(seed: number): GameState {
   parts.forEach(([id, n], i) => {
     depot.store[i] = { id, n };
   });
-  // Metals sit to the right of the parts, beside the smelter they come from.
+  // Metals sit to the right of the parts.
   const metalStore = newWarehouse(s, 300, 360);
   s.nodes.push(metalStore);
   metals.forEach(([id, n], i) => {
     metalStore.store[i] = { id, n };
   });
-  // Lines are paid from the bag, so these go in the player's inventory.
+  const kitStore = newWarehouse(s, 560, 360);
+  s.nodes.push(kitStore);
+  kit.forEach(([id, n], i) => {
+    kitStore.store[i] = { id, n };
+  });
+  // Lines are paid from the bag, so these go in the player's inventory. The player wears a full set.
   for (const [id, n] of transport) addTo(s.inv, id, n);
+  s.gear = { feet: "iron_boots", back: "iron_pack", hand: "iron_pick", weapon: "iron_blade" };
   s.stage = PLAYABLE_STAGES - 1;
   // Two of every machine open so far, built and ready to install, in machine warehouses of their own.
   const machines = machinesAt(s.stage);
@@ -2249,7 +2917,8 @@ export function createTestGame(seed: number): GameState {
   }
   addRivers(s);
   addLaterVeins(s);
-  for (const bank of riverBanks(seed)) reveal(s, bank, REVEAL);
+  // The whole neighbourhood is shown, so every biome, the rivers and the caves can be found at once.
+  reveal(s, BASE, TEST_REVEAL);
   nameRivers(s);
   // The workbench moves aside for a construction bench, which makes everything from S1-1 on.
   const workbench = s.nodes.find((n) => n.type === WORKBENCH)!;
@@ -2258,14 +2927,13 @@ export function createTestGame(seed: number): GameState {
   placeMachine(s, CONSTRUCTION, 40, 40);
   const motor = placeMachine(s, MOTOR, 300, 40)!;
   motor.energy = SPRING_MAX;
-  const smelter = placeMachine(s, "smelter", 300, 200)!;
+  const kiln = placeMachine(s, "brick_kiln", 300, 200)!;
   // The motor runs a belt drive, and the drive runs the warehouse's belt network.
   const drive = placeMachine(s, BELT_DRIVE, 540, 40)!;
   connect(s, motor.id, drive.id, POWER);
   connect(s, drive.id, store.id, DRIVE);
-  connect(s, store.id, smelter.id, ALL);
-  connect(s, smelter.id, store.id, MAIN);
-  connect(s, smelter.id, store.id, BYPRODUCT);
+  connect(s, store.id, kiln.id, ALL);
+  connect(s, kiln.id, store.id, MAIN);
   return s;
 }
 
@@ -2289,7 +2957,8 @@ export function step(s: GameState): void {
   // Walking off cancels prospecting; standing still for long enough finishes it.
   if (s.probe !== null && s.path.length) s.probe = null;
   if (s.probe !== null && s.time - s.probe >= CAVES.probeMs) finishProbe(s);
-  if (s.cave !== null) creatures(s);
+  if (s.z < 0) creatures(s);
+  else yetis(s);
   survive(s);
   turnSeason(s);
   if (s.time % SPRING_LEAK_MS === 0) leakForce(s);
@@ -2303,5 +2972,6 @@ export function step(s: GameState): void {
   s.nodes.forEach((node) => runMachine(s, node));
   // Least recently served first, so lines leaving one machine share its output evenly.
   [...s.lines].sort((a, b) => a.lastMoved - b.lastMoved).forEach((line) => runLine(s, line, nodes));
+  if (s.time % TUTORIAL_MS === 0) advanceTutorial(s);
 }
 

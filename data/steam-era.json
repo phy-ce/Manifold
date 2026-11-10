@@ -5,8 +5,8 @@
   },
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
-    "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
-    "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그",
+    "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "pyrite": "황철석", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
+    "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
     "steam_drum": "증기 드럼", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
     "steel_plate": "강판", "steel_shaft": "강철 축", "copper_wire": "구리선", "port_flange": "포트 증설 플랜지",
@@ -14,9 +14,9 @@
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 30
+    "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
   },
-  "stockpiled": ["slag", "coal_tar"],
+  "stockpiled": ["slag", "coal_tar", "sulfur"],
   "food": {
     "Be": { "hunger": 10, "hp": 0 },
     "Mu": { "hunger": 8, "hp": 0 },
@@ -31,22 +31,23 @@
   "fuels": { "Lg": 8, "Bt": 12, "An": 16, "coke": 20 },
   "tiers": ["spring", "low", "high"],
   "gear": {
-    "iron_boots": { "slot": "feet", "walk": 0.65, "note": "걷는 시간 35% 감소" },
+    "iron_boots": { "slot": "feet", "walk": 0.91, "note": "이동 속도 +10%" },
+    "iron_blade": { "slot": "weapon", "damage": 4, "range": 1, "cooldown": 700, "note": "공격력 4, 0.7초마다" },
+    "iron_spear": { "slot": "weapon", "damage": 3, "range": 2, "cooldown": 1000, "note": "공격력 3, 두 칸 거리, 1초마다" },
     "iron_pack": { "slot": "back", "carry": 40, "note": "최대 무게 +40" },
-    "iron_pick": { "slot": "hand", "mine": 2, "note": "광맥을 한 번에 2개 캠" }
+    "iron_pick": { "slot": "hand", "note": "효과 준비 중" }
   },
   "ruleItems": ["steam", "water_drum"],
   "kinds": { "water": "liquid", "coal_tar": "liquid", "steam": "gas" },
-  "drum": { "empty": "iron_drum", "liters": 100, "fills": { "water": "water_drum" } },
+  "drum": { "empty": "iron_drum", "liters": 5, "fills": { "water": "water_drum" } },
   "machines": {
     "workbench": { "name": "작업대", "difficulty": 1, "manual": "rhythm", "rhythm": [450, 450, 900], "cost": { "clay": 8 }, "work": 10 },
     "open_kiln": { "name": "노천 가마", "burn": 1, "cost": { "clay": 12 }, "work": 10 },
     "bloomery": { "name": "괴철로", "burn": 1, "difficulty": 1, "manual": "bellows", "byproductSlots": 1, "cost": { "clay": 10, "brick": 6 }, "work": 20 },
-    "hand_forge": { "name": "손 단조대", "difficulty": 1, "manual": "rhythm", "rhythm": [950], "cost": { "brick": 4, "bloom": 2 }, "work": 15 },
+    "hand_forge": { "name": "손 단조대", "difficulty": 1, "manual": "rhythm", "rhythm": [450], "cost": { "brick": 4, "bloom": 2 }, "work": 15 },
     "construction_bench": { "name": "건설대", "difficulty": 1, "manual": "rhythm", "rhythm": [700, 350, 350, 1050], "cost": { "iron": 4, "brick": 8 }, "work": 15 },
     "warehouse": { "name": "창고", "cost": { "iron_plate": 6, "iron_rod": 4, "iron_rivet": 8 }, "work": 25 },
     "brick_kiln": { "name": "벽돌 가마", "burn": 1, "cost": { "clay": 20 }, "work": 20 },
-    "smelter": { "name": "제련로", "burn": 1.5, "byproductSlots": 2, "cost": { "brick": 16, "clay": 8 }, "work": 40 },
     "plate_hammer": { "name": "판금 망치", "power": 2, "difficulty": 1, "manual": "rhythm", "rhythm": [700], "cost": { "iron": 8 }, "work": 15 },
     "forming_bench": { "name": "성형대", "power": 2, "difficulty": 2, "manual": "keys", "cost": { "iron": 6, "iron_plate": 4, "brick": 8 }, "work": 20 },
     "boiler_bench": { "name": "보일러 제작대", "power": 3, "difficulty": 3, "manual": "keys", "cost": { "iron_plate": 8, "iron_gear": 2, "iron_rivet": 8, "brick": 8 }, "work": 30 },
@@ -91,21 +92,23 @@
     { "form": "spring", "machine": "forming_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron", "copper", "steel"] },
     { "form": "belt", "machine": "forming_bench", "time": 4, "in": 1, "out": 2, "metals": ["iron"] },
     { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] },
-    { "form": "boots", "machine": "forming_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
-    { "form": "pack", "machine": "forming_bench", "time": 10, "in": 4, "out": 1, "metals": ["iron"] },
-    { "form": "pick", "machine": "forming_bench", "time": 8, "in": 3, "out": 1, "metals": ["iron"] }
+    { "form": "boots", "machine": "forming_bench", "time": 8, "in": 1, "extra": { "iron_plate": 2, "iron_rivet": 4 }, "out": 1, "metals": ["iron"] },
+    { "form": "pack", "machine": "forming_bench", "time": 12, "in": 1, "extra": { "iron_rod": 4, "iron_rivet": 6, "iron_belt": 2 }, "out": 1, "metals": ["iron"] },
+    { "form": "pick", "machine": "forming_bench", "time": 8, "in": 3, "extra": { "iron_rod": 1 }, "out": 1, "metals": ["iron"] },
+    { "form": "blade", "machine": "forming_bench", "time": 8, "in": 3, "extra": { "iron_rivet": 2 }, "out": 1, "metals": ["iron"] },
+    { "form": "spear", "machine": "forming_bench", "time": 8, "in": 2, "extra": { "iron_rod": 2 }, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
     { "id": "open_brick", "machine": "open_kiln", "time": 12, "in": { "clay": 2 }, "out": { "brick": 1 } },
     { "id": "open_berry", "machine": "open_kiln", "time": 8, "in": { "Be": 1 }, "out": { "Bc": 1 } },
     { "id": "open_mushroom", "machine": "open_kiln", "time": 8, "in": { "Mu": 1 }, "out": { "Mc": 1 } },
     { "id": "bloomery_bloom", "machine": "bloomery", "time": 10, "in": { "iron_ore": 3 }, "out": { "bloom": 1, "slag": 1 } },
+    { "id": "pyrite_roast", "machine": "bloomery", "time": 12, "in": { "pyrite": 4 }, "out": { "bloom": 1, "sulfur": 2 } },
+    { "id": "copper", "machine": "bloomery", "time": 8, "in": { "copper_oxide": 2 }, "out": { "copper": 1, "slag": 1 } },
+    { "id": "copper_sulfide_smelt", "machine": "bloomery", "time": 12, "in": { "copper_sulfide": 3 }, "out": { "copper": 1, "slag": 1 } },
     { "id": "forge_iron", "machine": "hand_forge", "time": 6, "in": { "bloom": 1 }, "out": { "iron": 1 } },
 
     { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2 }, "out": { "brick": 2 } },
-    { "id": "iron_bloom", "machine": "smelter", "time": 6, "in": { "iron_ore": 2 }, "out": { "iron": 1, "slag": 1 } },
-    { "id": "copper_sulfide_smelt", "machine": "smelter", "time": 8, "in": { "copper_sulfide": 3 }, "out": { "copper": 1, "slag": 2 } },
-    { "id": "copper", "machine": "smelter", "time": 6, "in": { "copper_oxide": 2 }, "out": { "copper": 1, "slag": 1 } },
     { "id": "steam_drum", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 6, "copper_tube": 6, "iron_rivet": 12 }, "out": { "steam_drum": 1 } },
     { "id": "steam_engine_unit", "machine": "engine_bench", "time": 30, "in": { "iron_cylinder": 2, "steam_drum": 1, "iron_gear": 4, "iron_rod": 4 }, "out": { "steam_engine_unit": 1 } },
     { "id": "steam_module", "machine": "engine_bench", "time": 20, "in": { "iron_cylinder": 1, "iron_plate": 2, "steam_engine_unit": 1, "copper_tube": 2 }, "out": { "steam_module": 2 } },
@@ -119,6 +122,7 @@
 
     { "id": "coke", "machine": "coke_oven", "time": 10, "in": { "coal": 2 }, "out": { "coke": 1, "coal_tar": 1 } },
     { "id": "iron_blast", "machine": "blast_furnace", "time": 6, "in": { "iron_ore": 4, "coke": 2, "limestone": 1 }, "out": { "pig_iron": 4, "slag": 2 } },
+    { "id": "pyrite_blast", "machine": "blast_furnace", "time": 6, "in": { "pyrite": 4, "coke": 2, "limestone": 1 }, "out": { "pig_iron": 2, "sulfur": 3 } },
     { "id": "copper_matte", "machine": "blast_furnace", "time": 6, "in": { "copper_sulfide": 4, "coke": 2, "limestone": 1 }, "out": { "copper_matte": 3, "slag": 2 } },
     { "id": "steel", "machine": "converter", "time": 10, "in": { "pig_iron": 4 }, "out": { "steel": 3, "slag": 1 } },
     { "id": "copper_converted", "machine": "converter", "time": 8, "in": { "copper_matte": 2 }, "out": { "copper": 2, "slag": 1 } },
@@ -137,14 +141,14 @@
   "milestones": [
     {
       "id": "S0", "name": "손작업",
-      "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "Be", "Mu"],
+      "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "limestone", "Be", "Mu"],
       "unlockMachines": ["workbench", "open_kiln", "bloomery", "hand_forge", "construction_bench"],
       "goal": { "item": "construction_bench", "amount": 1, "perMinute": 0.2 }
     },
     {
       "id": "S1-1", "name": "증기기관 + 구리 배관",
       "unlockSources": [],
-      "unlockMachines": ["brick_kiln", "smelter", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor", "belt_drive"],
+      "unlockMachines": ["brick_kiln", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor", "belt_drive"],
       "goal": { "item": "steam_engine_unit", "amount": 1, "perMinute": 0.2 }
     },
     {
@@ -155,7 +159,7 @@
     },
     {
       "id": "S1-3", "name": "코크스와 고로",
-      "unlockSources": ["limestone"],
+      "unlockSources": [],
       "unlockMachines": ["steam_manifold", "item_splitter", "blast_furnace", "converter", "tar_tank"],
       "goal": { "item": "steel", "amount": 100, "perMinute": 20 }
     },

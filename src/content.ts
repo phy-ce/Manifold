@@ -2,6 +2,7 @@
 import { localize, tr } from "./i18n";
 import eraData from "../data/steam-era.json";
 import oreJson from "../data/ores.json";
+import biomeJson from "../data/biomes.json";
 import displayData from "../data/display.json";
 import materialData from "../data/materials.json";
 import { BUILDERS, CONSTRUCTION, WORKBENCH, expandRecipes } from "./expandRecipes.mjs";
@@ -107,23 +108,98 @@ export const unitOf = (id: string): string => (kinds[id] === "liquid" ? "L" : ""
 /** Vein grades and their sizes. Each layer sets its own odds, so deeper ones usually hold more. */
 export const RICHNESS: { id: string; name: string; size: number[] }[] = oreData.richness;
 export const LAYERS: { depth: number; name: string; richness: Record<string, number> }[] = oreData.layers;
-export const richnessName = (id: string | undefined): string => RICHNESS.find((r) => r.id === id)?.name ?? "";
 /** How much a riverbank holds, and how often it gains 1 back. */
 export const RIVER: { reserve: number; regenMs: number } = oreData.river;
 /** How often each raw family turns up among veins, relative to the others. */
 export const FAMILY_WEIGHT: Record<string, number> = oreData.familyWeight;
+
+/** What a biome changes: its look, its water, how likely each ore and food is, and rules for whoever walks it. */
+export interface Biome {
+  id: string;
+  name: string;
+  ground: string;
+  glyphs: string;
+  /** "river" lets rivers run through; "pond", "oasis" and "ice" make still water of their own. Nothing: dry. */
+  water?: "river" | "pond" | "oasis" | "ice";
+  /** How high the land must rise, 0..1, to make a hill here: lower is hillier, above 1 none at all. The default is 0.8. */
+  hills?: number;
+  /** The tallest a hill gets here, 1 to 3. Only mountains reach 3. The default is 1. */
+  maxHeight?: number;
+  family?: Record<string, number>;
+  ores?: Record<string, number>;
+  /** Ores found on the surface here though they lie deeper elsewhere. */
+  extraOres?: string[];
+  forage: string[];
+  forageChance?: number;
+  caves?: number;
+  /** How much likelier a rich vein is. */
+  rich?: number;
+  rules?: { walk?: number; hunger?: number; winterHunger?: number; vision?: number };
+}
+const biomeData = localize(biomeJson) as unknown as {
+  climateScale: number; lakeScale: number; temperateRadius: number; starterRadius: number;
+  biomes: Record<string, Omit<Biome, "id">>;
+  yeti: Yeti;
+};
+/**
+ * The yeti of the snowfield: a belief of the early age, so it comes out only up to `lastStage`. While the
+ * player is in its biome one may come out every `everyMs` with `chance`, between `away` cells off and out of
+ * sight. It notices the player within `sight`, never leaves its biome, and gives up after `giveUpMs` with the
+ * player out of the biome or beyond `forgetAway`. `immune`: blows land and stagger it but take no health, so
+ * the only way to live through one is to leave its biome.
+ */
+export interface Yeti {
+  name: string; biome: string; lastStage: string;
+  everyMs: number; chance: number; away: number[]; sight: number; forgetAway: number; giveUpMs: number;
+  moveMs: number; attackMs: number; damage: number; hp: number; immune?: boolean;
+}
+export const YETI: Yeti = biomeData.yeti;
+export const BIOMES: Record<string, Biome> = Object.fromEntries(Object.entries(biomeData.biomes).map(([id, b]) => [id, { id, ...b } as Biome]));
+export const BIOME_WORLD = {
+  climateScale: biomeData.climateScale, lakeScale: biomeData.lakeScale,
+  temperateRadius: biomeData.temperateRadius, starterRadius: biomeData.starterRadius,
+};
+/**
+ * How veins are laid out over cells. Ore sizes are the grade's size times `sizeScale`. A chunk gets one ore
+ * vein with the first chance of `perChunk` and two with the second. A strand's cells hold shares weighted
+ * from 1 at its ends up to `coreWeight` at its middle. Lengths are per grade, rich ones longest; in a cave the
+ * strand picks floor, exposed wall and buried rock by `caveWeights`.
+ */
+export const VEINS: {
+  sizeScale: number; perChunk: number[]; coreWeight: number;
+  /** The one vein of each family S0 cannot do without, laid somewhere around the base, not right beside it. */
+  starter: { families: string[]; distance: number[] };
+  surfaceCells: Record<string, number[]>; caveCells: Record<string, number[]>;
+  caveWeights: { floor: number; wall: number; buried: number };
+  /**
+   * Surface veins that run on underground: the share of them that do, how many branches spread out below the
+   * outcrop, and each branch's cells by grade. The vein's one total covers the outcrop and its branches.
+   */
+  below: { chance: number; branches: number[]; cells: Record<string, number[]> };
+  /** The chance an underground chunk holds a vein of its own, never seen from the surface. */
+  underChunk: number;
+} = oreData.veins;
 /** The chance a chunk also holds a patch of food, apart from its ore. */
 export const FORAGE_CHANCE: number = oreData.forageChance;
 /** A cave entrance on the map. It is a site, but nothing is mined from it. */
 export const CAVE = "cave";
-/** Natural caves: one layer down, small, with veins found by prospecting. */
+/** The underground: one endless layer under the surface, entered by cave entrances, with veins found by prospecting. */
 export const CAVES: {
-  layer: number; width: number; height: number; sites: number[]; habitats: number[];
+  layer: number;
   probeMs: number; probeRadius: number; chunkChance: number; near: number[];
+  /**
+   * How the underground is laid out. Caverns open where a slow noise (`cavernScale` cells across) rises past
+   * `cavern`; tunnels run where one noise (`tunnelScale`) lies within `tunnel` of its middle and a broader one
+   * within `tunnelSpread`. A chunk has a den with the chance `dens`. Each entrance opens a chamber `chamber`
+   * cells round and is joined to the nearest open area of at least `joinSize` cells within `reach`.
+   */
+  under: { cavernScale: number; cavern: number; tunnelScale: number; tunnel: number; tunnelSpread: number; dens: number; chamber: number; reach: number; joinSize: number };
   creatures: {
     count: number[]; rangedShare: number; sight: number; hunt: number; safeRadius: number;
-    melee: { name: string; moveMs: number; attackMs: number; damage: number };
-    ranged: { name: string; moveMs: number; fireMs: number; damage: number; range: number; keep: number[]; shotSpeed: number };
+    /** Creatures that come out while the player is in: how often a den is tried, the odds and how they grow with time and noise, the most alive at once, and how far away they come out and are forgotten. */
+    spawn: { everyMs: number; chance: number; perMinute: number; most: number; cap: number; minAway: number; forgetAway: number; noiseMs: number; noiseBonus: number };
+    melee: { name: string; moveMs: number; attackMs: number; damage: number; hp: number };
+    ranged: { name: string; moveMs: number; fireMs: number; damage: number; hp: number; range: number; keep: number[]; shotSpeed: number };
   };
 } = oreData.cave;
 /** What a power line carries. Not an item: it drives other lines. */
@@ -170,13 +246,15 @@ export interface Gear {
   walk?: number;
   /** Adds to how much the player can carry. */
   carry?: number;
-  /** How much one strike takes from a vein. */
-  mine?: number;
+  /** A weapon: health taken from a creature per blow, how many cells away it reaches, and ms between blows. */
+  damage?: number;
+  range?: number;
+  cooldown?: number;
 }
 const gear: Record<string, Gear> = era.gear;
 export const gearOf = (id: string): Gear | undefined => gear[id];
 /** Equipment slots and what each is called. */
-export const GEAR_SLOTS: [string, string][] = [["feet", tr("발")], ["back", tr("등")], ["hand", tr("손")]];
+export const GEAR_SLOTS: [string, string][] = [["feet", tr("발")], ["back", tr("등")], ["hand", tr("손")], ["weapon", tr("무기")]];
 /** The items that fit a slot. */
 export const gearFor = (slot: string): string[] => Object.keys(gear).filter((id) => gear[id].slot === slot);
 
@@ -339,6 +417,8 @@ export function lineage(id: string): string[] {
 }
 
 /** Fits by the item itself: the same id, or an ore's family or group. */
+/** True when an ingredient names this very item or a group of it, finer than its family: pyrite, not iron ore. */
+export const namesItem = (item: string, ingredient: string): boolean => item === ingredient || !!ores[item]?.groups?.includes(ingredient);
 const fitsAsIs = (item: string, ingredient: string): boolean =>
   item === ingredient || ores[item]?.family === ingredient || !!ores[item]?.groups?.includes(ingredient);
 

@@ -6,22 +6,30 @@
   ],
   "forage": { "ids": ["Be", "Mu"], "size": [3, 9], "seasons": { "Be": [1, 2], "Mu": [0, 2] } },
   "richness": [
-    { "id": "scarce", "name": "빈약", "size": [12, 36] },
-    { "id": "normal", "name": "보통", "size": [40, 120] },
-    { "id": "rich", "name": "풍부", "size": [120, 360] }
+    { "id": "scarce", "name": "빈약", "size": [24, 72] },
+    { "id": "normal", "name": "보통", "size": [80, 240] },
+    { "id": "rich", "name": "풍부", "size": [240, 720] }
   ],
   "river": { "reserve": 300, "regenMs": 2000 },
   "familyWeight": { "iron_ore": 35, "coal": 35, "copper_ore": 20, "clay": 10, "limestone": 15 },
   "forageChance": 0.25,
-  "cave": { "layer": 1, "width": 64, "height": 48, "sites": [4, 6], "habitats": [3, 5], "probeMs": 1300, "probeRadius": 7, "chunkChance": 0.05, "near": [14, 22],
+  "veins": { "sizeScale": 4, "perChunk": [0.08, 0.01], "coreWeight": 3,
+    "starter": { "families": [], "distance": [12, 32] },
+    "surfaceCells": { "scarce": [3, 4], "normal": [3, 5], "rich": [5, 6] },
+    "caveCells": { "scarce": [4, 6], "normal": [5, 8], "rich": [8, 10] },
+    "caveWeights": { "floor": 1, "wall": 2, "buried": 0.5 },
+    "below": { "chance": 0.7, "branches": [2, 3], "cells": { "scarce": [3, 5], "normal": [4, 6], "rich": [5, 8] } },
+    "underChunk": 0.12 },
+  "cave": { "layer": 1, "probeMs": 1300, "probeRadius": 7, "chunkChance": 0.02, "near": [14, 22],
+    "under": { "cavernScale": 26, "cavern": 0.64, "tunnelScale": 15, "tunnel": 0.07, "tunnelSpread": 0.3, "dens": 0.3, "chamber": 2, "reach": 24, "joinSize": 80 },
     "creatures": {
-      "count": [5, 7], "rangedShare": 0.35, "sight": 7, "hunt": 12, "safeRadius": 3,
-      "melee": { "name": "동굴 늑대", "moveMs": 450, "attackMs": 1000, "damage": 7 },
-      "ranged": { "name": "가시 도롱뇽", "moveMs": 700, "fireMs": 2200, "damage": 5, "range": 6, "keep": [3, 5], "shotSpeed": 0.45 }
+      "count": [2, 4], "spawn": { "everyMs": 40000, "chance": 0.35, "perMinute": 0.1, "most": 0.9, "cap": 7, "minAway": 12, "forgetAway": 48, "noiseMs": 20000, "noiseBonus": 0.4 }, "rangedShare": 0.35, "sight": 7, "hunt": 12, "safeRadius": 3,
+      "melee": { "name": "동굴 늑대", "moveMs": 450, "attackMs": 1000, "damage": 7, "hp": 12 },
+      "ranged": { "name": "가시 도롱뇽", "moveMs": 700, "fireMs": 2200, "damage": 5, "hp": 8, "range": 6, "keep": [3, 5], "shotSpeed": 0.45 }
     } },
   "ores": {
     "Lm": { "name": "갈철석", "elements": "Fe", "family": "iron_ore", "layers": [0, 1], "color": "#c9983f", "metal": "Fe", "byproducts": ["Si", "Mn"] },
-    "Hm": { "name": "적철석", "elements": "Fe", "family": "iron_ore", "layers": [1, 2], "color": "#c8453a", "metal": "Fe", "byproducts": ["Si", "Mn"] },
+    "Py": { "name": "황철석", "elements": "Fe, S", "family": "iron_ore", "groups": ["pyrite"], "layers": [1, 2], "color": "#c4b06a", "metal": "Fe", "byproducts": ["S", "Co"] },
     "Mt": { "name": "자철석", "elements": "Fe", "family": "iron_ore", "layers": [2, 2], "color": "#8b93a6", "metal": "Fe", "byproducts": ["Ti", "V"] },
     "Ml": { "name": "공작석", "elements": "Cu", "family": "copper_ore", "groups": ["copper_oxide"], "layers": [0, 1], "color": "#35b779", "metal": "Cu", "byproducts": ["Cg", "Zn"] },
     "Cc": { "name": "휘동석", "elements": "Cu, S", "family": "copper_ore", "groups": ["copper_sulfide"], "layers": [1, 2], "color": "#7f8ba8", "metal": "Cu", "byproducts": ["S", "Ag"] },

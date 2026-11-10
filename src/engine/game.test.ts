@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt } from "../content";
+import { FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
 import {
-  GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
-  placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
+  GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, LOAD_SLOW, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
+  REVEAL, NOTE_MAX, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
-import { BASE, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
+import { BASE, biomeAt, cellsOf, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
+import { gameWithVeins, withVeinsNearBase } from "./testWorld";
 
 /** Most tests aren't about survival, so they keep the player fed. */
 const keepAlive = (s: GameState) => {
@@ -17,8 +18,18 @@ const run = (s: GameState, seconds: number) => {
     step(s);
   }
 };
+/** Runs while steady bellows hold a hand furnace's blast in the middle of its zone. */
+const blown = (s: GameState, node: GameNode, seconds: number) => {
+  for (let i = 0; i < seconds * 10; i += 1) {
+    keepAlive(s);
+    node.blast = (BLAST.low + BLAST.high) / 2;
+    step(s);
+  }
+};
+/** Walks until there, going on past each hazard safe mode stops at, as a player who has read the warning does. */
 const arrive = (s: GameState) => {
-  while (s.path.length) {
+  for (let guard = 0; guard < 100000 && (s.path.length || s.halt); guard += 1) {
+    if (s.halt) walkTo(s, s.halt.target);
     keepAlive(s);
     step(s);
   }
@@ -37,6 +48,9 @@ const createGame = (seed: number): GameState => {
   return s;
 };
 const warehouse = (s: GameState) => s.nodes.find((n) => n.type === WAREHOUSE)!;
+/** A vein grade's [smallest, largest] size, from the ore data. */
+/** A grade's vein sizes, scaled as veins are. */
+const grade = (id: string): number[] => RICHNESS.find((r) => r.id === id)!.size.map((n) => n * VEINS.sizeScale);
 /** Enough tubes in the bag to pipe out to either riverbank, twice over. */
 const tubes = (s: GameState) => addTo(s.inv, "iron_tube", 160);
 /** Gives a node a fully wound motor, for tests that aren't about power. */
@@ -101,9 +115,18 @@ const press = (s: GameState, id: number, times: number) => {
 /** Walks out, mines by hand, walks home and banks the ore. */
 function gather(s: GameState, family: string, amount: number) {
   let left = amount;
+  // Only S0's essentials are promised near the base. A chain test that needs more lays a vein of its own,
+  // a little way out, so it tests the chain rather than how lucky the map is.
+  const stock = s.sites.filter((x) => matches(x.ore, family)).reduce((n, x) => n + x.left, 0);
+  if (stock < amount) {
+    const ore = SURFACE_ORES.find((id) => matches(id, family))!;
+    const spot = { x: 6, y: 3 + s.sites.length % 5 };
+    s.sites.push({ id: s.sites.length, ore, ...spot, total: amount - stock, left: amount - stock, seed: 1 });
+  }
   for (const site of s.sites.filter((x) => matches(x.ore, family))) {
     while (left > 0 && site.left > 0) {
-      walkTo(s, site);
+      // A vein runs over several cells: go to one that still holds ore.
+      walkTo(s, cellsOf(site).find((cell) => cell.left > 0)!);
       arrive(s);
       let carried = 0;
       while (carried < 300 && left > 0 && mine(s)) {
@@ -124,10 +147,12 @@ describe("world", () => {
     expect(generateSites(7)).not.toEqual(generateSites(8));
   });
 
-  it("puts every surface ore near the base, whatever its size", () => {
+  it("promises no vein near the base: only food is laid there, the rest is rolled like anywhere else", () => {
+    expect(VEINS.starter.families).toEqual([]);
     for (let seed = 1; seed <= 300; seed += 1) {
       const sites = generateSites(seed);
-      for (const ore of SURFACE_ORES) expect(sites.filter((x) => x.ore === ore).length).toBe(3);
+      expect(sites.filter((x) => SURFACE_ORES.includes(x.ore))).toEqual([]);
+      expect(sites.some((x) => FORAGE.includes(x.ore))).toBe(true);
     }
   });
 });
@@ -162,8 +187,8 @@ describe("endless map", () => {
       return list;
     };
     for (const total of [...sizes(5), ...sizes(5000)]) {
-      expect(total).toBeGreaterThanOrEqual(12);
-      expect(total).toBeLessThanOrEqual(360);
+      expect(total).toBeGreaterThanOrEqual(grade("scarce")[0]);
+      expect(total).toBeLessThanOrEqual(grade("rich")[1]);
     }
   });
 
@@ -173,7 +198,7 @@ describe("endless map", () => {
     expect(s.path).toEqual([{ x: BASE.x + 1, y: BASE.y }]);
     // Nothing moves before a full step's time has passed.
     let ticks = 0;
-    while (s.player.x === BASE.x) {
+    while (s.player.x === BASE.x && ticks < 1000) {
       step(s);
       ticks += 1;
     }
@@ -212,7 +237,8 @@ describe("endless map", () => {
     const s = createGame(9);
     walkTo(s, { x: 500, y: 300 });
     arrive(s);
-    const cells = s.sites.map((v) => `${v.x},${v.y}`);
+    // On either layer, as each layer counts its own cells.
+    const cells = s.sites.flatMap((v) => cellsOf(v).map((c) => `${c.z ?? 0},${c.x},${c.y}`));
     expect(new Set(cells).size).toBe(cells.length);
   });
 });
@@ -224,10 +250,12 @@ describe("rules", () => {
     }
   });
 
-  it("limits mining to the vein", () => {
-    const s = createGame(1);
+  it("limits mining to the cell underfoot", () => {
+    const s = gameWithVeins(1);
     const site = s.sites[0];
-    site.left = 2;
+    const cell = site.cells!.find((c) => c.x === site.x && c.y === site.y)!;
+    site.left -= cell.left - 2;
+    cell.left = 2;
     walkTo(s, site);
     arrive(s);
     expect(siteHere(s)).toBe(site);
@@ -239,7 +267,7 @@ describe("rules", () => {
     walkTo(s, s.sites[0]);
     arrive(s);
     expect(atBase(s)).toBe(false);
-    expect(placeMachine(s, "smelter", 0, 0)).toBeNull();
+    expect(placeMachine(s, "brick_kiln", 0, 0)).toBeNull();
   });
 
   it("keeps machines running while the player is away", () => {
@@ -254,13 +282,15 @@ describe("rules", () => {
 
   it("stops a machine when an unconnected by-product fills up", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    furnace.ins.iron_ore = { id: "Lm", n: 16 };
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.ins.iron_ore = { id: "Lm", n: 15 };
     furnace.fuel = { id: "Lg", n: 16 };
     furnace.outs.slag = OUTPUT_CAP;
     expect(status(furnace)).toBe("blocked");
-    run(s, 12);
-    expect(furnace.ins.iron_ore!.n).toBe(16);
+    // Even with the bellows holding the blast in the zone, nothing moves.
+    blown(s, furnace, 12);
+    expect(furnace.ins.iron_ore!.n).toBe(15);
+    expect(furnace.progress).toBe(0);
   });
 
   it("enforces the port limit", () => {
@@ -277,10 +307,10 @@ describe("rules", () => {
 
   it("only offers materials the target can use", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const forge = placeMachine(s, "hand_forge", 0, 0)!;
     const hammer = placeMachine(s, "plate_hammer", 0, 0)!;
-    expect(connectOptions(s, furnace.id, hammer.id)).toEqual(["main"]);
-    expect(connectOptions(s, hammer.id, furnace.id)).toEqual([]);
+    expect(connectOptions(s, forge.id, hammer.id)).toEqual(["main"]);
+    expect(connectOptions(s, hammer.id, forge.id)).toEqual([]);
   });
 
   it("returns a removed machine's contents to the warehouse", () => {
@@ -294,19 +324,21 @@ describe("rules", () => {
 
   it("survives a save round trip", () => {
     const s = createGame(3);
-    placeMachine(s, "smelter", 5, 5);
+    placeMachine(s, "bloomery", 5, 5);
     run(s, 1);
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
 });
 
 describe("materials", () => {
-  const smelt = (ore: string) => {
+  /** One batch of ore through a bloomery, with the bellows held in the zone. */
+  const smelt = (ore: string, n: number) => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    furnace.ins.iron_ore = { id: ore, n: 2 };
-    furnace.fuel = { id: "Lg", n: 2 };
-    run(s, 7);
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.ins.iron_ore = { id: ore, n };
+    furnace.fuel = { id: "Lg", n: 4 };
+    // Long enough for the slowest batch, sulfide copper at 12 s, and not for a second one.
+    blown(s, furnace, 13);
     return furnace;
   };
 
@@ -317,10 +349,31 @@ describe("materials", () => {
     expect(itemName("iron_cylinder")).toBe("철 실린더");
   });
 
-  it("lets the ore decide what the smelter makes", () => {
-    expect(smelt("Lm").outs.iron).toBe(1);
-    expect(smelt("Ml").outs.copper).toBe(1);
-    expect(machineForms("smelter")).toEqual([]);
+  it("lights the bloomery's fire only once the bellows blow it into the green", () => {
+    const s = createGame(1);
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.ins.iron_ore = { id: "Lm", n: 3 };
+    furnace.fuel = { id: "Lg", n: 4 };
+    for (let i = 0; i < 30; i += 1) step(s);
+    // Loaded, but cold: no fuel burnt, nothing done.
+    expect(furnace.fuel).toEqual({ id: "Lg", n: 4 });
+    expect(furnace.heat ?? 0).toBe(0);
+    while ((furnace.blast ?? 0) < BLAST.low) workMachine(s, furnace.id);
+    step(s);
+    expect(furnace.fuel).toEqual({ id: "Lg", n: 3 });
+    expect(furnace.heat).toBeGreaterThan(0);
+  });
+
+  it("lets the ore decide what the bloomery makes", () => {
+    // Iron ore gives a bloom for the forge; oxide and sulfide copper ore give copper outright.
+    expect(smelt("Lm", 3).outs.bloom).toBe(1);
+    expect(smelt("Ml", 2).outs.copper).toBe(1);
+    expect(smelt("Cc", 3).outs.copper).toBe(1);
+    // Pyrite is an iron ore with a roast of its own: less iron for the ore, and sulfur powder besides.
+    const pyrite = smelt("Py", 4);
+    expect(pyrite.outs.bloom).toBe(1);
+    expect(pyrite.outs.sulfur).toBe(2);
+    expect(machineForms("bloomery")).toEqual([]);
   });
 
   it("lets the metal decide the plate, with no form choice on the hammer", () => {
@@ -332,21 +385,21 @@ describe("materials", () => {
     expect(hammer.outs.copper_plate).toBe(1);
   });
 
-  it("gives the smelter one metal slot and two by-product slots", () => {
-    expect(processOf("smelter", "").outSlots).toEqual([["iron", "copper"], ["slag"], []]);
+  it("gives the bloomery one metal slot and one by-product slot", () => {
+    expect(processOf("bloomery", "").outSlots).toEqual([["bloom", "copper"], ["slag", "sulfur"]]);
     // Pig iron makes its own tube, a kind of iron tube.
     expect(processOf("forming_bench", "tube").outSlots).toEqual([["iron_tube", "copper_tube", "pig_iron_tube"]]);
   });
 
   it("stops when the metal slot still holds another metal", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    furnace.outs.iron = 3;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.outs.bloom = 3;
     furnace.ins.iron_ore = { id: "Ml", n: 2 };
     furnace.fuel = { id: "Lg", n: 1 };
     expect(status(furnace)).toBe("blocked");
-    furnace.outs.iron = 0;
-    expect(status(furnace)).toBe("run");
+    furnace.outs.bloom = 0;
+    expect(status(furnace)).toBe("manual");
   });
 
   it("works softer metals faster", () => {
@@ -362,7 +415,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick", "blade", "spear"]);
   });
 
   it("makes the chosen form from whichever metal goes in", () => {
@@ -404,9 +457,9 @@ describe("materials", () => {
     const s = createGame(1);
     const bench = placeMachine(s, "forming_bench", 0, 0)!;
     const boiler = placeMachine(s, "boiler_bench", 0, 0)!;
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const forge = placeMachine(s, "hand_forge", 0, 0)!;
     bench.ins.iron = { id: "iron", n: 3 };
-    connect(s, furnace.id, bench.id, "main");
+    connect(s, forge.id, bench.id, "main");
     connect(s, bench.id, boiler.id, "main");
     setForm(s, bench.id, "cylinder");
     expect(s.lines.map((l) => l.material)).toEqual(["main"]);
@@ -445,7 +498,6 @@ describe("manual work", () => {
   });
 
   it("leaves fuel-fired machines automatic", () => {
-    expect(machineManual("smelter")).toBeUndefined();
     expect(machineManual("brick_kiln")).toBeUndefined();
     expect(machineManual("plate_hammer")).toBe("rhythm");
     expect(machineManual("bloomery")).toBe("bellows");
@@ -481,13 +533,13 @@ describe("labels and lines", () => {
 
   it("gives a warehouse one channel, because it has no filter", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    expect(routeMaterials(s, warehouse(s).id, furnace.id)).toEqual(["all"]);
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    expect(routeMaterials(s, warehouse(s).id, kiln.id)).toEqual(["all"]);
   });
 
   it("gives a machine main and by-product channels", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     expect(routeMaterials(s, furnace.id, warehouse(s).id)).toEqual(["main", "byproduct"]);
     const hammer = placeMachine(s, "plate_hammer", 0, 0)!;
     expect(routeMaterials(s, hammer.id, warehouse(s).id)).toEqual(["main"]);
@@ -495,34 +547,34 @@ describe("labels and lines", () => {
 
   it("fills from the first slot, then moves on to what the target still needs", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
     const store = warehouse(s);
-    store.store[0] = { id: "Lm", n: 2 };
-    store.store[1] = { id: "Kn", n: 5 };
+    store.store[0] = { id: "Kn", n: 2 };
+    store.store[1] = { id: "Lm", n: 5 };
     store.store[2] = { id: "Lg", n: 1 };
-    route(s, store.id, furnace.id, "all");
+    route(s, store.id, kiln.id, "all");
     run(s, 2);
-    expect(furnace.ins.iron_ore).toEqual({ id: "Lm", n: 2 });
-    // The coal went to the firebox, and the furnace has already started burning it.
+    expect(kiln.ins.clay).toEqual({ id: "Kn", n: 2 });
+    // The coal went to the firebox, and the kiln has already started burning it.
     expect(store.store[2]).toBeNull();
-    expect(!!furnace.fuel || (furnace.heat ?? 0) > 0).toBe(true);
-    expect(store.store[1]).toEqual({ id: "Kn", n: 5 });
+    expect(!!kiln.fuel || (kiln.heat ?? 0) > 0).toBe(true);
+    expect(store.store[1]).toEqual({ id: "Lm", n: 5 });
   });
 
-  it("runs a furnace from one warehouse on a single line", () => {
+  it("runs a kiln from one warehouse on a single line", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
     const store = warehouse(s);
-    store.store[0] = { id: "Lm", n: 20 };
+    store.store[0] = { id: "Kn", n: 20 };
     store.store[1] = { id: "Lg", n: 10 };
-    route(s, store.id, furnace.id, "all");
+    route(s, store.id, kiln.id, "all");
     run(s, 40);
-    expect(furnace.outs.iron).toBeGreaterThan(3);
+    expect(kiln.outs.brick).toBeGreaterThan(3);
   });
 
   it("has no filter: two ores in one warehouse both go in", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     const store = warehouse(s);
     store.store[0] = { id: "Ml", n: 1 };
     store.store[1] = { id: "Lm", n: 1 };
@@ -533,20 +585,20 @@ describe("labels and lines", () => {
 
   it("keeps by-products off the main channel", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    furnace.outs.iron = 1;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.outs.bloom = 1;
     furnace.outs.slag = 1;
     route(s, furnace.id, warehouse(s).id, "main");
     run(s, 2);
     expect(furnace.outs.slag).toBe(1);
-    expect(furnace.outs.iron).toBe(0);
+    expect(furnace.outs.bloom).toBe(0);
   });
 
   it("switches a channel back off", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    route(s, warehouse(s).id, furnace.id, "all");
-    route(s, warehouse(s).id, furnace.id, "all");
+    const kiln = placeMachine(s, "brick_kiln", 0, 0)!;
+    route(s, warehouse(s).id, kiln.id, "all");
+    route(s, warehouse(s).id, kiln.id, "all");
     expect(carrying(s)).toEqual([]);
   });
 
@@ -621,7 +673,7 @@ describe("warehouses", () => {
   it("moves goods between lines into a built warehouse", () => {
     const s = withParts();
     const extra = buildWarehouse(s);
-    const yard = placeMachine(s, "smelter", 0, 0)!;
+    const yard = placeMachine(s, "hand_forge", 0, 0)!;
     yard.outs.iron = 2;
     connect(s, yard.id, extra.id, "main");
     power(s, yard.id);
@@ -634,7 +686,7 @@ describe("slot roles", () => {
   it("names slots by what they are for, not by the material", () => {
     // Fuel has its own firebox, so recipe slots only hold materials.
     expect(processOf("brick_kiln", "").slots.map((slot) => inputRole(slot.key))).toEqual(["재료"]);
-    expect(processOf("smelter", "").slots.map((slot) => inputRole(slot.key))).toEqual(["재료"]);
+    expect(processOf("bloomery", "").slots.map((slot) => inputRole(slot.key))).toEqual(["재료"]);
     expect([0, 1, 2].map(outputRole)).toEqual(["결과", "부산물", "부산물"]);
   });
 });
@@ -663,11 +715,11 @@ describe("item index", () => {
       return recipeOf(node);
     };
     // Slots keep the names of each machine's first recipe, so old saves still fit.
-    expect(nodeProcess(placeMachine(s, "smelter", 0, 0)!).slots[0].key).toBe("iron_ore");
-    expect(run("smelter", [["Ml", 2]])).toMatchObject({ id: "copper", out: { copper: 1 } });
-    expect(run("smelter", [["Cc", 3]])).toMatchObject({ id: "copper_sulfide_smelt", in: { copper_sulfide: 3 }, out: { copper: 1 } });
+    expect(nodeProcess(placeMachine(s, "bloomery", 0, 0)!).slots[0].key).toBe("iron_ore");
+    expect(run("bloomery", [["Ml", 2]])).toMatchObject({ id: "copper", out: { copper: 1, slag: 1 } });
+    expect(run("bloomery", [["Cc", 3]])).toMatchObject({ id: "copper_sulfide_smelt", in: { copper_sulfide: 3 }, out: { copper: 1 } });
     expect(run("blast_furnace", [["Cc", 4], ["coke", 2], ["Ls", 1]])).toMatchObject({ id: "copper_matte", out: { copper_matte: 3 } });
-    expect(run("blast_furnace", [["Hm", 4], ["coke", 2], ["Ls", 1]])).toMatchObject({ id: "iron_blast" });
+    expect(run("blast_furnace", [["Py", 4], ["coke", 2], ["Ls", 1]])).toMatchObject({ id: "iron_blast" });
     expect(run("converter", [["copper_matte", 2]])).toMatchObject({ id: "copper_converted", out: { copper: 2 } });
     expect(run("converter", [["iron", 4]])).toMatchObject({ id: "steel" });
     expect(machineName("converter")).toBe("전로");
@@ -690,9 +742,11 @@ describe("item index", () => {
   });
 
   it("shows how an item is made", () => {
-    // By hand in S0, and on the smelter from S1-1.
+    // Iron is forged by hand from a bloom, and stays that way through S1-1 and S1-2.
     expect(ids(recipesFor("iron"))).toEqual(["forge_iron"]);
-    expect(ids(recipesFor("iron", 1))).toEqual(expect.arrayContaining(["forge_iron", "iron_bloom"]));
+    expect(ids(recipesFor("iron", 2))).toEqual(["forge_iron"]);
+    expect(ids(recipesFor("bloom", 1))).toEqual(["bloomery_bloom", "pyrite_roast"]);
+    expect(ids(recipesFor("copper", 1))).toEqual(expect.arrayContaining(["copper", "copper_sulfide_smelt"]));
     expect(ids(recipesFor("copper_tube", 1))).toEqual(["tube_copper"]);
   });
 
@@ -719,7 +773,8 @@ describe("item index", () => {
   });
 
   it("knows which machines burn fuel", () => {
-    expect(burners(1)).toEqual(expect.arrayContaining(["brick_kiln", "smelter"]));
+    expect(burners(1)).toEqual(expect.arrayContaining(["brick_kiln", "bloomery"]));
+    expect(burners(1)).not.toContain("smelter");
     expect(burners(1)).not.toContain("plate_hammer");
   });
 
@@ -790,7 +845,7 @@ describe("moving items by hand", () => {
 
   it("feeds a machine from the cursor, whole or one at a time", () => {
     const s = bag(["Lm", 10]);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     clickStack(s, s.inv, 0, "left");
     clickInput(s, furnace.id, "iron_ore", "right");
     expect(furnace.ins.iron_ore).toEqual({ id: "Lm", n: 1 });
@@ -803,7 +858,7 @@ describe("moving items by hand", () => {
 
   it("refuses the wrong material in a machine slot", () => {
     const s = bag(["Kn", 4]);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     clickStack(s, s.inv, 0, "left");
     clickInput(s, furnace.id, "iron_ore", "left");
     expect(furnace.ins.iron_ore).toBeNull();
@@ -812,16 +867,16 @@ describe("moving items by hand", () => {
 
   it("takes machine output onto the cursor", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    furnace.outs.iron = 5;
-    clickOutput(s, furnace.id, "iron", "right");
-    expect(s.cursor).toEqual({ id: "iron", n: 3 });
-    expect(furnace.outs.iron).toBe(2);
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.outs.bloom = 5;
+    clickOutput(s, furnace.id, "bloom", "right");
+    expect(s.cursor).toEqual({ id: "bloom", n: 3 });
+    expect(furnace.outs.bloom).toBe(2);
   });
 
   it("nudges single items with empty hands", () => {
     const s = bag(["Lm", 2]);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     expect(nudgeToNode(s, 0, furnace.id)).toBe(true);
     expect(furnace.ins.iron_ore).toEqual({ id: "Lm", n: 1 });
     expect(wheelInput(s, furnace.id, "iron_ore", "out")).toBe(true);
@@ -896,7 +951,7 @@ describe("seasons", () => {
   });
 
   it("closes food in winter but never ore", () => {
-    const s = createGame(1);
+    const s = gameWithVeins(1);
     skip(s, 3);
     expect(s.season).toBe(3);
     expect(s.sites.filter((v) => v.ore === "Be" || v.ore === "Mu").some((v) => canHarvest(s, v))).toBe(false);
@@ -945,11 +1000,11 @@ describe("carrying weight", () => {
     const s = createGame(1);
     expect(walkTime(s)).toBe(WALK_MS);
     s.inv[0] = { id: "Lm", n: 40 };
-    expect(walkTime(s)).toBe(WALK_MS * 2);
+    expect(walkTime(s)).toBeCloseTo(WALK_MS * (1 + LOAD_SLOW));
   });
 
   it("stops mining at the limit", () => {
-    const s = createGame(1);
+    const s = gameWithVeins(1);
     const site = s.sites[0];
     walkTo(s, site);
     arrive(s);
@@ -972,7 +1027,7 @@ describe("carrying weight", () => {
 describe("spring power", () => {
   const setup = () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "brick_kiln", 0, 0)!;
     const store = warehouse(s);
     store.store[0] = { id: "Lg", n: 10 };
     connect(s, store.id, furnace.id, "all");
@@ -1015,7 +1070,7 @@ describe("spring power", () => {
   it("shares one drive's rate across every belt of its network", () => {
     const { s, store } = setup();
     driven(s, store, SPRING_MAX);
-    for (let i = 0; i < 3; i += 1) connect(s, store.id, placeMachine(s, "smelter", 0, 0)!.id, "all");
+    for (let i = 0; i < 3; i += 1) connect(s, store.id, placeMachine(s, "brick_kiln", 0, 0)!.id, "all");
     run(s, 1);
     expect(beltNetOf(store.id)).toMatchObject({ belts: 4, rate: DRIVE_RATE / 4 });
   });
@@ -1073,7 +1128,7 @@ describe("spring power", () => {
     const motor = placeMachine(s, MOTOR, 0, 0)!;
     const drive = placeMachine(s, BELT_DRIVE, 0, 0)!;
     expect(routeMaterials(s, motor.id, drive.id)).toEqual([POWER]);
-    // A smelter burns fuel and its belts run on a drive, so a power line would do nothing.
+    // A kiln burns fuel and its belts run on a drive, so a power line would do nothing.
     expect(routeMaterials(s, motor.id, furnace.id)).toEqual([]);
     expect(routeMaterials(s, store.id, motor.id)).toEqual([]);
     expect(routeMaterials(s, drive.id, store.id)).toEqual([DRIVE]);
@@ -1089,23 +1144,57 @@ describe("spring power", () => {
   });
 });
 
+describe("map notes", () => {
+  it("keeps a note on a place, trimmed and cut to length, through a save; a blank note removes it", () => {
+    const s = createGame(1);
+    const site = s.sites[0];
+    expect(setNote(s, site.id, "  철 많음, 강 건너  ")).toBe(true);
+    expect(site.note).toBe("철 많음, 강 건너");
+    expect(setNote(s, site.id, "x".repeat(NOTE_MAX + 10))).toBe(true);
+    expect(site.note).toHaveLength(NOTE_MAX);
+    expect(loadSave(JSON.parse(JSON.stringify(s)))!.sites[0].note).toBe(site.note);
+    setNote(s, site.id, "   ");
+    expect(site.note).toBeUndefined();
+    expect(setNote(s, 99999, "없는 곳")).toBe(false);
+  });
+});
+
 describe("test preset", () => {
-  it("starts with a motor driving a smelter that actually runs", () => {
+  it("starts with a motor driving a brick kiln that actually runs", () => {
     const s = createTestGame(1);
-    const smelter = s.nodes.find((n) => n.type === "smelter")!;
+    const kiln = s.nodes.find((n) => n.type === "brick_kiln")!;
     const motor = s.nodes.find((n) => n.type === MOTOR)!;
     expect(motor.energy).toBe(SPRING_MAX);
     run(s, 12);
-    expect(warehouse(s).store.some((slot) => slot?.id === "iron")).toBe(true);
+    expect(warehouse(s).store.some((slot) => slot?.id === "brick")).toBe(true);
     expect(motor.energy).toBeLessThan(SPRING_MAX);
-    expect(smelter.progress + (warehouse(s).store.find((x) => x?.id === "slag")?.n ?? 0)).toBeGreaterThan(0);
+    expect(kiln.progress + (warehouse(s).store.find((x) => x?.id === "brick")?.n ?? 0)).toBeGreaterThan(0);
   });
 
   it("stocks the parts to build every machine open so far", () => {
     const s = createTestGame(1);
-    // Raw materials, metals, parts, and three shelves of built machines.
-    expect(s.nodes.filter((n) => n.type === WAREHOUSE).length).toBe(6);
+    // Raw materials, metals, parts, field kit, and as many shelves of built machines as it takes to hold them.
+    const shelves = Math.ceil(machinesAt(s.stage).length / warehouse(s).store.length);
+    expect(s.nodes.filter((n) => n.type === WAREHOUSE).length).toBe(4 + shelves);
     for (const type of machinesAt(s.stage)) expect([type, canAfford(s, type)]).toEqual([type, true]);
+  });
+
+  it("holds every ore, and sends the player out fully equipped with no tutorial", () => {
+    const s = createTestGame(1);
+    for (const ore of ["Kn", "Lm", "Py", "Mt", "Ml", "Cc", "Ls", "Lg", "Bt", "An"]) expect([ore, countOf(s, ore) > 0]).toEqual([ore, true]);
+    expect(s.gear).toEqual({ feet: "iron_boots", back: "iron_pack", hand: "iron_pick", weapon: "iron_blade" });
+    expect(countOf(s, "iron_drum")).toBeGreaterThan(0);
+    expect(s.tutorial?.off).toBe(true);
+  });
+
+  it("shows the map far enough out to find every biome, on a world of its own", () => {
+    const s = createTestGame(4);
+    const seen = new Set<string>();
+    for (let x = -160; x <= 160; x += 4) {
+      for (let y = -96; y <= 96; y += 4) if (isRevealed(s, x, y)) seen.add(biomeAt(x, y, s.seed));
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(4);
+    expect(createTestGame(5).sites.map((v) => `${v.x},${v.y}`)).not.toEqual(s.sites.map((v) => `${v.x},${v.y}`));
   });
 
   it("keeps two of every machine open so far, built and ready to install", () => {
@@ -1114,15 +1203,16 @@ describe("test preset", () => {
     for (const type of machinesAt(s.stage)) expect([type, countOf(s, type) >= 2]).toEqual([type, true]);
   });
 
-  it("runs the smelter's belts on a belt drive driven by the motor", () => {
+  it("runs the kiln's belts on a belt drive driven by the motor", () => {
     const s = createTestGame(1);
-    const smelter = s.nodes.find((n) => n.type === "smelter")!;
+    const kiln = s.nodes.find((n) => n.type === "brick_kiln")!;
     const drive = s.nodes.find((n) => n.type === BELT_DRIVE)!;
     expect(s.lines.some((l) => l.to === drive.id && l.material === POWER)).toBe(true);
     expect(s.lines.some((l) => l.from === drive.id && l.material === DRIVE)).toBe(true);
     run(s, 3);
-    expect(beltNetOf(smelter.id)).toMatchObject({ running: 1, belts: 3 });
-    expect(Object.values(smelter.ins).some((slot) => slot) || !!smelter.fuel).toBe(true);
+    // Materials in, bricks back: two belts on the one drive.
+    expect(beltNetOf(kiln.id)).toMatchObject({ running: 1, belts: 2 });
+    expect(Object.values(kiln.ins).some((slot) => slot) || !!kiln.fuel).toBe(true);
   });
 
   it("runs a belt drive and a piping riverbank pump off one spring motor", () => {
@@ -1148,7 +1238,7 @@ describe("test preset", () => {
 describe("costly routes", () => {
   it("needs parts to connect anything", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     expect(canAffordRoute(s, warehouse(s).id, "all")).toBe(false);
     expect(toggleRoute(s, warehouse(s).id, furnace.id, "all")).toBe(false);
     expect(s.lines).toEqual([]);
@@ -1156,7 +1246,7 @@ describe("costly routes", () => {
 
   it("charges a belt for an item line", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     const store = warehouse(s).id;
     // Any belt will do, or the kind picked.
     expect(routeCost(s, store, "all")).toEqual({ belt: 1 });
@@ -1182,7 +1272,7 @@ describe("costly routes", () => {
 
   it("gives the parts back when a route or machine goes", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     s.inv[0] = { id: "iron_belt", n: 1 };
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
@@ -1194,7 +1284,7 @@ describe("costly routes", () => {
 
   it("pays for a line from the bag, never a warehouse", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     addTo(warehouse(s).store, "iron_belt", 5);
     expect(canAffordRoute(s, warehouse(s).id, "all")).toBe(false);
     expect(toggleRoute(s, warehouse(s).id, furnace.id, "all")).toBe(false);
@@ -1203,7 +1293,7 @@ describe("costly routes", () => {
 
   it("puts a taken-down line's belt in the bag, not a warehouse", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     s.inv[0] = { id: "iron_belt", n: 1 };
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
@@ -1213,7 +1303,7 @@ describe("costly routes", () => {
 
   it("refuses to take a line down into a full bag", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     s.inv[0] = { id: "iron_belt", n: 1 };
     toggleRoute(s, warehouse(s).id, furnace.id, "all");
     s.inv = s.inv.map(() => ({ id: "Lm", n: 64 }));
@@ -1327,7 +1417,36 @@ describe("map knowledge", () => {
     for (let x = 0; x < 400 && !terrain(peak.x, peak.y, s.seed)[2]; x += 1) {
       for (let y = -30; y < 30; y += 1) if (terrain(x, y, s.seed)[2] === 3) peak = { x, y };
     }
-    expect(visionAt(s, peak)).toBe(visionAt(s, { x: 1000, y: 1000 }) + 6);
+    // Against flat open ground, so no biome rule muddles the comparison.
+    expect(visionAt(s, peak) - (BIOMES[biomeAt(peak.x, peak.y, s.seed)].rules?.vision ?? 0)).toBe(REVEAL + 6);
+  });
+
+  it("sees less in a forest, walks slower in a marsh, and hungers faster in a desert", () => {
+    const s = createGame(1);
+    const find = (id: string) => {
+      for (let r = 80; r < 2000; r += 7) {
+        for (let a = 0; a < 24; a += 1) {
+          const x = Math.round(Math.cos(a) * r);
+          const y = Math.round(Math.sin(a) * r * 0.6);
+          if (biomeAt(x, y, s.seed) === id && terrain(x, y, s.seed)[2] === 0 && terrain(x, y, s.seed)[1] !== "t-water") return { x, y };
+        }
+      }
+      throw new Error(`no ${id}`);
+    };
+    const plain = walkTime(s);
+    s.player = find("forest");
+    expect(visionAt(s, s.player)).toBe(REVEAL - 1);
+    s.player = find("marsh");
+    expect(walkTime(s)).toBeCloseTo(plain * 1.5);
+    // Hunger over a minute, stepping without the helper that keeps the player fed.
+    const hungerOver = (at: { x: number; y: number }) => {
+      s.player = at;
+      s.hunger = 100;
+      s.hungerTimer = 0;
+      for (let i = 0; i < 600; i += 1) step(s);
+      return 100 - s.hunger;
+    };
+    expect(hungerOver(find("desert"))).toBeGreaterThan(hungerOver({ x: 0, y: 0 }));
   });
 
 });
@@ -1335,10 +1454,11 @@ describe("map knowledge", () => {
 describe("scale", () => {
   it("keeps a large factory well inside the step budget", () => {
     const s = createGame(1);
-    const nodes = Array.from({ length: 400 }, () => placeMachine(s, "plate_hammer", 0, 0)!);
+    // Kilns that fire on their own, each sending bricks to a boiler bench.
+    const nodes = Array.from({ length: 400 }, () => placeMachine(s, "boiler_bench", 0, 0)!);
     const furnaces = Array.from({ length: 200 }, () => {
-      const f = placeMachine(s, "smelter", 0, 0)!;
-      f.ins.iron_ore = { id: "Lm", n: 16 };
+      const f = placeMachine(s, "brick_kiln", 0, 0)!;
+      f.ins.clay = { id: "Kn", n: 16 };
       f.fuel = { id: "Lg", n: 16 };
       return f;
     });
@@ -1380,26 +1500,55 @@ describe("survival", () => {
     expect(s.hp).toBe(50);
   });
 
-  it("hurts on hills and water, and is safe on open ground", () => {
+  it("hurts on a change of height and on going into water, and costs nothing along a ridge", () => {
     const s = createGame(1);
-    const find = (cls: string) => {
-      for (let x = 1; x < 400; x += 1) {
-        for (let y = -40; y < 40; y += 1) {
-          if (terrain(x, y, s.seed)[1] === cls && !s.sites.some((v) => v.x === x && v.y === y)) return { x, y };
-        }
-      }
-      throw new Error("no " + cls);
-    };
-    for (const [cls, damage] of [["t-hill", 2], ["t-water", 3]] as const) {
-      const target = find(cls);
-      s.player = { x: target.x, y: target.y - 1 };
+    const free = (x: number, y: number) => !s.sites.some((v) => cellsOf(v).some((c) => c.x === x && c.y === y));
+    const height = (x: number, y: number) => terrain(x, y, s.seed)[2];
+    const dry = (x: number, y: number) => terrain(x, y, s.seed)[1] !== "t-water";
+    /** Steps once from `from` to `to`, safe mode off, and gives the health it cost. */
+    const stepCost = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      s.player = { ...from };
       s.hp = MAX_VITAL;
-      s.path = [target];
+      s.path = [to];
       s.walkTimer = 0;
+      s.safeWalk = false;
       while (s.path.length) step(s);
-      const height = terrain(target.x, target.y, s.seed)[2];
-      expect(s.hp).toBe(MAX_VITAL - (cls === "t-hill" ? 1 + height : damage));
+      return MAX_VITAL - s.hp;
+    };
+    const find = (ok: (x: number, y: number) => boolean) => {
+      for (let x = 1; x < 600; x += 1) for (let y = -60; y < 60; y += 1) if (ok(x, y)) return { x, y };
+      throw new Error("no such place");
+    };
+    // Up a slope: as much as the height rises.
+    const up = find((x, y) => dry(x, y) && dry(x, y - 1) && height(x, y) > height(x, y - 1) && free(x, y));
+    expect(stepCost({ x: up.x, y: up.y - 1 }, up)).toBe(height(up.x, up.y) - height(up.x, up.y - 1));
+    // Along a ridge of one height: nothing.
+    const ridge = find((x, y) => dry(x, y) && dry(x + 1, y) && height(x, y) > 0 && height(x + 1, y) === height(x, y) && free(x + 1, y));
+    expect(stepCost(ridge, { x: ridge.x + 1, y: ridge.y })).toBe(0);
+    // Down again: as much as it falls.
+    const down = find((x, y) => dry(x, y) && dry(x, y - 1) && height(x, y - 1) > height(x, y) && free(x, y));
+    expect(stepCost({ x: down.x, y: down.y - 1 }, down)).toBe(height(down.x, down.y - 1) - height(down.x, down.y));
+    // Into water, as before.
+    const water = find((x, y) => !dry(x, y) && dry(x, y - 1) && free(x, y));
+    expect(stepCost({ x: water.x, y: water.y - 1 }, water)).toBe(3);
+  });
+
+  it("warns in safe mode of what the next step would cost from where the player stands", () => {
+    const s = createGame(1);
+    const height = (x: number, y: number) => terrain(x, y, s.seed)[2];
+    const dry = (x: number, y: number) => terrain(x, y, s.seed)[1] !== "t-water";
+    let at: { x: number; y: number } | undefined;
+    for (let x = 1; x < 600 && !at; x += 1) for (let y = -60; y < 60 && !at; y += 1) {
+      if (dry(x, y) && dry(x + 1, y) && height(x, y) === 0 && height(x + 1, y) >= 2 && !s.sites.some((v) => cellsOf(v).some((c) => c.x === x + 1 && c.y === y))) at = { x, y };
     }
+    s.player = at!;
+    // Safe mode warns only of ground the player has seen.
+    s.revealed[`${Math.floor((at!.x + 1) / 16)},${Math.floor(at!.y / 16)}`] = new Array(256).fill(1);
+    setSafeWalk(s, true);
+    walkTo(s, { x: at!.x + 1, y: at!.y });
+    for (let i = 0; i < 20 && s.path.length; i += 1) step(s);
+    expect(s.halt?.damage).toBe(height(at!.x + 1, at!.y));
+    expect(s.player).toEqual(at);
   });
 
   it("collapses to the base, loses 30% of what is carried, and keeps stored goods", () => {
@@ -1536,7 +1685,7 @@ describe("building", () => {
   it("offers only the machines open so far", () => {
     const s = createGame(1);
     expect(setForm(s, bench(s).id, "steam_hammer")).toBe(false);
-    expect(setForm(s, bench(s).id, "smelter")).toBe(true);
+    expect(setForm(s, bench(s).id, "forming_bench")).toBe(true);
   });
 
   it("installs a machine item from the bag or a warehouse, and needs one", () => {
@@ -1687,6 +1836,31 @@ describe("steam power", () => {
       expect(engine.energy).toBeGreaterThan(0);
     }
     expect(itemStats("steam")[0][1]).toContain("300");
+  });
+
+  it("turns a belt drive on steam", () => {
+    const s = steamStage();
+    const engine = engineAt(s);
+    const drive = placeMachine(s, "belt_drive", 0, 0)!;
+    const store = warehouse(s);
+    expect(connect(s, engine.id, drive.id, POWER)).toBeTruthy();
+    expect(connect(s, drive.id, store.id, DRIVE)).toBeTruthy();
+    run(s, 4);
+    expect(drive.speed).toBe(1);
+  });
+
+  it("turns a belt drive on an engine fed by a boiler", () => {
+    const s = steamStage();
+    const boiler = boilerAt(s, 200);
+    const engine = placeMachine(s, "steam_engine", 0, 0)!;
+    const drive = placeMachine(s, "belt_drive", 0, 0)!;
+    const store = warehouse(s);
+    expect(connect(s, boiler.id, engine.id, "main")).toBeTruthy();
+    expect(connect(s, engine.id, drive.id, POWER)).toBeTruthy();
+    expect(connect(s, drive.id, store.id, DRIVE)).toBeTruthy();
+    run(s, 30);
+    expect([status(engine), engine.energy, engine.ins.steam?.n, boiler.outs.steam]).toEqual(["run", expect.any(Number), expect.any(Number), expect.any(Number)]);
+    expect(drive.speed).toBe(1);
   });
 
   it("runs the steam hammer at full speed within its limit", () => {
@@ -2078,32 +2252,48 @@ describe("fluids", () => {
     expect(boiler.ins.water!.n).toBe(20);
   });
 
-  it("fills an empty drum with exactly 100 litres", () => {
+  it("fills an empty drum with exactly one drum's worth", () => {
     const { s, pump } = pumped();
+    pump.outs.water = DRUM.liters + 2;
     s.cursor = { id: "iron_drum", n: 2 };
     clickOutput(s, pump.id, "water", "left");
-    expect(pump.outs.water).toBe(50);
+    expect(pump.outs.water).toBe(2);
     expect(s.cursor).toEqual({ id: "iron_drum", n: 1 });
     expect(s.inv.some((slot) => slot?.id === "water_drum")).toBe(true);
     clickOutput(s, pump.id, "water", "left");
-    expect(pump.outs.water).toBe(50);
+    expect(pump.outs.water).toBe(2);
   });
 
   it("pours a drum into a tank and gives the empty drum back", () => {
     const { s, boiler } = pumped();
     s.cursor = { id: "water_drum", n: 1 };
     clickInput(s, boiler.id, "water", "left");
-    expect(boiler.ins.water).toEqual({ id: "water", n: 100 });
+    expect(boiler.ins.water).toEqual({ id: "water", n: DRUM.liters });
     expect(s.cursor).toEqual({ id: "iron_drum", n: 1 });
   });
 
   it("won't pour without room for the whole drum", () => {
     const { s, boiler } = pumped();
-    boiler.ins.water = { id: "water", n: TANK_CAP - 50 };
+    boiler.ins.water = { id: "water", n: TANK_CAP - DRUM.liters + 1 };
     s.cursor = { id: "water_drum", n: 1 };
     clickInput(s, boiler.id, "water", "left");
-    expect(boiler.ins.water!.n).toBe(TANK_CAP - 50);
+    expect(boiler.ins.water!.n).toBe(TANK_CAP - DRUM.liters + 1);
     expect(s.cursor).toEqual({ id: "water_drum", n: 1 });
+  });
+
+  it("fills a drum by hand at a riverbank, from the hand first, and only with an empty drum", () => {
+    const { s } = pumped();
+    const bank = s.sites.find((site) => site.ore === "water")!;
+    s.player = { x: bank.x, y: bank.y };
+    s.path = [];
+    const left = bank.left;
+    expect(mine(s)).toBe(false);
+    s.cursor = { id: "iron_drum", n: 1 };
+    expect(mine(s)).toBe(true);
+    expect(bank.left).toBe(left - DRUM.liters);
+    expect(s.cursor).toBeNull();
+    expect(s.inv.some((slot) => slot?.id === "water_drum")).toBe(true);
+    expect(mine(s)).toBe(false);
   });
 
   it("flows along a line to a machine but never into a warehouse", () => {
@@ -2271,10 +2461,10 @@ describe("blueprints", () => {
 });
 
 describe("vein grades", () => {
-  const veins = () => [...Array(3000).keys()].flatMap((seed) => generateSites(seed + 1).filter((v) => v.rich));
+  const veins = () => [...Array(3000).keys()].flatMap((seed) => withVeinsNearBase(() => generateSites(seed + 1)).filter((v) => v.rich));
 
   it("leaves the first vein near the base to luck", () => {
-    const first = [...Array(60).keys()].map((seed) => generateSites(seed + 1)[0].rich);
+    const first = [...Array(60).keys()].map((seed) => withVeinsNearBase(() => generateSites(seed + 1))[0].rich);
     expect(first).toContain("scarce");
     expect(first).toContain("normal");
   });
@@ -2290,10 +2480,10 @@ describe("vein grades", () => {
   it("scales size by grade", () => {
     const all = veins();
     const sizes = (grade: string) => all.filter((v) => v.rich === grade).map((v) => v.total);
-    expect(Math.max(...sizes("scarce"))).toBeLessThanOrEqual(36);
-    expect(Math.min(...sizes("normal"))).toBeGreaterThanOrEqual(40);
-    expect(Math.max(...sizes("normal"))).toBeLessThanOrEqual(120);
-    expect(Math.min(...sizes("rich"))).toBeGreaterThanOrEqual(120);
+    expect(Math.max(...sizes("scarce"))).toBeLessThanOrEqual(grade("scarce")[1]);
+    expect(Math.min(...sizes("normal"))).toBeGreaterThanOrEqual(grade("normal")[0]);
+    expect(Math.max(...sizes("normal"))).toBeLessThanOrEqual(grade("normal")[1]);
+    expect(Math.min(...sizes("rich"))).toBeGreaterThanOrEqual(grade("rich")[0]);
   });
 
   it("makes rich veins likelier the deeper the layer", () => {
@@ -2308,7 +2498,7 @@ describe("vein grades", () => {
   });
 
   it("grades old veins as normal", () => {
-    const s = createGame(1);
+    const s = gameWithVeins(1);
     delete s.sites[0].rich;
     upgradeSave(s);
     expect(s.sites[0].rich).toBe("normal");
@@ -2328,28 +2518,62 @@ describe("safe walking", () => {
       const target = { x: 8, y: 0 };
       setSafeWalk(s, false);
       walkTo(s, target);
-      if (hazards(s) >= 1) return { s, target };
+      // The target itself must be safe ground, or no route could avoid it.
+      if (hazards(s) >= 1 && terrain(target.x, target.y, s.seed)[2] === 0) return { s, target };
     }
     throw new Error("no hilly start");
   };
 
-  it("goes around known hazards, and ignores them when told to", () => {
+  /** Steps until the walk ends, by arriving or by safe mode stopping it. */
+  const walkOut = (s: GameState) => {
+    for (let i = 0; i < 5000 && s.path.length; i += 1) step(s);
+  };
+
+  it("in safe mode, stops short of the first known hazard and says what it is", () => {
     const { s, target } = hilly();
-    const straight = hazards(s);
     setSafeWalk(s, true);
     walkTo(s, target);
-    expect(hazards(s)).toBeLessThan(straight);
-    expect(s.path.at(-1)).toEqual(target);
-    setSafeWalk(s, false);
-    walkTo(s, target);
-    expect(hazards(s)).toBe(straight);
+    const hp = s.hp;
+    walkOut(s);
+    expect(s.halt).toBeTruthy();
+    expect(s.halt!.target).toEqual(target);
+    // Water ahead, or a step up or down a hill.
+    const ahead = terrain(s.halt!.x, s.halt!.y, s.seed);
+    const here = terrain(s.player.x, s.player.y, s.seed);
+    expect(ahead[1] === "t-water" || ahead[2] !== here[2]).toBe(true);
+    expect(s.halt!.damage).toBeGreaterThan(0);
+    // Stopped beside it, unhurt.
+    expect(Math.max(Math.abs(s.halt!.x - s.player.x), Math.abs(s.halt!.y - s.player.y))).toBe(1);
+    expect(s.hp).toBe(hp);
   });
 
-  it("re-routes a walk already under way when the mode changes", () => {
+  it("goes on into the hazard when the same walk is asked for again", () => {
     const { s, target } = hilly();
     setSafeWalk(s, true);
-    expect(s.path.at(-1)).toEqual(target);
-    expect(hazards(s)).toBe(0);
+    walkTo(s, target);
+    walkOut(s);
+    const at = { x: s.halt!.x, y: s.halt!.y };
+    walkTo(s, target);
+    expect(s.halt).toBeNull();
+    let crossed = false;
+    for (let i = 0; i < 5000 && s.path.length && !crossed; i += 1) {
+      step(s);
+      crossed = s.player.x === at.x && s.player.y === at.y;
+    }
+    expect(crossed).toBe(true);
+  });
+
+  it("walks straight through everything with safe mode off", () => {
+    const { s, target } = hilly();
+    setSafeWalk(s, false);
+    walkTo(s, target);
+    expect(hazards(s)).toBeGreaterThan(0);
+    for (let i = 0; i < 5000 && s.path.length; i += 1) {
+      keepAlive(s);
+      step(s);
+    }
+    expect(s.player).toEqual(target);
+    expect(s.halt ?? null).toBeNull();
   });
 
   it("still crosses a river when there is no way around", () => {
@@ -2360,7 +2584,7 @@ describe("safe walking", () => {
     expect(s.path.at(-1)).toEqual(far);
   });
 
-  it("walks only one cell at a time along a safe route", () => {
+  it("walks only one cell at a time", () => {
     const { s, target } = hilly();
     setSafeWalk(s, true);
     walkTo(s, target);
@@ -2553,22 +2777,11 @@ describe("S1-3", () => {
     return { s, motor };
   };
 
-  it("adds limestone veins when the stage opens", () => {
-    const s = createGame(1);
-    expect(s.sites.some((v) => v.ore === "Ls")).toBe(false);
-    s.stage = 2;
-    s.made.coke_oven = 1;
-    const hammer = (() => {
-      s.stage = 1;
-      const h = placeMachine(s, "plate_hammer", 0, 0)!;
-      s.stage = 2;
-      return h;
-    })();
-    hammer.ins.iron = { id: "iron", n: 2 };
-    power(s, hammer.id);
-    run(s, 6);
-    expect(s.stage).toBe(3);
-    expect(s.sites.filter((v) => v.ore === "Ls").length).toBeGreaterThan(0);
+  it("rolls limestone from the start: what turns up on the map doesn't wait for a stage", () => {
+    expect(stageOres(0)).toContain("Ls");
+    let found = false;
+    for (let cx = -60; cx < 60 && !found; cx += 1) for (let cy = 4; cy < 10 && !found; cy += 1) found = chunkSites(1, cx, cy).some((v) => v.ore === "Ls");
+    expect(found).toBe(true);
   });
 
   it("turns coal into coke, with tar that needs somewhere to go", () => {
@@ -2841,7 +3054,7 @@ describe("gear", () => {
     const s = createGame(1);
     const plain = walkTime(s);
     s.gear.feet = "iron_boots";
-    expect(walkTime(s)).toBeCloseTo(plain * 0.65);
+    expect(walkTime(s)).toBeCloseTo(plain * 0.91);
   });
 
   it("a pack raises the load limit", () => {
@@ -2853,24 +3066,27 @@ describe("gear", () => {
     expect(overloaded(s)).toBe(false);
   });
 
-  it("a pick takes two per strike, never more than the vein or the load allows", () => {
-    const s = createGame(1);
+  it("a pick doesn't change how much one strike takes: always one", () => {
+    const s = gameWithVeins(1);
     s.gear.hand = "iron_pick";
     const site = s.sites.find((v) => v.ore === "Lm")!;
     s.player = { x: site.x, y: site.y };
-    site.left = 3;
+    const left = site.left;
     expect(mine(s)).toBe(true);
-    expect(site.left).toBe(1);
+    expect(site.left).toBe(left - 1);
     expect(mine(s)).toBe(true);
-    expect(site.left).toBe(0);
-    expect(s.inv[0]).toEqual({ id: "Lm", n: 3 });
+    expect(site.left).toBe(left - 2);
+    expect(s.inv[0]).toEqual({ id: "Lm", n: 2 });
   });
 
   it("is made on the forming bench", () => {
     const s = createGame(1);
     const bench = placeMachine(s, "forming_bench", 0, 0)!;
     setForm(s, bench.id, "boots");
-    bench.ins.iron = { id: "iron", n: 2 };
+    // Boots take an ingot, plates and rivets now, not ingots alone.
+    bench.ins.iron = { id: "iron", n: 1 };
+    bench.ins.iron_plate = { id: "iron_plate", n: 2 };
+    bench.ins.iron_rivet = { id: "iron_rivet", n: 4 };
     power(s, bench.id);
     run(s, 9);
     expect(bench.outs.iron_boots).toBe(1);
@@ -2895,18 +3111,18 @@ describe("calendar", () => {
 describe("expected output", () => {
   it("appears only once the inputs are enough for a batch", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     expect(expectedOutput(furnace)).toEqual([]);
     furnace.ins.iron_ore = { id: "Lm", n: 1 };
     furnace.fuel = { id: "Lg", n: 1 };
     expect(expectedOutput(furnace)).toEqual([]);
-    furnace.ins.iron_ore = { id: "Lm", n: 2 };
-    expect(expectedOutput(furnace)).toEqual(["iron", "slag"]);
+    furnace.ins.iron_ore = { id: "Lm", n: 3 };
+    expect(expectedOutput(furnace)).toEqual(["bloom", "slag"]);
   });
 
   it("follows what the input decides", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
     furnace.ins.iron_ore = { id: "Ml", n: 2 };
     furnace.fuel = { id: "Lg", n: 1 };
     expect(expectedOutput(furnace)).toEqual(["copper", "slag"]);
@@ -2914,8 +3130,8 @@ describe("expected output", () => {
 
   it("stays quiet while the output is blocked", () => {
     const s = createGame(1);
-    const furnace = placeMachine(s, "smelter", 0, 0)!;
-    furnace.ins.iron_ore = { id: "Lm", n: 2 };
+    const furnace = placeMachine(s, "bloomery", 0, 0)!;
+    furnace.ins.iron_ore = { id: "Lm", n: 3 };
     furnace.fuel = { id: "Lg", n: 1 };
     furnace.outs.copper = 1;
     expect(expectedOutput(furnace)).toEqual([]);
@@ -2948,14 +3164,10 @@ describe("stage goals", () => {
     expect(goalMade(s)).toBe(0);
   });
 
-  it("opens no riverbanks before the stage that opens water", () => {
+  it("shows riverbanks from the start, like everything else on the map", () => {
     const s = newGame(1);
-    s.made.construction_bench = 1;
-    const forge = placeMachine(s, "hand_forge", 0, 0)!;
-    forge.ins.bloom = { id: "bloom", n: 1 };
-    workMachine(s, forge.id, 6);
-    expect(s.stage).toBe(1);
-    expect(s.sites.some((site) => site.ore === "water")).toBe(false);
+    expect(s.stage).toBe(0);
+    expect(s.sites.some((site) => site.ore === "water")).toBe(true);
   });
 
   it("carries an old save over without losing progress", () => {
@@ -3110,17 +3322,17 @@ describe("S0 hand work", () => {
     expect(STAGES[0].id).toBe("S0");
     expect(s.stage).toBe(0);
     expect(s.nodes.map((n) => n.type)).toEqual([WAREHOUSE, WORKBENCH]);
-    expect(placeMachine(s, "smelter", 0, 0)).toBeNull();
+    expect(placeMachine(s, "brick_kiln", 0, 0)).toBeNull();
     expect(placeMachine(s, "bloomery", 0, 0)).toBeTruthy();
   });
 
   it("makes S0's machines on the workbench, and everything after on the construction bench", () => {
     for (const type of ["open_kiln", "bloomery", "hand_forge", CONSTRUCTION]) expect(recipesFor(type)[0].machine).toBe(WORKBENCH);
-    expect(recipesFor("smelter", 1)[0].machine).toBe(CONSTRUCTION);
+    expect(recipesFor("brick_kiln", 1)[0].machine).toBe(CONSTRUCTION);
     // The workbench can't make what isn't open yet.
     const s = newGame(1);
     const bench = s.nodes.find((n) => n.type === WORKBENCH)!;
-    expect(machineForms(WORKBENCH)).not.toContain("smelter");
+    expect(machineForms(WORKBENCH)).not.toContain("brick_kiln");
     expect(setForm(s, bench.id, "bloomery")).toBe(true);
   });
 
@@ -3149,7 +3361,8 @@ describe("S0 hand work", () => {
       if (!bloomery.fuel) bloomery.fuel = { id: "Lg", n: 8 };
       run(s, 1);
       // Pump only while the blast is low enough, so it stays in the zone without overheating.
-      if ((bloomery.blast ?? 0) < BLAST.low + 10) press(s, bloomery.id, 1);
+      // Pump until the blast is in the zone, as a player does several times a second, and no further.
+      for (let k = 0; k < 5 && (bloomery.blast ?? 0) < BLAST.low + 10; k += 1) press(s, bloomery.id, 1);
       takeOutput(s, bloomery.id, "bloom");
       takeOutput(s, bloomery.id, "slag");
     }
@@ -3169,7 +3382,7 @@ describe("S0 hand work", () => {
     run(s, 1);
     expect(s.announced).toBe("S0");
     expect(s.stage).toBe(1);
-    expect(placeMachine(s, "smelter", 0, 0)).toBeTruthy();
+    expect(placeMachine(s, "brick_kiln", 0, 0)).toBeTruthy();
     console.log(`S0 finished at ${Math.round(s.time / 1000)}s of game time`);
   });
 
@@ -3193,16 +3406,20 @@ describe("S0 hand work", () => {
 describe("S1-1 playthrough", () => {
   it("builds a steam engine from nothing but clicks and lines", () => {
     const s = createGame(2026);
-    gather(s, "iron_ore", 160);
+    // Three ore make a bloom and a bloom forges into one iron, so iron takes more ore than it used to.
+    gather(s, "iron_ore", 240);
     gather(s, "coal", 120);
     gather(s, "clay", 16);
     gather(s, "copper_ore", 16);
 
     const add = (type: string) => placeMachine(s, type, 0, 0)!.id;
     const store = warehouse(s).id;
-    // Two iron smelters: one line can't feed every bench that needs iron.
-    const [bloom, parts, smelter, kiln, hammer, cast, tube, rivet, gear, rod, boiler, engine, yard, ores] = [
-      "smelter", "smelter", "smelter", "brick_kiln", "plate_hammer", "forming_bench", "forming_bench", "forming_bench", "forming_bench", "forming_bench",
+    // No smelter until the blast furnace: iron comes from bloomeries worked by the bellows and blooms
+    // hammered on hand forges, and copper from a bloomery of its own.
+    // Two iron lines: one forge can't feed every bench that needs iron.
+    const [bloomA, bloomB, cuBloom, forgeA, forgeB, kiln, hammer, cast, tube, rivet, gear, rod, boiler, engine, yard, ores] = [
+      "bloomery", "bloomery", "bloomery", "hand_forge", "hand_forge", "brick_kiln", "plate_hammer",
+      "forming_bench", "forming_bench", "forming_bench", "forming_bench", "forming_bench",
       "boiler_bench", "engine_bench", WAREHOUSE, WAREHOUSE,
     ].map(add);
     expect(setForm(s, cast, "cylinder")).toBe(true);
@@ -3222,14 +3439,15 @@ describe("S1-1 playthrough", () => {
     addTo(copperStore, "Lg", 16);
 
     const wires: [number, number, string][] = [
-      [store, bloom, "all"], [store, parts, "all"], [ores, smelter, "all"],
-      [bloom, yard, "byproduct"], [parts, yard, "byproduct"], [smelter, yard, "byproduct"],
-      [bloom, hammer, "main"], [bloom, rivet, "main"], [parts, cast, "main"], [parts, gear, "main"], [parts, rod, "main"], [smelter, tube, "main"],
+      [store, bloomA, "all"], [store, bloomB, "all"], [ores, cuBloom, "all"],
+      [bloomA, yard, "byproduct"], [bloomB, yard, "byproduct"], [cuBloom, yard, "byproduct"],
+      [bloomA, forgeA, "main"], [bloomB, forgeB, "main"],
+      [forgeA, hammer, "main"], [forgeA, rivet, "main"], [forgeB, cast, "main"], [forgeB, gear, "main"], [forgeB, rod, "main"], [cuBloom, tube, "main"],
       [hammer, boiler, "main"], [rivet, boiler, "main"], [tube, boiler, "main"], [kiln, boiler, "main"],
       [cast, engine, "main"], [boiler, engine, "main"], [gear, engine, "main"], [rod, engine, "main"],
     ];
     for (const [from, to, material] of wires) expect(connect(s, from, to, material)).toBeTruthy();
-    for (const id of [store, ores, bloom, parts, smelter, kiln, hammer, cast, tube, rivet, gear, rod, boiler]) power(s, id);
+    for (const id of [store, ores, bloomA, bloomB, cuBloom, forgeA, forgeB, kiln, hammer, cast, tube, rivet, gear, rod, boiler]) power(s, id);
     nodeById(s, kiln)!.ins.clay = { id: "Kn", n: 16 };
     nodeById(s, kiln)!.fuel = { id: "Lg", n: 8 };
 
@@ -3237,7 +3455,14 @@ describe("S1-1 playthrough", () => {
     const manual = s.nodes.filter((n) => machineManual(n.type));
     for (let i = 0; i < 6000 && !bench.outs.steam_engine_unit; i += 1) {
       run(s, 1);
-      manual.forEach((n) => press(s, n.id, 1));
+      for (const n of manual) {
+        // The bellows are pumped up into the zone, as a player does several times a second, and no further.
+        if (machineManual(n.type) === "bellows") {
+          for (let k = 0; k < 5 && (n.blast ?? 0) < BLAST.low + 10; k += 1) press(s, n.id, 1);
+          continue;
+        }
+        press(s, n.id, 1);
+      }
     }
     expect(bench.outs.steam_engine_unit).toBeGreaterThanOrEqual(1);
 

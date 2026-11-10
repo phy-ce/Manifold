@@ -19,6 +19,8 @@
     "drum": { "name": " 드럼통", "label": "드럼통", "code": "d", "weight": 1.5, "category": "product" },
     "boots": { "name": " 장화", "label": "장화", "code": "b", "weight": 0.5, "category": "gear" },
     "pack": { "name": " 틀 배낭", "label": "틀 배낭", "code": "k", "weight": 1, "category": "gear" },
-    "pick": { "name": " 곡괭이", "label": "곡괭이", "code": "x", "weight": 0.5, "category": "gear" }
+    "pick": { "name": " 곡괭이", "label": "곡괭이", "code": "x", "weight": 0.5, "category": "gear" },
+    "blade": { "name": " 칼", "label": "칼", "code": "n", "weight": 1, "category": "gear" },
+    "spear": { "name": " 창", "label": "창", "code": "j", "weight": 1.5, "category": "gear" }
   }
 }

@@ -37,7 +37,8 @@ export function expandRecipes(era, materials) {
         form: template.form,
         // Harder metals take longer to work.
         time: Math.max(1, Math.round(template.time * metal.hardness)),
-        in: { [metalId]: template.in },
+        // Gear takes finished parts besides the metal: rivets for boots, rods for a spear's shaft.
+        in: { [metalId]: template.in, ...(template.extra ?? {}) },
         out: { [id]: template.out },
       });
     }
