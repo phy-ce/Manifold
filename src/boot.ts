@@ -1,6 +1,7 @@
 // Starts the game. The language has to be chosen first, because the game's text is read as it loads.
 import "./style.css";
 import { Language, keptLanguage, restart, setLanguage, tr } from "./i18n";
+import { keyHintHtml } from "./ui/keyHint";
 
 function askLanguage(): Promise<Language> {
   return new Promise((resolve) => {
@@ -20,7 +21,14 @@ function askLanguage(): Promise<Language> {
       });
       choices.append(b);
     }
-    panel.append(title, choices);
+    // The screen is laid out for a full 1920×1080, so full screen is offered first: [F11], or a click on it.
+    // Both languages, as none is chosen yet.
+    const full = document.createElement("button");
+    full.type = "button";
+    full.className = "key-button full-screen";
+    full.innerHTML = keyHintHtml("F11", "전체 화면 · Full screen", "on");
+    full.addEventListener("click", () => void document.documentElement.requestFullscreen?.().catch(() => undefined));
+    panel.append(title, choices, full);
     document.body.append(panel);
   });
 }

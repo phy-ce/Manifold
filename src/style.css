@@ -53,7 +53,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 #app > .map-view { grid-area: centre; }
 #app > .graph-view { grid-area: centre; }
 /* The board's tools in the left column. Drop-downs (a stage's machines, a kind's list) open over the board. */
-.board-side { position: relative; z-index: 6; overflow: visible; }
+.map-side.board-side { position: relative; z-index: 6; overflow: visible; }
 .board-side .palette, .board-side .graph-tools, .board-side .roster { gap: var(--gap-sm); }
 .board-side .graph-tools input { width: 100%; }
 .board-side .roster-box { flex: 1 1 auto; min-height: 0; overflow: hidden; align-content: start; }
@@ -183,9 +183,11 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
 /* The left column: blocks of fixed height top to bottom; search results take what is left, in pages, never scrolled. */
-.map-side { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; min-height: 0; overflow: hidden; }
+/* The left column scrolls when a tall place panel (a riverbank, a vein) pushes the search down: the one place on the
+   screen that does, so the search always keeps room for at least a few results. The bar is thin and dim. */
+.map-side { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .map-side > * { flex: none; }
-.map-side > .finder { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.map-side > .finder { flex: 1 0 auto; min-height: calc(var(--control) * 7); display: flex; flex-direction: column; }
 .map-side > .box { padding: var(--gap); }
 .map-results { flex: 1 1 auto; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: var(--gap-sm); }
 .map-results .route-row { height: var(--control); }
@@ -275,6 +277,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .language-pick pre { max-width: 80vw; margin: 0; color: var(--alert); white-space: pre-wrap; }
 .language-pick button { min-width: 140px; padding: 12px 16px; color: var(--go); background: var(--panel); border: 1px solid var(--line); font: inherit; cursor: pointer; }
 .language-pick button:hover { border-color: var(--go); }
+.language-pick .full-screen { min-width: 0; color: var(--fg); }
 .inv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap-lg); }
 .inv-row > .slot-grid { flex: 1 1 0; min-width: 0; }
 .gear-grid { display: flex; gap: var(--gap); padding-left: var(--gap-lg); border-left: 1px solid var(--line); }
