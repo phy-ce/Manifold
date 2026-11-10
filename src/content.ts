@@ -347,7 +347,10 @@ function buildProcess(type: string, form: string): Process {
 export const SURFACE_ORES: string[] = Object.keys(ores).filter(
   (id) => ores[id].layers[0] === 0 && MILESTONE.unlockSources.includes(ores[id].family),
 );
-const allSurfaceOres = Object.keys(ores).filter((id) => ores[id].layers[0] === 0);
+/** Ores found on the surface: those of the top layer, and those a biome lays there too (magnetite on the snow,
+ * pyrite in the mountains), so the index lists them and says where they come from. */
+const biomeSurfaceOres = Object.values(BIOMES).flatMap((b) => b.extraOres ?? []);
+const allSurfaceOres = Object.keys(ores).filter((id) => ores[id].layers[0] === 0 || biomeSurfaceOres.includes(id));
 /** Whether an ore turns up in a layer. */
 export const inLayer = (id: string, layer: number): boolean => !!ores[id] && ores[id].layers[0] <= layer && layer <= ores[id].layers[1];
 /** Ores of the opened families that turn up in a layer. */

@@ -141,6 +141,16 @@ function gather(s: GameState, family: string, amount: number) {
   expect(left).toBe(0);
 }
 
+describe("index of biome ores", () => {
+  it("lists ores a biome lays on the surface from S0, with the bloomery among their uses", () => {
+    for (const id of ["Mt", "Py"]) {
+      expect(indexItems(0)).toContain(id);
+      expect(itemSource(id)).toBeTruthy();
+    }
+    expect(usesOf("Mt", 0).some((r) => r.machine === "bloomery")).toBe(true);
+  });
+});
+
 describe("search", () => {
   it("finds an item by name, code or category with one rule for every search box", () => {
     expect(itemMatches("Kn", "점토")).toBe(true); // kaolin is a clay
