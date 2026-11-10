@@ -5,6 +5,7 @@
 import { GameState, atBase, countOf, revealWay } from "./game";
 import { WORKBENCH, familyOf } from "../content";
 import { BASE } from "./world";
+import { getLanguage } from "../i18n";
 import tutorialData from "../../data/tutorial.json";
 
 export interface TutorialStep {
@@ -76,10 +77,14 @@ const RULES: Record<string, Rule> = {
 };
 
 /** The steps in order: the words from the data, the rules from above. A step without a rule is a mistake. */
-export const TUTORIAL: TutorialStep[] = tutorialData.steps.map((words) => {
-  const rule = RULES[words.id];
-  if (!rule) throw new Error(`Tutorial step "${words.id}" in data/tutorial.json has no rule in tutorial.ts`);
-  return { ...words, ...rule };
+/**
+ * The steps in order: the words from the data, in the language chosen (each entry carries its English beside the
+ * Korean, so a sentence is changed in one place), and the rules from above. A step without a rule is a mistake.
+ */
+export const TUTORIAL: TutorialStep[] = tutorialData.steps.map(({ en, ...ko }) => {
+  const rule = RULES[ko.id];
+  if (!rule) throw new Error(`Tutorial step "${ko.id}" in data/tutorial.json has no rule in tutorial.ts`);
+  return { ...ko, ...(getLanguage() === "en" ? en : {}), ...rule };
 });
 
 
@@ -153,9 +158,12 @@ const TIP_WHEN: Record<string, (s: GameState) => boolean> = {
 export function pendingTip(s: GameState): Tip | null {
   const t = s.tutorial;
   if (!t || t.off) return null;
-  const tips = tutorialData.tips as Record<string, { title: string; text: string }>;
+  const tips = tutorialData.tips as Record<string, { title: string; text: string; en: { title: string; text: string } }>;
   for (const [id, when] of Object.entries(TIP_WHEN)) {
-    if (!t.tips?.includes(id) && when(s) && tips[id]) return { id, ...tips[id] };
+    if (!t.tips?.includes(id) && when(s) && tips[id]) {
+      const { en, ...ko } = tips[id];
+      return { id, ...ko, ...(getLanguage() === "en" ? en : {}) };
+    }
   }
   return null;
 }

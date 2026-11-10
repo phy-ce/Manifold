@@ -26,9 +26,10 @@ describe("translation", () => {
   });
 
   it("has English for every string in the game data", () => {
-    expect([...new Set(stringsIn([era, ores, materials, biomes, tutorial]))].filter((key) => EN[key] === undefined)).toEqual([]);
+    expect([...new Set(stringsIn([era, ores, materials, biomes]))].filter((key) => EN[key] === undefined)).toEqual([]);
   });
 
+it("has English beside every tutorial word, section, title and text, and for every tip", () => {    const missing = [...tutorial.steps, ...Object.values(tutorial.tips)].flatMap((entry) => {      const words = entry as unknown as Record<string, unknown> & { en?: Record<string, string> };      return Object.entries(words).filter(([key, value]) => key !== "id" && key !== "en" && typeof value === "string" && (!words.en?.[key] || korean.test(words.en[key]))).map(([key]) => `${String(words.id ?? words.title)}.${key}`);    });    expect(missing).toEqual([]);  });
   it("leaves no Korean outside tr() in the code", () => {
     const left = sources.flatMap((file) => readFileSync(file, "utf8").split(/\r?\n/)
       .map((line) => line.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "").replace(/\btr\("(?:[^"\\]|\\.)*"\)/g, ""))
