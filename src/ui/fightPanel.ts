@@ -170,7 +170,7 @@ export class FightPanel {
       if (x >= 0 && x < W && y >= 0 && y < H) this.strike(this.picks[y * W + x]);
     });
     this.canvas.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
+      if (event.key === "Enter") {
         event.preventDefault();
         this.strike(this.picks[(H / 2) * W + W / 2]);
       }
