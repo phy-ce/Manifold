@@ -2,7 +2,7 @@ import { SECTIONS, TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, else
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
+import { GameState, HurtCause, creatureInfo, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -179,11 +179,17 @@ document.body.append(hurtFlash, hurtEdge);
 const HURT_FULL = 10;
 let lastHp = state.hp;
 /** Matches the longest hurt animation in style.css. */
-const HURT_MS = 600;
+const HURT_MS = 1600;
 let hurtTimer = 0;
 
+/** The words for what took the health, shown with the amount: "체력 -3 늑대". */
+function hurtCause(cause: HurtCause | undefined): string {
+  if (cause === "melee" || cause === "ranged" || cause === "yeti") return tr(creatureInfo(cause).name);
+  return cause === "water" ? tr("물") : cause === "hill" ? tr("고도 변화") : cause === "hunger" ? tr("굶주림") : "";
+}
+
 function showHurt(amount: number): void {
-  hurtFlash.textContent = `-${amount}`;
+  hurtFlash.textContent = `${tr("체력")} -${amount} ${hurtCause(state.hurtBy)}`.trim();
   hurtEdge.style.setProperty("--hurt", String(0.35 + 0.65 * Math.min(1, amount / HURT_FULL)));
   for (const el of [hurtFlash, hurtEdge, vitals]) {
     el.classList.remove("hit");
@@ -375,6 +381,14 @@ window.addEventListener("keydown", (e) => {
   map.approach();
 });
 window.addEventListener("blur", () => heldWalk.clear());
+// Space is the game's own key (bellows, rhythm work). A browser would also press whatever button was last
+// clicked with it, so its default is stopped everywhere but in a text box; the game's handlers still see it.
+for (const type of ["keydown", "keyup"] as const) {
+  window.addEventListener(type, (e) => {
+    if (e.code !== "Space" || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    e.preventDefault();
+  }, true);
+}
 
 // The bag shows twice: its slots as a hotbar under the map, always there, and with the gear in the window I opens
 // over the map. Both are the same slots, so either can be used.

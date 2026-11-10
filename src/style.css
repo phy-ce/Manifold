@@ -479,11 +479,12 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .held .slot { background: transparent; border-color: transparent; }
 
 /* Taking damage */
-.hurt { position: fixed; top: calc(var(--gap) * 6); left: 50%; z-index: 35; color: var(--alert); font-size: var(--text-md); font-weight: 700; pointer-events: none; opacity: 0; }
-.hurt.hit { animation: hurt-flash .6s ease-out; }
+/* What a hit cost and what dealt it, "체력 -3 늑대", over the top of the map long enough to read. */
+.hurt { position: fixed; top: calc(var(--gap) * 8); left: 50%; transform: translateX(-50%); z-index: 35; padding: var(--gap-sm) var(--gap); color: var(--alert); background: rgb(16 21 28 / 80%); border: 1px solid var(--alert); font-size: var(--text-lg); font-weight: 700; white-space: nowrap; pointer-events: none; opacity: 0; }
+.hurt.hit { animation: hurt-flash 1.6s ease-out; }
 /* Only the colour changes on a hit: moving or bolding the text would shift the bar. */
 .vitals.hit .meter.hp { color: var(--alert); }
-@keyframes hurt-flash { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hurt-flash { 0%, 60% { opacity: 1; } to { opacity: 0; } }
 /* The red edge on taking damage: a vignette, clear in the middle, strongest at the corners, gone in half a second. */
 .hurt-edge { position: fixed; inset: 0; z-index: 34; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgb(200 30 30 / 55%) 100%); box-shadow: inset 0 0 calc(var(--gap) * 6) rgb(255 60 50 / 45%); }
 .hurt-edge.hit { animation: hurt-edge .55s ease-out; }

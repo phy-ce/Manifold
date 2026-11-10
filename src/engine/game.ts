@@ -268,6 +268,8 @@ export interface GameState {
   weakUntil: number;
   /** What the last collapse cost, until the screen has shown it. */
   lost: Stack[] | null;
+  /** What last took health, so the screen can say why along with how much. */
+  hurtBy?: HurtCause;
   /** Index into STAGES of the stage being played. */
   stage: number;
   /** How many of each item have ever been made. Goals check this, so nothing is handed in. */
@@ -453,6 +455,9 @@ function makeNoise(s: GameState): void {
 
 /** A wolf runs the player down and bites; a spine salamander keeps its distance and shoots. */
 /** A cell that hurts to step on: where it is, how much, and what it is. */
+/** What can take the player's health: a creature by kind, the ground (water, a climb or drop), or hunger. */
+export type HurtCause = "melee" | "ranged" | "yeti" | "water" | "hill" | "hunger";
+
 export interface Hazard {
   x: number;
   y: number;
@@ -664,7 +669,7 @@ function creatures(s: GameState): void {
     if (mob.kind === "melee") {
       if (near <= 1 && mob.cool <= 0) {
         mob.cool = MOBS.melee.attackMs;
-        hurt(s, MOBS.melee.damage);
+        hurt(s, MOBS.melee.damage, "melee");
         if (s.z === 0) return;
         continue;
       }
@@ -697,7 +702,7 @@ function creatures(s: GameState): void {
     const y = Math.round(shot.y);
     if (shot.life <= 0 || rockAt(s, x, y)) return false;
     if (x === s.player.x && y === s.player.y && s.z < 0) {
-      hurt(s, MOBS.ranged.damage);
+      hurt(s, MOBS.ranged.damage, "ranged");
       return false;
     }
     return true;
@@ -777,7 +782,7 @@ function yetis(s: GameState): void {
     mob.lost = home && near <= YETI.forgetAway ? 0 : (mob.lost ?? 0) + STEP_MS;
     if (home && near <= 1 && mob.cool <= 0) {
       mob.cool = YETI.attackMs;
-      hurt(s, YETI.damage);
+      hurt(s, YETI.damage, "yeti");
       // A collapse sends the player home and clears the surface.
       if (!s.mobs.includes(mob)) return;
       continue;
@@ -2635,10 +2640,11 @@ function walk(s: GameState): void {
   if (s.passing && !cost) s.passing = false;
   reveal(s, s.player, ...sightOf(s, s.player), s.facing);
   nameRivers(s);
-  if (cost) hurt(s, cost);
+  if (cost) hurt(s, cost, terrain(next.x, next.y, s.seed)[1] === "t-water" ? "water" : "hill");
 }
 
-function hurt(s: GameState, amount: number): void {
+function hurt(s: GameState, amount: number, cause: HurtCause): void {
+  s.hurtBy = cause;
   s.hp -= amount;
   s.probe = null;
   if (s.hp <= 0) collapse(s);
@@ -2690,7 +2696,7 @@ function survive(s: GameState): void {
   s.vitalTimer += STEP_MS;
   if (s.vitalTimer < (starving ? STARVE_MS : HEAL_MS)) return;
   s.vitalTimer = 0;
-  if (starving) hurt(s, 1);
+  if (starving) hurt(s, 1, "hunger");
   else s.hp += 1;
 }
 
