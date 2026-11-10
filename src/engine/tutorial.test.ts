@@ -44,6 +44,8 @@ describe("S0 tutorial", () => {
     expect(isRevealed(s, clay.x, clay.y)).toBe(false);
     addTo(s.inv, "Mu", 4);
     advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("bag");
+    acknowledgeStep(s);
     expect(currentStep(s)?.id).toBe("clay");
     expect(isRevealed(s, clay.x, clay.y)).toBe(true);
     const mid = { x: Math.round((BASE.x + clay.x) / 2), y: Math.round((BASE.y + clay.y) / 2) };
@@ -57,6 +59,8 @@ describe("S0 tutorial", () => {
     expect(currentStep(s)?.id).toBe("food");
     addTo(s.inv, "Bc", 1);
     advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("bag");
+    acknowledgeStep(s);
     expect(currentStep(s)?.id).toBe("clay");
   });
 
@@ -65,6 +69,8 @@ describe("S0 tutorial", () => {
     addTo(s.inv, "Mu", 4);
     addTo(s.inv, "Kn", 12);
     advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("index");
+    acknowledgeStep(s);
     expect(currentStep(s)?.id).toBe("kiln");
     s.inv = s.inv.map(() => null);
     advanceTutorial(s);

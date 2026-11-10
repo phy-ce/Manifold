@@ -675,6 +675,8 @@ function redraw(): void {
   guide.hidden = !lesson;
   guideNext.hidden = !lesson?.ack;
   vitals.classList.toggle("tutorial-target", lesson?.id === "vitals");
+  bagKey.classList.toggle("tutorial-target", lesson?.id === "bag");
+  itemIndex.root.classList.toggle("tutorial-target", lesson?.id === "index");
   guideAgain.disabled = state.stage > 0;
   if (lesson) {
     // One section at a time: its name and number, its steps as a checklist, and what to do for the current one.
