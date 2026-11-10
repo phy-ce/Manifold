@@ -1,5 +1,5 @@
 // Item icons. Most items map to a stored shape; metal parts take their form's shape in the metal's colour.
-// Ores and slag are drawn fresh instead: their rough, speckled look comes from printing shaded pixels by brightness.
+// Ores are drawn fresh instead: their rough, speckled look comes from printing shaded pixels by brightness.
 import { familyMembers, formOf, isMachine, itemColor, membersOf } from "../content";
 import { hash } from "../engine/world";
 import { machineIcon, printCanvas } from "./art";
@@ -11,12 +11,12 @@ const SHAPE_OF: Record<string, string> = {
   water_drum: "water_drum",
   steel: "ingot",
   coal_tar: "water",
-  brick: "brick", steam_module: "steam_module",
+  brick: "brick", steam_module: "steam_module", slag: "slag",
   iron: "ingot", copper: "ingot", steam_drum: "steam_drum", pig_iron: "ingot", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
 };
 
-const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick"]);
+const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear"]);
 
 interface Lump {
   /** Gives each lump its own outline. */
@@ -26,20 +26,21 @@ interface Lump {
   /** Gas pockets left in the rock, as in slag. */
   holes?: number;
   /** Mineral-specific fracture and lustre, still printed through the same brightness ramp. */
-  mineral?: "hematite" | "magnetite" | "chalcocite" | "chalcopyrite" | "bituminous" | "anthracite";
+  mineral?: "pyrite" | "magnetite" | "chalcocite" | "chalcopyrite" | "bituminous" | "anthracite";
 }
 
 const LUMPS: Record<string, Lump> = {
   Ls: { seed: 15, grain: 0.35 },
   coke: { seed: 42, grain: 0.8, holes: 14 },
   Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, grain: 0.7 },
-  Hm: { seed: 21, grain: 0.65, mineral: "hematite" },
+  Py: { seed: 21, grain: 0.5, mineral: "pyrite" },
   Mt: { seed: 22, grain: 0.3, mineral: "magnetite" },
   Cc: { seed: 23, grain: 0.4, mineral: "chalcocite" },
   Cp: { seed: 24, grain: 0.8, mineral: "chalcopyrite" },
   Bt: { seed: 25, grain: 0.55, mineral: "bituminous" },
   An: { seed: 26, grain: 0.2, mineral: "anthracite" },
-  slag: { seed: 41, holes: 9 },
+  // Sulfur driven off roasting pyrite: a crumbly yellow lump.
+  sulfur: { seed: 46, grain: 0.9 },
   // A bloom is spongy iron straight from the bloomery, still full of slag pockets.
   bloom: { seed: 44, grain: 0.6, holes: 12, mineral: "magnetite" },
   // Matte is a cooled copper sulphide melt: a dense lump with a metallic sheen and a few gas pockets.
@@ -94,11 +95,17 @@ function drawLump(color: string, { seed, grain = 1, holes = 0, mineral }: Lump):
       const texture = (hash(x, y, seed + 1) - 0.5) * 0.26 * grain;
       let tone = fleck ? light + 0.55 * grain : light + texture - (speck < 0.12 ? 0.2 : 0);
       let tint = color;
-      if (mineral === "hematite") {
-        // Earthy red lobes with darker iron-red bands, rather than limonite's ochre grains.
-        const band = Math.sin(dy * 15 + Math.sin(dx * 5) * 1.5);
-        tone = light + texture + (band > 0.5 ? 0.22 : band < -0.6 ? -0.25 : 0);
-        if (speck > 0.93) { tint = "#e58b78"; tone = 0.95; }
+      if (mineral === "pyrite") {
+        // Pale brass cubes: flat faces lit by which way they turn, fine parallel striations, a bright edge
+        // where faces meet. Paler and more blocky than chalcopyrite's brass patches.
+        const fx = Math.floor((dx + 1.2) * 2.2);
+        const fy = Math.floor((dy + 1.2) * 2.2);
+        const face = hash(fx, fy, seed + 3);
+        const stripe = Math.sin((face > 0.5 ? dx : dy) * 42) > 0.7 ? -0.12 : 0;
+        tone = 0.5 + face * 0.42 + light * 0.18 + stripe + texture * 0.4;
+        const edgeX = (dx + 1.2) * 2.2 - fx;
+        const edgeY = (dy + 1.2) * 2.2 - fy;
+        if (edgeX < 0.1 || edgeY < 0.1) { tint = "#efe2a8"; tone = 0.9; }
       } else if (mineral === "magnetite") {
         // Large contrasting crystal faces and a narrow silver ridge, not random glitter.
         const ridge = dx < 0.18 ? dx + 0.22 : dx - 0.46;

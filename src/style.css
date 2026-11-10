@@ -1,5 +1,6 @@
 /* Sizes come from src/ui/theme.ts as CSS variables. Rules: docs/design/style.md */
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap");
+@font-face { font-family: "GalmuriMono11"; src: url("./assets/fonts/GalmuriMono11.woff2") format("woff2"); font-display: swap; }
 
 :root {
   color-scheme: dark;
@@ -9,8 +10,11 @@
   --fire: #ffb238; --alert: #ff5f56; --water: #4d8fc4; --go: #8fd16f; --power: #ffd24a;
 
   /* Type scale */
-  --mono: "JetBrains Mono", "Noto Sans KR", Consolas, monospace;
-  --text-xs: 11px; --text-sm: 13px; --text-md: 15px; --text-lg: 18px;
+  /* UI text: a pixel font (Galmuri, OFL; src/assets/fonts) for the dot look, crisp only at its own 12px and twice that.
+     Text art (machine pictures, item icons, the vein picture) stays in a fine mono face: at 2–6px a pixel font has no room. */
+  --mono: "GalmuriMono11", "JetBrains Mono", "Noto Sans KR", Consolas, monospace;
+  --art-mono: "JetBrains Mono", Consolas, monospace;
+  --text-xs: 12px; --text-sm: 12px; --text-md: 12px; --text-lg: 24px;
 
   /* Spacing, derived from the unit */
   --gap: var(--u, 8px);
@@ -24,33 +28,56 @@ html, body { height: 100%; overflow: hidden; }
 body { user-select: none; }
 input { user-select: text; }
 [hidden] { display: none !important; }
-body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--mono); font-variant-ligatures: none; font-size: var(--text-md); }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--mono); font-variant-ligatures: none; font-size: var(--text-md); -webkit-font-smoothing: none; font-smooth: never; }
 pre { margin: 0; font: inherit; line-height: 1.2; white-space: pre; }
 h2 { margin: 0; font-size: var(--text-lg); }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 
 /* Layout primitives */
-#app { height: 100%; padding: var(--gap-lg) calc(var(--gap) * 2); display: flex; flex-direction: column; gap: var(--gap-lg); }
+#app { position: relative; z-index: 1; height: 100%; padding: var(--gap-lg) calc(var(--gap) * 2); display: flex; flex-direction: column; gap: var(--gap-lg); }
 #app > .box { flex: none; }
-.box { background: var(--panel); border: 1px solid var(--line); padding: var(--gap-lg); min-width: 0; }
+.box { background: color-mix(in srgb, var(--panel) 86%, transparent); border: 1px solid var(--line); padding: var(--gap-lg); min-width: 0; }
+/* The biome's landscape behind the whole screen (src/ui/scenery.ts): two layers that cross-fade, never touchable.
+   Panels let a little of it through; the map keeps a solid back so it reads cleanly. */
+.scenery { position: fixed; inset: 0; z-index: 0; pointer-events: none; user-select: none; overflow: hidden; }
+.scenery img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 2.2s ease; -webkit-user-drag: none; }
+.scenery img.on { opacity: .5; }
+.map-box { background: var(--panel); }
+@media (prefers-reduced-motion: reduce) { .scenery img { transition: none; } }
 .scroll { overflow: hidden; }
 .top, .bar-row, .palette, .roster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 .bar-row { margin-bottom: var(--gap); color: var(--dim); }
 .push { margin-left: auto; }
-.goal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); padding: var(--gap-sm) var(--gap); border: 2px solid var(--fire); font-weight: 700; font-size: var(--text-md); }
+.goal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); padding: var(--gap-sm) var(--gap); border: 1px solid var(--line); font-weight: 700; font-size: var(--text-sm); }
 .goal-tag { padding: 0 var(--gap-sm); color: var(--bg); background: var(--fire); }
 .goal-stage { color: var(--dim); font-weight: 400; font-size: var(--text-sm); }
-.goal-item { font-size: var(--text-lg); }
-.goal-bar { color: var(--fire); }
+.goal-item { font-size: var(--text-md); }
+.goal-bar { color: var(--dim); }
 
 /* Vitals */
 .vitals { display: flex; flex-wrap: wrap; gap: var(--gap-lg); color: var(--dim); font-size: var(--text-sm); }
 .meter { white-space: pre; }
 .meter.low { color: var(--alert); }
+/* Health and hunger stand out from the rest of the status line: larger, bright, each bar in its own colour. Low, they turn red and pulse. */
+.meter.vital { color: var(--fg); font-size: var(--text-md); font-weight: 700; }
+.meter.vital b { font-weight: 700; }
+.meter.hp .meter-bar { color: #e8645c; }
+.meter.hunger .meter-bar { color: #d9a441; }
+.meter.weight .meter-bar { color: #8fb0cf; }
+/* A dig the load stopped: the load meter jolts red for a moment. */
+.meter.weight.strain, .meter.weight.strain .meter-bar { color: var(--alert); animation: nudge-hard .3s 2; }
+.meter.vital.low, .meter.vital.low .meter-bar { color: var(--alert); animation: pulse .7s steps(2) infinite; }
 /* Holds the room of a warning that is not showing, so the bar keeps its width. */
 .reserve { visibility: hidden; }
 .notice { padding: var(--gap); border: 1px solid var(--alert); color: var(--alert); font-weight: 700; }
+/* The tutorial line: what to do next, under the goal. */
+.tutorial { display: flex; align-items: center; gap: var(--gap); padding: var(--gap-sm) var(--gap); border: 1px dashed var(--fire); }
+.tutorial-tag { flex: none; padding: 0 var(--gap-sm); color: var(--fire); border: 1px solid var(--fire); }
+.tutorial-text { flex: 1 1 auto; min-width: 0; }
+.tutorial-target { outline: 2px solid var(--fire); outline-offset: 2px; animation: tutorial-pulse 1.6s ease-in-out infinite; }
+@keyframes tutorial-pulse { 50% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .tutorial-target { animation: none; } }
 
 /* Controls */
 .tech, .facility { min-height: var(--control); padding: var(--gap-sm) var(--gap); border: 1px solid var(--line); }
@@ -78,7 +105,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .slot .role { color: var(--dim); font-size: var(--text-xs); }
 .slot.byproduct { border-style: dashed; }
 .slot.full { border-color: var(--alert); animation: pulse .7s steps(2) infinite; }
-.icon { font-size: var(--glyph-icon); line-height: var(--glyph-icon); font-weight: 700; }
+.icon { font-family: var(--art-mono); font-size: var(--glyph-icon); line-height: var(--glyph-icon); font-weight: 700; }
 .code, .n { position: absolute; right: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; background: rgb(16 21 28 / 72%); }
 .code { top: 1px; font-weight: 700; }
 /* A group's badge: how many kinds count as it. Top left, clear of the code and the count. */
@@ -87,12 +114,18 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 
 /* Map */
 .map-view, .graph-view { flex: 1; min-height: 0; display: grid; gap: var(--gap-lg); }
-.map-view { grid-template-columns: max-content minmax(0, 1fr); align-items: start; align-content: start; }
+.map-view { grid-template-columns: max-content minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: start; }
 .graph-view { grid-template-rows: auto auto auto minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
-.map-side { display: grid; gap: var(--gap-lg); min-width: 0; }
-.finder { display: grid; gap: var(--gap); }
+/* The side column runs the full height; the search results take what is left and scroll inside it, so none is cut off. */
+.map-side { display: flex; flex-direction: column; gap: var(--gap-lg); min-width: 0; min-height: 0; align-self: stretch; }
+.map-side > .box { flex: none; }
+.map-side > .finder { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.map-results { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--gap-sm); }
+.map-results .route-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-note { width: 100%; min-height: var(--control); margin-bottom: var(--gap-sm); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
+.finder { gap: var(--gap); }
 .finder input { width: 100%; min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .save-list { display: grid; gap: var(--gap); }
 .save-list .bar-row { margin: 0; }
@@ -100,8 +133,23 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .t-path { color: var(--fire); } .t-base { color: var(--fg); font-weight: 700; } .t-me { color: var(--go); font-weight: 700; }
 .t-fog { color: #1e2732; } .t-site { font-weight: 700; }
 .vein { display: block; text-align: left; user-select: none; }
+.vein pre { font-family: var(--art-mono); }
 .vein:active pre { transform: translateY(1px); }
 .vein[disabled] { cursor: default; }
+/* Creatures in sight, face-on, bigger the nearer. Only one in reach is lit; a struck one flashes. */
+.fight-panel { width: 100%; min-width: 0; overflow: hidden; }
+.fight-head { display: flex; justify-content: space-between; gap: var(--gap); height: 24px; line-height: 24px; white-space: nowrap; overflow: hidden; font-size: var(--text-sm); }
+.fight-head > span:not(.key-hint) { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+/*
+ * The key hint, the game's one way of saying what a key does (src/ui/keyHint.ts): a small keycap and a word,
+ * never a sentence. Lit amber when the key would act now, dim when it would not.
+ */
+.key-hint { flex: none; display: inline-flex; align-items: center; gap: var(--gap-sm); white-space: nowrap; color: var(--fg); }
+.key-hint kbd { display: inline-block; min-width: 18px; line-height: 16px; padding: 0 4px; text-align: center; font: inherit; font-weight: 700; border: 1px solid var(--dim); border-bottom-width: 2px; background: var(--bg); }
+.key-hint.on { color: var(--fire); }
+.key-hint.on kbd { border-color: var(--fire); color: var(--fire); }
+.fight-view { display: block; width: 384px; max-width: 100%; height: auto; aspect-ratio: 16 / 9; margin: var(--gap-sm) auto 0; background: #090d12; image-rendering: pixelated; cursor: crosshair; touch-action: manipulation; }
+.fight-view:focus-visible { outline: 1px solid var(--go); outline-offset: 2px; }
 .rock { color: var(--rock); } .hit { color: var(--bg); background: var(--fire); }
 
 /* Base graph */
@@ -184,7 +232,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 /* Shape mode: the machine drawn small on the left (44x26 characters at the 3px icon glyph), its label beside it.
    The card keeps its words-mode size; how the machine is doing shows in how bright the picture is. */
 .node-body.shape { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr; align-items: center; gap: var(--gap-sm); }
-.node-art { font: 700 var(--glyph-icon)/var(--glyph-icon) var(--mono); white-space: pre; filter: brightness(.6) saturate(.4); }
+.node-art { font: 700 var(--glyph-icon)/var(--glyph-icon) var(--art-mono); white-space: pre; filter: brightness(.6) saturate(.4); }
 .node[data-status="run"] .node-art { filter: brightness(1.15) saturate(1.35); }
 .node[data-status="manual"] .node-art { filter: none; }
 .node-side { display: grid; gap: 1px; min-width: 0; }
@@ -204,6 +252,18 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .top-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 1 1 auto; min-width: 0; }
 .top-actions { display: flex; align-items: center; gap: var(--gap); flex: none; margin-left: auto; }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+/* Where safe mode stopped a walk. The line is always there, empty or not, so the map below never moves. */
+.reserve-gauges { display: inline-flex; gap: var(--gap); white-space: nowrap; }
+/* A reserve gauge on the vein panel: a short label, the bar, and left/total, bold. */
+.reserve-gauge { display: inline-flex; gap: var(--gap-sm); align-items: baseline; color: var(--dim); }
+.reserve-gauge .meter-bar { color: var(--fire); }
+.reserve-gauge b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.walk-warn { min-height: calc(var(--text-sm) * 1.5); color: var(--alert); font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 0; min-width: 100%; }
+/* The lines above the map stay one line each and never widen the map's box: long text is cut short, the full text in its tip. */
+.map-line { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; width: 0; min-width: 100%; }
+.map-tools { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--gap-sm); margin-bottom: var(--gap-sm); overflow: hidden; width: 0; min-width: 100%; }
+.map-tools .tech { flex: none; white-space: nowrap; }
+.map-actions { display: flex; flex-wrap: nowrap; gap: var(--gap-sm); min-width: 0; }
 /* The riverbank pump's "lay the pipe?" row: its own line under the banks. */
 .river-ask { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-top: var(--gap-sm); }
 /* The shape picker: category drop-downs, a search box, and what the search finds. */
@@ -224,23 +284,23 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .window { display: grid; gap: var(--gap-lg); max-width: 100%; padding: var(--gap-lg); background: var(--panel); border: 1px solid var(--dim); }
 /*
  * Windows keep one size whatever they show. Each is sized for its fullest state, kept as narrow as that allows:
- * the machine window fits inputs, the 274px picture, outputs and a bellows gauge in one row (about 462px) inside
- * eight slots of width. Lines whose text changes stay on one line and cut off rather than wrap, so the height holds too.
+ * the machine window fits inputs, the 274px picture, outputs and a bellows gauge in one row (about 440px with the smaller
+ * slots) inside 60 units (480px). Lines whose text changes stay on one line and cut off rather than wrap, so the height holds too.
  */
-.machine-window { width: calc(var(--slot) * 8); }
+.machine-window { width: var(--machine-window); }
 .machine-window > .bar-row:first-child { flex-wrap: nowrap; min-width: 0; }
 .machine-window > .bar-row:first-child h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .machine-window .recipe { flex-wrap: nowrap; min-width: 0; overflow: hidden; white-space: nowrap; }
 .machine-window .recipe > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .machine-window .recipe .state { flex: none; }
 .machine-window .window-bar { min-height: calc(var(--gap) * 2.5); overflow: hidden; }
-.machine { display: grid; grid-auto-flow: column; grid-auto-columns: auto; gap: var(--gap-lg); justify-content: center; align-items: center; }
-.stack { display: grid; gap: var(--gap); }
-.art { font-size: var(--glyph-machine); line-height: var(--glyph-machine); font-weight: 700; }
+.machine { display: grid; grid-auto-flow: column; grid-auto-columns: auto; gap: var(--gap); justify-content: center; align-items: center; }
+.stack { display: grid; gap: var(--gap-sm); }
+.art { font-family: var(--art-mono); font-size: var(--glyph-machine); line-height: var(--glyph-machine); font-weight: 700; }
 .window-bar { text-align: center; color: var(--fire); min-height: calc(var(--gap) * 2); }
 /* A warehouse's own slots sit in a sunken box; the player's inventory sits below a rule with its own label. */
 .slot-label { color: var(--dim); font-size: var(--text-sm); text-align: center; }
-.store-grid { padding: var(--gap); background: var(--bg); border: 1px solid var(--rock); }
+.store-grid { padding: var(--gap-sm); background: var(--bg); border: 1px solid var(--rock); }
 .inv-box { display: grid; gap: var(--gap-sm); padding-top: var(--gap); border-top: 1px dashed var(--line); }
 .window-bar.stop { color: var(--alert); }
 /* A bar with a note: the note has its own line under the bar, kept even when empty, so nothing moves or resizes. */
@@ -347,6 +407,11 @@ body.dock-open .window-back { right: var(--dock); }
 /* Only the colour changes on a hit: moving or bolding the text would shift the bar. */
 .vitals.hit .meter.hp { color: var(--alert); }
 @keyframes hurt-flash { from { opacity: 1; } to { opacity: 0; } }
+/* The red edge on taking damage: a vignette, clear in the middle, strongest at the corners, gone in half a second. */
+.hurt-edge { position: fixed; inset: 0; z-index: 34; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgb(200 30 30 / 55%) 100%); box-shadow: inset 0 0 calc(var(--gap) * 6) rgb(255 60 50 / 45%); }
+.hurt-edge.hit { animation: hurt-edge .55s ease-out; }
+@keyframes hurt-edge { from { opacity: var(--hurt, 1); } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hurt-edge.hit { animation-duration: .25s; } }
 
 /* Tooltip */
 .tip { position: fixed; left: 0; top: 0; z-index: 50; padding: var(--gap-sm) var(--gap); background: var(--bg); border: 1px solid var(--dim); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }
@@ -357,4 +422,4 @@ body.dock-open .window-back { right: var(--dock); }
 .tip-value { color: var(--fire); text-align: right; }
 
 @keyframes pulse { 50% { background: #3a1a1a; } }
-@media (prefers-reduced-motion: reduce) { .slot.full, .node[data-status="blocked"] { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .slot.full, .node[data-status="blocked"], .meter.vital.low, .meter.weight.strain { animation: none; } }

@@ -14,6 +14,8 @@ type Tab = "recipes" | "uses" | "members" | "stats";
 
 /** Short numbers: whole when they are, otherwise up to two decimals. */
 const short = (n: number) => String(Math.round(n * 100) / 100);
+/** A rate: two decimals, or two significant digits when it is slower than one in ten seconds. */
+const rate = (n: number) => (n >= 0.1 ? short(n) : String(Number(n.toPrecision(2))));
 
 /** Rows of items per page, and the page size before the grid has been laid out. */
 const GRID_ROWS = 4;
@@ -56,6 +58,8 @@ export class ItemIndex {
   private item: string | null = null;
   private tab: Tab = "recipes";
   private synced = "";
+  /** The stage the grid and page were drawn for. */
+  private stage = -1;
 
   constructor(
     private readonly game: () => GameState,
@@ -138,10 +142,10 @@ export class ItemIndex {
   }
 
   /**
-   * Recipes grouped by the machine that runs them: the machine's icon and name once at the head, how it is
-   * worked beside it, and each recipe as a row underneath. Order follows the recipes given.
+   * Recipes grouped by the machine that runs them: the machine's icon and name once at the head, its power
+   * and heat beside it, and each recipe as a row underneath. Order follows the recipes given.
    */
-  private machineGroups(recipes: Recipe[]): [HTMLElement, number][] {
+  private machineGroups(recipes: Recipe[], focus: string): [HTMLElement, number][] {
     const byMachine = new Map<string, Recipe[]>();
     for (const r of recipes) byMachine.set(r.machine, [...(byMachine.get(r.machine) ?? []), r]);
     return [...byMachine].map(([machine, list]) => {
@@ -153,12 +157,8 @@ export class ItemIndex {
       icon.classList.add("small");
       const name = document.createElement("strong");
       name.textContent = machineName(machine);
-      const manual = machineManual(machine);
-      // A rhythm machine's pace by hand is capped by its beat, so its fastest speed is what is worth knowing.
-      const hand = manual === "keys" ? tr("키 입력") : manual === "rhythm" ? `${tr("손작업 최대")} ×${short(maxWorkRate(machineRhythm(machine)))}` : manual === "bellows" ? tr("풀무") : manual === "click" ? tr("클릭") : "";
       const heat = machineBurn(machine);
       const facts = [
-        hand,
         machinePower(machine) ? `${tr("동력")} ${machinePower(machine)}` : "",
         machinePowerOut(machine) ? `${tr("동력")} +${machinePowerOut(machine)}` : "",
         heat ? `${tr("열")} ${short(heat)}/${tr("초")}` : "",
@@ -167,13 +167,13 @@ export class ItemIndex {
       meta.className = "card-note";
       meta.textContent = facts;
       head.append(icon, name, meta);
-      card.append(head, ...list.map((r) => this.recipeRow(r)));
+      card.append(head, ...list.map((r) => this.recipeRow(r, focus)));
       return [card, GROUP_HEAD + list.length * RECIPE_ROW];
     });
   }
 
-  /** One recipe under its machine: what goes in, what comes out, and its time. */
-  private recipeRow(recipe: Recipe): HTMLElement {
+  /** One recipe under its machine: what goes in, what comes out, and how many a second at full speed. */
+  private recipeRow(recipe: Recipe, focus: string): HTMLElement {
     const box = document.createElement("div");
     box.className = "recipe-row";
     const row = document.createElement("div");
@@ -196,9 +196,11 @@ export class ItemIndex {
     const note = document.createElement("div");
     note.className = "card-note";
     const form = recipe.form && recipe.machine === "forming_bench" ? `${formLabel(recipe.form)} · ` : "";
-    // By hand, the fastest the recipe can go when every beat is struck exactly.
-    const fastest = machineManual(recipe.machine) === "rhythm" ? ` · ${tr("최대")} ${short(recipe.time / maxWorkRate(machineRhythm(recipe.machine)))}${tr("초")}` : "";
-    note.textContent = `${form}${recipe.time}${tr("초")}${fastest}`;
+    // Full speed: a rhythm machine with every beat struck exactly, anything else at its recipe time.
+    const time = machineManual(recipe.machine) === "rhythm" ? recipe.time / maxWorkRate(machineRhythm(recipe.machine)) : recipe.time;
+    // The rate of the item this page is about, else the main output, else what it uses up.
+    const counted = recipe.out[focus] !== undefined ? recipe.out[focus] : Object.values(recipe.out)[0] ?? Object.values(recipe.in)[0] ?? 0;
+    note.textContent = `${form}${rate(counted / time)}${tr("개/초")}`;
     box.append(row, note);
     return box;
   }
@@ -223,10 +225,19 @@ export class ItemIndex {
     return b;
   }
 
-  /** Redraws when the open machine or the bag changes, so the fill buttons stay true. */
+  /**
+   * Redraws when the stage, the open machine or the bag changes: a new stage opens items, recipes
+   * and uses, and the fill buttons have to stay true.
+   */
   sync(): void {
-    if (this.root.hidden || !this.item) return;
+    if (this.root.hidden) return;
     const s = this.game();
+    if (s.stage !== this.stage) {
+      this.stage = s.stage;
+      this.synced = "";
+      this.drawGrid();
+    }
+    if (!this.item) return;
     const id = this.openNode();
     const node = id === null ? undefined : nodeById(s, id);
     const key = `${id}|${node?.form}|${s.inv.map((slot) => slot?.id ?? "").join()}`;
@@ -355,10 +366,10 @@ export class ItemIndex {
       if (members.length) cards.push([this.membersCard(members), CARD_HEIGHT]);
     } else if (this.tab === "recipes") {
       if (source) cards.push(text(source));
-      cards.push(...this.machineGroups(recipes));
+      cards.push(...this.machineGroups(recipes, id));
     } else {
       cards.push(...burns.map((type): [HTMLElement, number] => [this.burnCard(type, id), CARD_HEIGHT]));
-      cards.push(...this.machineGroups(uses));
+      cards.push(...this.machineGroups(uses, id));
       cards.push(...builds.map(([type, cost]): [HTMLElement, number] => [this.buildCard(type, cost), CARD_HEIGHT]));
     }
     if (!cards.length) cards.push(text(tr("아직 없습니다")));

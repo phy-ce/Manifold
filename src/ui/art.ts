@@ -286,54 +286,94 @@ function springMotor(mode: Status, f: number) {
   blocked(mode);
 }
 
-function steamEngine(mode: Status, f: number) {
+function steamBoiler(mode: Status, f: number) {
   const p = pose(mode, f);
-  const angle = p * Math.PI / 2;
-  // A complete engine on one heavy bed: boiler, chimney and driven cylinder.
-  rect("#515d68", 5, 66, 66, 6);
-  rect("#a7b5bf", 5, 66, 66, 2);
-  rect("#645044", 10, 50, 30, 16);
-  rect("#252a31", 15, 55, 12, 9);
-  rect("#bd854b", 17, 59, 8, 3);
-  oval("#7b684f", 35, 39, 9, 15);
-  rect("#ac8b5d", 16, 24, 19, 30);
-  rect("#dfc28c", 16, 27, 19, 4);
-  rect("#756044", 16, 48, 19, 6);
-  oval("#d4b47d", 16, 39, 10, 15);
-  oval("#8e704c", 16, 39, 7, 11);
-  rect("#4f606d", 12, 9, 7, 17);
-  rect("#9cb0be", 12, 9, 2, 17);
-  rect("#b6c3c9", 10, 7, 11, 3);
-  rect("#c7a875", 30, 18, 7, 7);
-  line("#b3c1c7", 3, 35, 20, 46, 20);
-  line("#b3c1c7", 3, 46, 20, 46, 37);
-  for (const y of [29, 38, 47]) rect("#eed29d", 32, y, 2, 2);
-  // The piston sits low on its own mounting, with an exposed connecting rod.
-  rect("#718694", 29, 51, 17, 10);
-  rect("#d0dce0", 29, 50, 3, 12);
-  rect("#c2d0d6", 43, 50, 3, 12);
-  rect("#53616a", 49, 59, 13, 7);
-  oval("#c3b18a", 56, 45, 16, 19);
-  oval("#5f676a", 56, 45, 13, 16);
-  oval("#1c252d", 56, 45, 10, 13);
-  for (let i = 0; i < 3; i++) {
-    const a = angle + i * Math.PI * 2 / 3;
-    line("#a5b5bc", 2, 56, 45, 56 + Math.cos(a) * 12, 45 + Math.sin(a) * 15);
+  // Effect anchors before y scaling: fire door (28, 56), outlet (71, 17).
+  rect("#454b50", 7, 68, 61, 4);
+  bricks(11, 43, 53, 25, [127, 88, 65]);
+  rect("#777a78", 9, 42, 57, 3);
+  rect("#666e71", 17, 45, 22, 22);
+  rect("#201e1c", 20, 47, 16, 18);
+  g.save();
+  g.beginPath();
+  g.rect(20, 47, 16, 18);
+  g.clip();
+  fire(21, 35, 63, mode === "blocked" ? "idle" : mode, p * 2);
+  g.restore();
+  for (const x of [21, 25, 29, 33]) rect("#42464a", x, 62, 1, 3);
+  rect("#88857a", 38, 53, 3, 6);
+  // Riveted horizontal drum and rear chimney.
+  rect("#414d54", 53, 8, 7, 23);
+  rect("#7b878b", 53, 8, 2, 23);
+  rect("#8b9595", 51, 6, 11, 3);
+  oval("#3f505a", 55, 32, 10, 12);
+  rect("#647681", 21, 20, 34, 24);
+  rect("#98a6ab", 21, 22, 34, 3);
+  rect("#435660", 21, 39, 34, 5);
+  oval("#96a3a7", 21, 32, 11, 12);
+  oval("#536670", 21, 32, 8, 9);
+  oval("#71838b", 20, 30, 5, 6);
+  for (const x of [34, 49]) {
+    rect("#46555d", x, 20, 2, 24);
+    for (const y of [23, 30, 37, 41]) rect("#a8b3b5", x, y, 1, 1);
   }
-  const crankX = 56 + Math.cos(angle) * 6;
-  const crankY = 45 + Math.sin(angle) * 7;
-  line("#e0c290", 3, 39 + Math.cos(angle) * 3, 55, crankX, crankY);
-  oval("#e7d3a8", crankX, crankY, 2, 2);
-  oval("#d8e1e4", 56, 45, 3, 3);
-  if (mode === "run") {
-    for (let i = 0; i < 2; i++) {
-      const rise = (p + i * 2) % 4;
-      oval("#b4cbd3", 39 + rise * 2, 15 - rise * 3, 2 + rise / 2, 2);
-    }
-  }
+  line("#92754f", 3, 34, 20, 34, 14);
+  oval("#a7926d", 34, 11, 6, 6);
+  oval("#c1c4b7", 34, 11, 4, 4);
+  line("#303c43", 1, 34, 12, mode === "run" ? 36 : 32, 9);
+  rect("#9b8b68", 40, 28, 6, 13);
+  rect("#273c44", 42, 30, 2, 9);
+  rect("#71959a", 42, 34, 2, 5);
+  rect("#88744f", 43, 14, 6, 6);
+  line("#89999f", 4, 46, 17, 71, 17);
+  rect("#b2babb", 68, 13, 3, 8);
+  rect("#34444e", 71, 15, 1, 4);
+  line("#9d8960", 2, 46, 14, 46, 8);
+  line("#9d8960", 2, 43, 9, 51, 9);
+  oval("#655a45", 51, 11, 2, 3);
+  if (mode === "run") smoke(56, p * 2);
   blocked(mode);
 }
 
+function steamEngine(mode: Status, f: number) {
+  const p = pose(mode, f);
+  const angle = p * Math.PI / 2;
+  // Separate steam supply from the left; exhaust anchor (29, 11).
+  rect("#424e58", 5, 66, 66, 6);
+  rect("#8999a3", 5, 66, 66, 2);
+  line("#71858e", 5, 0, 23, 18, 23);
+  line("#71858e", 5, 18, 23, 18, 31);
+  line("#a0afb4", 1, 0, 21, 19, 21);
+  rect("#a38d65", 7, 19, 3, 8);
+  rect("#647b87", 12, 30, 16, 7);
+  rect("#99aab1", 12, 30, 16, 2);
+  line("#72858e", 4, 26, 31, 29, 25);
+  line("#72858e", 4, 29, 25, 29, 11);
+  oval("#a6b2b6", 29, 11, 3, 1.5);
+  oval("#26343c", 29, 11, 1.5, 0.8);
+  for (const x of [13, 25, 54]) rect("#50616d", x, 54, 7, 12);
+  rect("#596f7e", 9, 37, 21, 18);
+  rect("#8fa6b2", 9, 38, 21, 3);
+  rect("#384d5a", 9, 51, 21, 4);
+  for (const x of [9, 27]) rect("#a6b5bd", x, 35, 3, 22);
+  for (const y of [40, 53]) rect("#657884", 30, y, 18, 2);
+  oval("#8999a1", 57, 43, 16, 21);
+  oval("#465963", 57, 43, 13, 18);
+  oval("#1b252d", 57, 43, 11, 15);
+  for (let i = 0; i < 3; i++) {
+    const a = angle + i * Math.PI * 2 / 3;
+    line("#8298a4", 2, 57, 43, 57 + Math.cos(a) * 12, 43 + Math.sin(a) * 17);
+  }
+  const crankX = 57 + Math.cos(angle) * 6;
+  const crankY = 43 + Math.sin(angle) * 7;
+  const slideX = 37 + Math.cos(angle) * 4;
+  line("#b4c0c5", 3, 30, 47, slideX, 47);
+  rect("#8a9ba5", slideX - 2, 43, 5, 9);
+  line("#b29b73", 3, slideX, 47, crankX, crankY);
+  oval("#c1b08d", crankX, crankY, 2, 2);
+  oval("#b1bec4", 57, 43, 3, 3);
+  blocked(mode);
+}
 function drainagePump(mode: Status, f: number) {
   const p = pose(mode, f);
   const lift = [0, 4, 8, 4][p];
@@ -803,6 +843,189 @@ function pressurePump(mode: Status, f: number) {
   blocked(mode);
 }
 
+// Compact late-era machines share a cast bed, but retain distinct tooling.
+function machineBed() {
+  rect("#424f59", 7, 66, 62, 6);
+  rect("#8c9ca5", 7, 66, 62, 2);
+  for (const x of [13, 57]) rect("#526570", x, 51, 6, 15);
+}
+
+function rollingMill(mode: Status, f: number) {
+  const p = pose(mode, f), a = p * Math.PI / 2;
+  machineBed();
+  // Two massive rolls flatten a steel billet into a thin plate.
+  for (const x of [19, 53]) {
+    rect("#4e626e", x, 18, 7, 48);
+    rect("#8d9fa8", x, 18, 2, 48);
+    rect("#9c8a67", x + 2, 10, 3, 8);
+    line("#a3aaa7", 2, x - 2, 10, x + 9, 10);
+  }
+  rect("#71838e", 17, 18, 45, 4);
+  rect("#727f86", 2, 39, 27, 7);
+  rect("#9aa7ad", 2, 39, 27, 2);
+  rect("#7c8e99", 43, 42, 31, 3);
+  rect("#b1bbc0", 43, 42, 31, 1);
+  for (const y of [32, 53]) {
+    rect("#617683", 28, y - 8, 25, 16);
+    rect("#9aabb3", 28, y - 7, 25, 3);
+    oval("#a2afb5", 28, y, 7, 9);
+    oval("#425763", 28, y, 4, 6);
+    line("#b6a077", 2, 28, y, 28 + Math.cos(a) * 4, y + Math.sin(a) * (y === 32 ? 6 : -6));
+  }
+  blocked(mode);
+}
+
+function lathe(mode: Status, f: number) {
+  const p = pose(mode, f);
+  machineBed();
+  rect("#637986", 7, 49, 62, 5);
+  rect("#a0b0b8", 7, 49, 62, 2);
+  rect("#536a78", 8, 26, 14, 23);
+  rect("#94a6af", 8, 26, 14, 3);
+  oval("#a3afb4", 23, 36, 5, 11);
+  oval("#3f515e", 23, 36, 3, 7);
+  rect("#83959f", 25, 33, 30, 6);
+  line("#bec7ca", 1, 26, 34 + [0, 1, 3, 1][p], 54, 34 + [0, 1, 3, 1][p]);
+  polygon("#859aa5", [[53, 36], [62, 28], [67, 28], [67, 49], [58, 49], [58, 39]]);
+  const x = 33 + p * 3;
+  rect("#485e6d", x, 44, 13, 7);
+  rect("#a18d69", x + 4, 39, 4, 7);
+  line("#aab7bb", 2, x + 6, 40, x + 3, 37);
+  oval("#8a9aa3", x + 6, 55, 4, 4);
+  oval("#273740", x + 6, 55, 2, 2);
+  for (const dx of [0, 5, 9]) line("#6f7a80", 1, 30 + dx, 61, 33 + dx, 59);
+  blocked(mode);
+}
+
+function gearCutter(mode: Status, f: number) {
+  const p = pose(mode, f);
+  machineBed();
+  rect("#4d6370", 12, 14, 10, 52);
+  rect("#8fa1aa", 12, 14, 3, 49);
+  rect("#718590", 12, 14, 40, 6);
+  rect("#93a5ae", 12, 14, 40, 2);
+  rect("#4a5e6b", 43, 20, 8, 12);
+  rect("#9cabb1", 45, 30, 4, 13);
+  oval("#a6b2b6", 47, 36, 7, 5);
+  for (let i = 0; i < 3; i++) rect("#465864", 42 + (i * 4 + p) % 12, 33, 1, 6);
+  rect("#697e8a", 26, 56, 30, 10);
+  rect("#9baab1", 23, 54, 36, 3);
+  gear(37, 44, 10, 10, p * Math.PI / 20);
+  blocked(mode);
+}
+
+function wireDrawer(mode: Status, f: number) {
+  const p = pose(mode, f), a = p * Math.PI / 2;
+  machineBed();
+  // Copper stock passes through a die into a large take-up drum.
+  oval("#756049", 13, 35, 10, 15);
+  oval("#292c2b", 13, 35, 6, 10);
+  line("#a97c50", 3, 13, 35, 13 + Math.cos(a) * 8, 35 + Math.sin(a) * 12);
+  line("#af8156", 3, 19, 40, 31, 40);
+  rect("#526975", 29, 29, 10, 24);
+  rect("#a0afb5", 29, 29, 10, 3);
+  oval("#b09b73", 34, 40, 3, 5);
+  line("#b98a5b", 1, 37, 40, 56, 40);
+  rect("#876346", 52, 26, 12, 30);
+  for (let y = 29; y < 55; y += 4) line("#b0875e", 1, 52, y, 64, y);
+  oval("#899ba6", 52, 41, 7, 18);
+  oval("#455966", 52, 41, 5, 14);
+  line("#a88d66", 2, 52, 41, 52 + Math.cos(a) * 4, 41 + Math.sin(a) * 12);
+  rect("#8395a0", 64, 24, 3, 34);
+  blocked(mode);
+}
+
+function tarStill(mode: Status, f: number) {
+  const p = pose(mode, f);
+  machineBed();
+  // Steam-jacketed retort, overhead condenser, and a dark pitch receiver.
+  line("#6f8189", 4, 26, 22, 26, 12);
+  line("#6f8189", 4, 26, 12, 56, 12);
+  line("#6f8189", 4, 56, 12, 56, 23);
+  oval("#798b94", 26, 31, 15, 14);
+  rect("#5e737e", 11, 31, 30, 24);
+  oval("#425864", 26, 55, 15, 7);
+  rect("#92a2a8", 14, 31, 3, 22);
+  for (const y of [33, 51]) rect("#897b60", 11, y, 30, 2);
+  rect("#4e6976", 49, 22, 14, 25);
+  rect("#879fa9", 49, 22, 3, 25);
+  for (const y of [26, 32, 38]) line("#9e7e58", 2, 52, y, 61, y + 3);
+  line("#7a8b92", 3, 56, 47, 56, 54);
+  rect("#4c555c", 47, 58, 20, 8);
+  oval("#89969b", 57, 58, 10, 3);
+  oval("#22252a", 57, 58, 8, 2);
+  if (mode === "run") rect("#494035", 55, 54 + p, 2, 2);
+  line("#87704f", 3, 0, 48, 11, 48);
+  blocked(mode);
+}
+
+function coilWinder(mode: Status, f: number) {
+  const p = pose(mode, f);
+  machineBed();
+  // Feed reel, pitch bath and traversing guide wind an insulated copper coil.
+  oval("#a28159", 14, 31, 9, 12);
+  oval("#353c3e", 14, 31, 5, 8);
+  line("#ad8a60", 2, 14, 31, 14 + [6, 0, -6, 0][p], 31 + [0, 8, 0, -8][p]);
+  line("#ad8056", 1, 21, 34, 31, 48);
+  rect("#556672", 24, 45, 16, 9);
+  rect("#292a2b", 26, 45, 12, 3);
+  line("#806148", 1, 33, 47, 49 + p, 35);
+  for (const x of [43, 64]) rect("#5d737f", x, 36, 5, 30);
+  line("#a1b0b7", 3, 41, 35, 70, 35);
+  rect("#614b38", 48, 23, 15, 24);
+  for (let x = 49; x < 63; x += 3) rect("#a07850", x, 24, 1, 22);
+  for (const x of [46, 63]) rect("#8598a2", x, 21, 3, 28);
+  rect("#a6b1b4", 49 + p * 3, 49, 3, 5);
+  blocked(mode);
+}
+
+function corePress(mode: Status, f: number) {
+  const p = pose(mode, f), drop = [0, 5, 10, 5][p];
+  machineBed();
+  for (const x of [16, 55]) {
+    rect("#536a78", x, 13, 6, 53);
+    rect("#8b9fa9", x, 13, 2, 53);
+  }
+  rect("#748893", 14, 12, 49, 6);
+  rect("#a1b0b7", 14, 12, 49, 2);
+  rect("#526b7b", 30, 18, 16, 12);
+  rect("#a8b6bc", 36, 30, 4, 7 + drop);
+  rect("#7a8f9d", 26, 35 + drop, 24, 6);
+  rect("#a5b4bc", 26, 35 + drop, 24, 2);
+  rect("#3b4d59", 25, 58, 26, 8);
+  // Stacked iron laminations, with a central slot.
+  for (const y of [51, 54, 57]) {
+    rect("#8d9da6", 28, y, 20, 2);
+    rect("#283740", 35, y, 6, 2);
+  }
+  for (const y of [59, 62]) rect("#798a95", 3, y, 17, 2);
+  blocked(mode);
+}
+
+function generatorBench(mode: Status, f: number) {
+  const p = pose(mode, f);
+  machineBed();
+  rect("#74604a", 6, 52, 64, 5);
+  rect("#a18a65", 6, 52, 64, 2);
+  // Open generator casing reveals the iron armature and two field coils.
+  oval("#526a78", 40, 33, 22, 19);
+  oval("#263640", 40, 33, 17, 15);
+  for (const y of [20, 40]) {
+    rect("#725239", 29, y, 22, 8);
+    for (let x = 31; x < 50; x += 3) rect("#a67c50", x, y, 1, 8);
+  }
+  rect("#8398a4", 30, 30, 21, 7);
+  for (const x of [33, 38, 43, 48]) rect("#455b69", x, 30, 1, 7);
+  line("#afbdc3", 3, 11, 34, 67, 34);
+  rect("#8e7958", 17, 29, 5, 11);
+  for (const x of [23, 53]) rect("#657c89", x, 45, 7, 7);
+  // Assembly tool strokes; the unfinished generator is not energized.
+  const y = 7 + [0, 2, 4, 2][p];
+  line("#a6b3b9", 2, 54, y, 54, y + 10);
+  rect("#856648", 51, y, 6, 5);
+  gear(13, 46, 4, 6, 0);
+  blocked(mode);
+}
 /** A plain crate, for any machine without a scene of its own yet. */
 function crate(mode: Status) {
   rect("#6b4a33", 14, 24, 46, 46);
@@ -821,13 +1044,13 @@ const SCENES: Record<string, (mode: Status, f: number) => void> = {
   belt_drive: beltDrive,
   pressure_pump: pressurePump,
   brick_kiln: (m, f) => furnace(m, f, [190, 110, 80]),
-  smelter: (m, f) => furnace(m, f, [172, 92, 62]),
   plate_hammer: plateHammer,
   forming_bench: formingBench,
   boiler_bench: boilerBench,
   engine_bench: engineBench,
   warehouse,
   spring_motor: springMotor,
+  steam_boiler: steamBoiler,
   steam_engine: steamEngine,
   drainage_pump: drainagePump,
   steam_hammer: steamHammer,
@@ -837,6 +1060,14 @@ const SCENES: Record<string, (mode: Status, f: number) => void> = {
   tar_tank: tarTank,
   steam_manifold: steamManifold,
   item_splitter: itemSplitter,
+  rolling_mill: rollingMill,
+  lathe,
+  gear_cutter: gearCutter,
+  wire_drawer: wireDrawer,
+  tar_still: tarStill,
+  coil_winder: coilWinder,
+  core_press: corePress,
+  generator_bench: generatorBench,
 };
 
 function drawScene(type: string, mode: Status, frame: number): void {

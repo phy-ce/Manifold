@@ -2,12 +2,13 @@
 import { tr } from "../i18n";
 import { machineRhythm, isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, itemCode, itemColor, machinePower, unitOf } from "../content";
 import {
-  BLAST, hasFire, inBlastZone, GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
+  BLAST, inBlastZone, GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
 import { beltSummary } from "./graphView";
 import { MachineArt } from "./machineArt";
 import { RhythmLane, Strike, replay, sparks } from "./handWork";
 import { SOUND } from "./sound";
+import { CLICK, keyHintHtml } from "./keyHint";
 import { makeSlot, paintSlot } from "./slots";
 
 const KEYS = ["A", "S", "D", "F"];
@@ -31,8 +32,29 @@ const STRIKE_AT: Record<string, { x: number; y: number }> = {
 };
 /** Where each fire shows: only there flickers, and embers rise from it. */
 const FIRE_AT: Record<string, { x: number; y: number }> = {
-  bloomery: spot(40, 57), brick_kiln: spot(38, 52), smelter: spot(38, 52), open_kiln: spot(38, 56),
-  steam_engine: spot(21, 59), blast_furnace: spot(36, 62), converter: spot(37, 15),
+  bloomery: spot(40, 57), brick_kiln: spot(38, 52), open_kiln: spot(38, 56),
+  blast_furnace: spot(36, 62), converter: spot(37, 15), steam_boiler: spot(28, 56),
+};
+/** Where steam leaves: the engine's exhaust, the boiler's valve, the hammer's exhaust pipe. How often at full work, in ms. */
+const STEAM_AT: Record<string, { x: number; y: number }> = {
+  steam_engine: spot(29, 11), steam_boiler: spot(71, 17), steam_hammer: spot(59, 32),
+};
+const STEAM_MS = 1000;
+/** Where a freshly struck piece stays hot for a moment after the blow, and how long it takes to go dark, in ms. */
+const AFTERGLOW_AT: Record<string, { x: number; y: number }> = { hand_forge: STRIKE_AT.hand_forge, plate_hammer: STRIKE_AT.plate_hammer };
+const AFTERGLOW_MS = 1400;
+/** Where the steam hammer's head meets the work. */
+const HAMMER_AT = spot(36.5, 55);
+/** How quickly the picture catches up with how lively the machine is: the time constant, in seconds. */
+const EASE_S = 0.4;
+/** The most poses a second a machine moves through, at full tilt. */
+const POSE_RATE = 5;
+/** A fuel piece's flame weakens only over its last part, this fraction of it. */
+const FADE_PART = 0.3;
+/** Eases 0..1 in and out, so a light neither snaps on nor stops dead. */
+const smooth = (x: number): number => {
+  const t = Math.min(1, Math.max(0, x));
+  return t * t * (3 - 2 * t);
 };
 const SPARK_COLOR: Record<string, string> = { plate_hammer: "#ffcd72", hand_forge: "#ffb238", workbench: "#c49a68", construction_bench: "#ffd58c" };
 /** Embers rise from a working fire this often, in ms. */
@@ -79,9 +101,17 @@ export class MachineWindow {
   /** Sparks and embers fly over the picture from here. */
   private readonly fx = document.createElement("span");
   private emberAt = 0;
+  private steamAt = 0;
   /** A warm glow over a fire's own spot, and the brief flash where a tool lands. */
   private readonly fireGlow = document.createElement("span");
   private nodeId: number | null = null;
+  /** How lively the open machine looks, eased toward the real thing; where its motion has got to; when it was drawn. */
+  private live = 0;
+  private fresh = true;
+  private phase = 0;
+  private drawnAt = 0;
+  /** How far the work had got when the fire went out, for the embers to die with it. */
+  private coolFrom = 0;
 
   /** `speed` is the game speed: hand work keeps time with it, and none is taken while paused. */
   constructor(private readonly game: () => GameState, private readonly changed: () => void, private readonly speed: () => number = () => 1) {
@@ -328,6 +358,10 @@ export class MachineWindow {
     if (rhythm) this.lane.start(machineRhythm(node.type));
     else this.lane.stop();
     this.struck = null;
+    // A window opens on the machine as it is, not fading in from dark.
+    this.fresh = true;
+    this.phase = 0;
+    this.coolFrom = 0;
     this.inputs = [];
     this.outputs = [];
     this.stored = [];
@@ -671,6 +705,25 @@ export class MachineWindow {
     });
   }
 
+  /**
+   * How hard a machine is going, 0 to 1. A bellows furnace burns as hard as it is blown. Any other fire
+   * burns steadily and weakens over the last part of each fuel piece; once out, it dies down with the
+   * work as that cools. Everything else is simply running or not.
+   */
+  private liveliness(node: GameNode, state: string, lit: boolean, bellows: boolean, waiting: boolean): number {
+    if (bellows) return waiting && lit ? 0.25 + 0.75 * Math.min(1, (node.blast ?? 0) / BLAST.max) : 0;
+    if (machineBurn(node.type)) {
+      if (lit) {
+        this.coolFrom = 0;
+        return smooth((node.heat ?? 0) / (node.heatFull || 1) / FADE_PART);
+      }
+      if (node.progress <= 0) return 0;
+      this.coolFrom = Math.max(this.coolFrom, node.progress);
+      return 0.35 * smooth(node.progress / this.coolFrom);
+    }
+    return state === "run" ? 1 : 0;
+  }
+
   draw(frame: number): void {
     if (this.nodeId === null) return;
     const s = this.game();
@@ -742,7 +795,8 @@ export class MachineWindow {
     const state = status(node);
     const current = recipeOf(node);
     const style = machineManual(node.type);
-    const hand = style === "keys" ? tr("키를 누르세요") : style === "rhythm" ? tr("박자에 맞춰 그림이나 Space") : style === "bellows" ? tr("풀무질: 초록 칸 유지") : tr("그림을 클릭하세요");
+    // What to press, as a key hint: a keycap and a word. The gauge and the picture say the rest.
+    const hand = style === "keys" ? keyHintHtml(tr("키"), tr("입력")) : style === "click" || !style ? keyHintHtml(CLICK(), tr("작업")) : keyHintHtml("Space", style === "bellows" ? tr("풀무질") : tr("두드리기"));
     const unlinked = node.type === PUMP && !riverOf(s, node);
     // Why a loaded machine isn't running: no fuel, too weak a power tier, or cut off at the back of the queue.
     const powerText = node.tierLow ? tr("동력 등급 부족") : node.order ? tr("동력 부족") : tr("동력 없음");
@@ -789,41 +843,77 @@ export class MachineWindow {
       cap.classList.toggle("target", waiting && i === this.target);
     });
     const now = performance.now();
+    const dt = Math.min(0.5, (now - (this.drawnAt || now)) / 1000);
+    this.drawnAt = now;
     const striking = now - this.hitAt < HIT_MS;
     const bellows = manual === "bellows";
     const blast = node.blast ?? 0;
-    const burning = machineBurn(node.type) > 0 && hasFire(node);
-    // Hand tools sit still and show the bottom of the stroke for a moment after each strike.
-    // A bellows furnace burns on its own, so it moves whenever its fire is lit.
+    const lit = machineBurn(node.type) > 0 && (node.heat ?? 0) > 0;
+    // One value from 0 to 1 says how hard the machine is going, and the picture follows it, eased, so it
+    // brightens, speeds up, dims and slows down smoothly instead of stepping between looks.
+    const target = this.liveliness(node, state, lit, bellows, waiting);
+    this.live = this.fresh ? target : this.live + (target - this.live) * (1 - Math.exp(-dt / EASE_S));
+    this.fresh = false;
+    const live = smooth(this.live);
+    // Hand tools sit still and show the bottom of the stroke for a moment after each strike. Anything
+    // else in motion moves at a pace set by how lively it is, up to POSE_RATE poses a second.
     const mode = bellows ? (waiting ? "run" : state) : waiting ? (striking ? "run" : "idle") : state;
-    const pose = !bellows && waiting && striking && STRIKE_FRAME[node.type] !== undefined ? STRIKE_FRAME[node.type] : frame;
+    this.phase += dt * POSE_RATE * live;
+    const pose = !bellows && waiting && striking && STRIKE_FRAME[node.type] !== undefined ? STRIKE_FRAME[node.type]
+      : waiting && !bellows ? frame : Math.floor(this.phase) * 2;
     const scene = `${node.type}|${mode}|${mode === "run" ? pose >> 1 : ""}`;
     if (this.art.root.dataset.scene !== scene) {
       this.art.root.dataset.scene = scene;
       this.art.show(node.type, mode, pose);
     }
-    // Light by state, so a working furnace is plainly bright and a cold one plainly dull. Fires flicker.
-    // Light by state, steady: a working machine is plainly bright and a stopped one plainly dull.
-    // Only the fire itself flickers, in its own glow over the fire spot.
-    this.art.root.style.filter =
-      bellows && waiting ? `brightness(${0.75 + blast / 260}) saturate(${0.6 + blast / 110})`
-      : state === "run" ? "brightness(1.12) saturate(1.35)"
-      : waiting ? "" : "brightness(.55) saturate(.3)";
-    const fireSpot = FIRE_AT[node.type];
-    const glowing = !!fireSpot && burning && (state === "run" || (bellows && waiting));
-    this.fireGlow.hidden = !glowing;
-    if (glowing && fireSpot) {
-      const strength = bellows ? 0.25 + blast / 160 : 0.55;
+    // Light follows liveliness: a working machine plainly bright, a stopped one plainly dull, and the
+    // way between them gradual. A rhythm machine waiting on the player keeps its plain look.
+    this.art.root.style.filter = waiting && !bellows ? ""
+      : `brightness(${(0.55 + 0.57 * live).toFixed(3)}) saturate(${(0.3 + 1.05 * live).toFixed(3)})`;
+    // Only the fire itself glows, as strong as it burns, swaying slowly rather than blinking.
+    // A hand-forged piece glows where it was struck and darkens over a second or so.
+    const afterglow = AFTERGLOW_AT[node.type];
+    const cooling = afterglow && this.hitAt ? Math.max(0, 1 - (now - this.hitAt) / AFTERGLOW_MS) : 0;
+    const fireSpot = FIRE_AT[node.type] ?? (cooling > 0 ? afterglow : undefined);
+    const glow = FIRE_AT[node.type] && machineBurn(node.type) ? 0.7 * live : 0.45 * cooling * cooling;
+    this.fireGlow.hidden = glow < 0.02;
+    if (!this.fireGlow.hidden && fireSpot) {
+      const sway = 1 + 0.04 * Math.sin(now / 180) + 0.03 * Math.sin(now / 97);
       this.fireGlow.style.left = `${fireSpot.x}px`;
       this.fireGlow.style.top = `${fireSpot.y}px`;
-      this.fireGlow.style.opacity = String(strength * (frame % 2 ? 1 : 0.7));
+      this.fireGlow.style.opacity = (glow * sway).toFixed(3);
     }
-    // Embers rise from a lit fire; a powered tool throws the odd spark as it works.
-    if ((state === "run" || (bellows && waiting)) && now - this.emberAt > (bellows ? EMBER_MS * (1.6 - blast / 100) : EMBER_MS)) {
+    // Embers rise from a fire as often as it burns hard; an engine breathes steam at its valve as hard as
+    // it is worked; a powered tool throws the odd spark.
+    if (machineBurn(node.type)) {
+      if (lit && now - this.emberAt > EMBER_MS / Math.max(0.15, live)) {
+        this.emberAt = now;
+        const fire = fireSpot ?? SPARK_AT;
+        sparks(this.fx, fire.x + (Math.random() - 0.5) * 24, fire.y - 6, "#ffb238", 1 + Math.round(live), 34, "'·*");
+      }
+      // A boiler under fire lets off steam at its valve, as often as it boils.
+      const valve = STEAM_AT[node.type];
+      if (valve && state === "run" && now - this.steamAt > STEAM_MS / Math.max(0.2, live)) {
+        this.steamAt = now;
+        sparks(this.fx, valve.x, valve.y, "#9aa7b0", 1, 22, "~");
+      }
+    } else if (node.type === ENGINE) {
+      const load = powerLoad(s, node);
+      const work = load.limit ? load.now / load.limit : 0;
+      if (state === "run" && work > 0 && now - this.emberAt > STEAM_MS / (0.2 + 0.8 * work)) {
+        this.emberAt = now;
+        sparks(this.fx, STEAM_AT.steam_engine.x, STEAM_AT.steam_engine.y, "#9aa7b0", 1, 22, "~");
+      }
+    } else if (node.type === "steam_hammer") {
+      // Each blow spends its steam out of the exhaust, and hot metal spits at the anvil.
+      if (state === "run" && now - this.emberAt > STEAM_MS * 0.8) {
+        this.emberAt = now;
+        sparks(this.fx, STEAM_AT.steam_hammer.x, STEAM_AT.steam_hammer.y, "#9aa7b0", 1, 22, "~");
+        sparks(this.fx, HAMMER_AT.x, HAMMER_AT.y, "#ffb238", 2, 28, "'·*");
+      }
+    } else if (state === "run" && machinePower(node.type) && now - this.emberAt > EMBER_MS) {
       this.emberAt = now;
-      const fire = FIRE_AT[node.type] ?? SPARK_AT;
-      if (machineBurn(node.type)) sparks(this.fx, fire.x + (Math.random() - 0.5) * 24, fire.y - 6, "#ffb238", 2, 34, "'·*");
-      else if (machinePower(node.type)) sparks(this.fx, SPARK_AT.x, SPARK_AT.y, "#a9bacb", 1, 26, "*·");
+      sparks(this.fx, SPARK_AT.x, SPARK_AT.y, "#a9bacb", 1, 26, "*·");
     }
     if (bellows) {
       this.gaugeFill.style.height = `${Math.min(100, (blast / BLAST.max) * 100)}%`;

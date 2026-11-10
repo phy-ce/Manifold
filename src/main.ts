@@ -1,7 +1,8 @@
+import { TUTORIAL, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, currentCave, inCave, startProbe } from "./engine/game";
+import { GameState, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -13,6 +14,7 @@ import { RouteWindow } from "./ui/routeWindow";
 import { HelpWindow } from "./ui/helpWindow";
 import { SaveWindow } from "./ui/saveWindow";
 import { MenuWindow } from "./ui/menuWindow";
+import { Scenery } from "./ui/scenery";
 import { setSound, soundOn } from "./ui/sound";
 import { MapView } from "./ui/mapView";
 import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
@@ -101,7 +103,7 @@ const testStart = document.createElement("button");
 testStart.type = "button";
 testStart.className = "tech";
 testStart.textContent = tr("테스트 시작");
-testStart.dataset.tip = tr("지금까지 만든 단계가 열린 상태로, 감긴 태엽 동력기, 벨트 구동기, 제련로, 원료 창고, 부품 창고, 모든 기계 2대씩, 인벤토리의 선 재료와 함께 시작합니다");
+testStart.dataset.tip = tr("새 월드에서 지금까지 만든 단계가 모두 열린 채 시작합니다. 모든 광석과 금속, 부품, 기계 2대씩, 장비 한 벌, 선 재료가 있고, 모든 바이옴이 보이도록 지도를 넓게 밝혀 둡니다");
 testStart.addEventListener("click", () => {
   if (testStart.dataset.armed !== "1") {
     testStart.dataset.armed = "1";
@@ -149,16 +151,33 @@ soundButton.addEventListener("click", () => {
   setSound(!soundOn());
   showSound();
 });
-const menu = new MenuWindow([soundButton, testStart, reset]);
+// From the menu: start the tutorial again from the top, while still in S0.
+const guideAgain = document.createElement("button");
+guideAgain.type = "button";
+guideAgain.className = "tech";
+guideAgain.textContent = tr("튜토리얼 다시 보기");
+guideAgain.addEventListener("click", () => {
+  state.tutorial = { step: 0, off: false };
+  advanceTutorial(state);
+  menu.close();
+  redraw();
+});
+const menu = new MenuWindow([soundButton, guideAgain, testStart, reset]);
 menuButton.addEventListener("click", () => menu.open());
 topActions.append(travel, indexButton, speedBar, saveButton, helpButton, menuButton);
 top.append(topStatus, topActions);
 
-// A small number shows the damage taken. No full-screen flash: it was hard on the eyes.
+// A small number shows the damage taken, and the screen's edges glow red for a moment, stronger for a
+// bigger blow. Only the edges: a flash over the whole picture was hard on the eyes.
 const hurtFlash = document.createElement("div");
 hurtFlash.className = "hurt";
 hurtFlash.setAttribute("aria-hidden", "true");
-document.body.append(hurtFlash);
+const hurtEdge = document.createElement("div");
+hurtEdge.className = "hurt-edge";
+hurtEdge.setAttribute("aria-hidden", "true");
+document.body.append(hurtFlash, hurtEdge);
+/** Damage at which the red edge is at its strongest. */
+const HURT_FULL = 10;
 let lastHp = state.hp;
 /** Matches the longest hurt animation in style.css. */
 const HURT_MS = 600;
@@ -166,7 +185,8 @@ let hurtTimer = 0;
 
 function showHurt(amount: number): void {
   hurtFlash.textContent = `-${amount}`;
-  for (const el of [hurtFlash, vitals]) {
+  hurtEdge.style.setProperty("--hurt", String(0.35 + 0.65 * Math.min(1, amount / HURT_FULL)));
+  for (const el of [hurtFlash, hurtEdge, vitals]) {
     el.classList.remove("hit");
     void el.offsetWidth; // restart the animation if it is already running
     el.classList.add("hit");
@@ -175,10 +195,29 @@ function showHurt(amount: number): void {
   clearTimeout(hurtTimer);
   hurtTimer = window.setTimeout(() => {
     hurtFlash.classList.remove("hit");
+    hurtEdge.classList.remove("hit");
     vitals.classList.remove("hit");
   }, HURT_MS);
 }
 
+// The S0 tutorial: one line saying what to do next, with a way to turn it off.
+const guide = document.createElement("div");
+guide.className = "tutorial";
+guide.setAttribute("role", "status");
+guide.hidden = true;
+const guideTag = document.createElement("span");
+guideTag.className = "tutorial-tag";
+const guideText = document.createElement("span");
+guideText.className = "tutorial-text";
+const guideOff = document.createElement("button");
+guideOff.type = "button";
+guideOff.className = "tech push";
+guideOff.textContent = tr("튜토리얼 끄기");
+guideOff.addEventListener("click", () => {
+  if (state.tutorial) state.tutorial.off = true;
+  redraw();
+});
+guide.append(guideTag, guideText, guideOff);
 const notice = document.createElement("div");
 notice.className = "notice";
 notice.hidden = true;
@@ -186,11 +225,29 @@ let noticeUntil = 0;
 const NOTICE_MS = 6000;
 const LOW_VITAL = 25;
 
+/**
+ * The load, read like health and hunger: a bar that fills as the bag gets heavier. Over the limit it turns red and
+ * pulses; a dig or pick the load just stopped makes it jolt, so the player sees why nothing happened.
+ */
+function weightMeter(load: number, limit: number, over: boolean, strain: boolean): string {
+  const cells = 10;
+  const fill = Math.min(cells, Math.ceil((load / limit) * cells));
+  const digits = String(limit).length;
+  return `<span class="meter vital weight${over ? " low" : ""}${strain ? " strain" : ""}">${tr("무게")} <span class="meter-bar">[${"#".repeat(fill).padEnd(cells, ".")}]</span> <b>${String(load).padStart(digits)}/${limit}</b></span>`;
+}
+/** Until when the load meter jolts, after a dig the load stopped. */
+let strainUntil = 0;
+const STRAIN_MS = 600;
+window.addEventListener("manifold:too-heavy", () => {
+  strainUntil = performance.now() + STRAIN_MS;
+});
+
 function meter(label: string, value: number, kind = ""): string {
   const cells = 10;
   const fill = Math.ceil((value / MAX_VITAL) * cells);
   const low = value <= LOW_VITAL ? " low" : "";
-  return `<span class="meter${low}${kind ? ` ${kind}` : ""}">${label} [${"#".repeat(fill).padEnd(cells, ".")}] ${String(value).padStart(String(MAX_VITAL).length)}</span>`;
+  // Health and hunger read at a glance: the bar in its own colour, the number bold; the rest of the line stays quiet.
+  return `<span class="meter${low}${kind ? ` ${kind}` : ""}">${label} <span class="meter-bar">[${"#".repeat(fill).padEnd(cells, ".")}]</span> <b>${String(value).padStart(String(MAX_VITAL).length)}</b></span>`;
 }
 
 const windowView = new MachineWindow(game, redraw, () => speed);
@@ -283,10 +340,16 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => {
   heldWalk.delete(e.code);
 });
-// P prospects, underground.
+// Q prospects, underground: on the left hand, beside WASD, F and the rest.
 window.addEventListener("keydown", (e) => {
-  if (e.code !== "KeyP" || e.repeat || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
+  if (e.code !== "KeyQ" || e.repeat || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
   if (startProbe(state)) redraw();
+});
+// F is the one action key on the map: it fights a creature in sight (closing in when out of reach), and
+// otherwise digs, picks or fills at the place underfoot. On the surface and underground alike.
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "KeyF" || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
+  map.useKey(e.repeat);
 });
 window.addEventListener("blur", () => heldWalk.clear());
 
@@ -389,7 +452,10 @@ keepPlaying.addEventListener("click", () => {
 win.firstElementChild!.append(keepPlaying);
 
 document.body.append(itemIndex.root);
-app.append(top, notice, graph.root, map.root, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
+// The biome's landscape behind everything, first in the page so all else stands over it.
+const scenery = new Scenery();
+document.body.prepend(scenery.root);
+app.append(top, guide, notice, graph.root, map.root, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
 
 // Escape first closes whatever is open; only with nothing to cancel does it open the menu.
 // This runs in the capture phase, before the windows' own Escape handlers close them.
@@ -401,11 +467,11 @@ window.addEventListener("keydown", (e) => {
 }, true);
 
 travel.addEventListener("click", () => {
-  const cave = currentCave(state);
+  const stair = underground(state) ? nearestStair(state) : undefined;
   if (atBase(state)) screen = screen === "base" ? "map" : "base";
-  // Underground the way home starts at the cave's way out.
-  else if (cave) walkTo(state, cave.map.entry);
-  else walkTo(state, BASE);
+  // Underground the way home starts at the nearest stair the player has seen.
+  else if (stair) walkTo(state, stair);
+  else if (!underground(state)) walkTo(state, BASE);
   redraw();
 });
 reset.addEventListener("click", () => {
@@ -430,6 +496,8 @@ reset.addEventListener("click", () => {
 function redraw(): void {
   // Only the screen for the player's current location exists on the page.
   const home = atBase(state);
+  // Underground there is no sky to see; on the surface, the biome underfoot.
+  scenery.show(underground(state) ? null : world.biomeAt(state.player.x, state.player.y, state.seed));
   if (home && !wasHome) screen = "base"; // arriving home opens the base
   wasHome = home;
   if (!home) closeBaseWindows();
@@ -437,7 +505,7 @@ function redraw(): void {
   graph.root.hidden = !showBase;
   map.root.hidden = showBase;
 
-  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : inCave(state) ? tr("출구로") : tr("기지로 복귀");
+  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : underground(state) ? tr("출구로") : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;
   const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
   const { item, amount } = stage.goal;
@@ -459,8 +527,8 @@ function redraw(): void {
   const weak = isWeak(state);
   const weakLeft = weak ? Math.ceil((state.weakUntil - state.time) / 1000) : 0;
   const shown = `<span class="meter">${yearAt(state.time)}${tr("년차")} ${SEASON_NAMES[state.season]} ${clock}</span>` +
-    meter(tr("체력"), state.hp, "hp") + meter(tr("허기"), state.hunger) +
-    `<span class="meter${over ? " low" : ""}">${tr("무게")} ${String(carried(state)).padStart(limit.length)}/${limit}<span class="${over ? "" : "reserve"}">${tr(" 초과, 이동 불가")}</span></span>` +
+    meter(tr("체력"), state.hp, "vital hp") + meter(tr("허기"), state.hunger, "vital hunger") +
+    weightMeter(carried(state), Number(limit), over, performance.now() < strainUntil) +
     `<span class="meter low${weak ? "" : " reserve"}">${tr("쇠약")} ${String(weakLeft).padStart(2)}${tr("초")}</span>`;
   if (vitals.innerHTML !== shown) vitals.innerHTML = shown;
   // A collapse jumps health back up, so it counts as a hit even though the number rises.
@@ -493,6 +561,19 @@ function redraw(): void {
     const next = STAGES[state.stage];
     win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `${tr("다음 단계:")} ${next.id} ${next.name}` : `${next.id}${tr("은 아직 준비 중입니다.")}`;
   }
+  const lesson = currentStep(state);
+  guide.hidden = !lesson;
+  guideAgain.disabled = state.stage > 0;
+  if (lesson) {
+    const tag = `${tr("튜토리얼")} ${state.tutorial!.step + 1}/${TUTORIAL.length}`;
+    if (guideTag.textContent !== tag) guideTag.textContent = tag;
+    const text = tr(lesson.text);
+    if (guideText.textContent !== text) guideText.textContent = text;
+  }
+  // The travel button is pointed out when the step needs the player somewhere else.
+  travel.classList.toggle("tutorial-target", !!lesson && elsewhere(state, lesson, home && screen === "base"));
+  // On the map, a step that needs a vein points at the search box to find it by name.
+  map.pointSearch(!!lesson?.search && !(home && screen === "base") && !underground(state));
   graph.setStage(state.stage);
   setSlotStage(state.stage);
   itemIndex.sync();
@@ -510,7 +591,9 @@ function tick(): void {
   const now = performance.now();
   const dt = now - last;
   last = now;
-  backlog = Math.min(backlog + dt * speed, MAX_CATCH_UP_MS * Math.max(1, speed));
+  // The menu stops the world while it is open, as a pause would; the chosen speed comes back when it closes.
+  const pace = menu.isOpen ? 0 : speed;
+  backlog = Math.min(backlog + dt * pace, MAX_CATCH_UP_MS * Math.max(1, pace));
   while (backlog >= STEP_MS) {
     keyWalk();
     step(state);

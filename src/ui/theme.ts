@@ -5,7 +5,7 @@
 export const UNIT = 8;
 
 /** Component sizes, in units. */
-const UNITS = { slot: 8, dockSlot: 5.5, nodeW: 22, nodeH: 12 };
+const UNITS = { slot: 6.5, dockSlot: 5.5, nodeW: 22, nodeH: 12, machineWindow: 60 };
 
 export const SIZE = {
   slot: UNITS.slot * UNIT,
@@ -13,6 +13,8 @@ export const SIZE = {
   dockSlot: UNITS.dockSlot * UNIT,
   nodeW: UNITS.nodeW * UNIT,
   nodeH: UNITS.nodeH * UNIT,
+  /** The machine window is sized by its picture and gauge, not by slots, so smaller slots leave it whole. */
+  machineWindow: UNITS.machineWindow * UNIT,
 };
 
 /** Character size in px for each kind of text art. */
@@ -38,6 +40,7 @@ export function applyTheme(): void {
     "--glyph-icon": GLYPH.icon,
     "--glyph-dock": GLYPH.dock,
     "--dock-slot": SIZE.dockSlot,
+    "--machine-window": SIZE.machineWindow,
   };
   for (const [name, px] of Object.entries(vars)) document.documentElement.style.setProperty(name, `${px}px`);
 }
