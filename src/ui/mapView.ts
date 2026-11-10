@@ -672,7 +672,7 @@ export class MapView {
         else {
           const [ch, cls, height] = terrain(x, y, s.seed);
           glyph = ch;
-          color = COLOR[cls === "t-hill" ? `t-hill${height}` : cls] ?? groundColor(cls) ?? COLOR["t-plain"];
+          color = cls === "t-hill" ? COLOR[`t-hill${height}`] : groundColor(cls) ?? COLOR[cls] ?? COLOR["t-plain"];
         }
         if (this.markCell(vx, vy, key)) color = "#10151c";
         if (glyph === " ") continue;
