@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { addTo, createGame, isRevealed, loadSave, placeMachine } from "./game";
+import { addTo, createGame, isRevealed, loadSave, placeMachine, step, walkTo } from "./game";
 import { WORKBENCH, familyOf } from "../content";
 import { TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./tutorial";
-import { BASE } from "./world";
+import { BASE, terrain } from "./world";
 
 const at = (id: string) => TUTORIAL.findIndex((step) => step.id === id);
 
@@ -16,7 +16,7 @@ describe("S0 tutorial", () => {
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("vitals");
     acknowledgeStep(s);
-    expect(currentStep(s)?.id).toBe("top");
+    expect(currentStep(s)?.id).toBe("safe");
     const t = createGame(1);
     acknowledgeStep(t);
     expect(currentStep(t)?.id).toBe("walk");
@@ -32,12 +32,10 @@ describe("S0 tutorial", () => {
     expect(currentStep(s)?.id).toBe("walk");
     s.player = { x: BASE.x + 6, y: BASE.y };
     advanceTutorial(s);
-    expect(currentStep(s)?.id).toBe("top");
-    acknowledgeStep(s);
-    expect(currentStep(s)?.id).toBe("food");
+    expect(currentStep(s)?.id).toBe("safe");
     s.player = { ...BASE };
     advanceTutorial(s);
-    expect(currentStep(s)?.id).toBe("food");
+    expect(currentStep(s)?.id).toBe("safe");
   });
 
   it("lights the way from the base to the promised clay once the clay step comes up", () => {
@@ -52,6 +50,27 @@ describe("S0 tutorial", () => {
     expect(isRevealed(s, clay.x, clay.y)).toBe(true);
     const mid = { x: Math.round((BASE.x + clay.x) / 2), y: Math.round((BASE.y + clay.y) / 2) };
     expect(isRevealed(s, mid.x, mid.y)).toBe(true);
+  });
+
+  it("has the player stopped at a river by safe mode and then cross it, before moving on", () => {
+    const s = createGame(1);
+    acknowledgeStep(s);
+    s.player = { x: BASE.x + 6, y: BASE.y };
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("safe");
+    // The nearest river on this row, east of the base.
+    let rx = 7;
+    while (terrain(rx, BASE.y, s.seed)[1] !== "t-water") rx += 1;
+    s.player = { x: rx - 2, y: BASE.y };
+    walkTo(s, { x: rx + 2, y: BASE.y });
+    for (let i = 0; i < 200 && !s.halt; i += 1) step(s);
+    expect(s.halt).toBeTruthy();
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("safe");
+    walkTo(s, { x: rx, y: BASE.y }); // the same cell again: across
+    for (let i = 0; i < 200 && s.player.x !== rx; i += 1) step(s);
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("top");
   });
 
   it("asks for food next, picked or cooked, then clay", () => {

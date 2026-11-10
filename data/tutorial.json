@@ -23,14 +23,25 @@
       }
     },
     {
-      "id": "top",
+      "id": "safe",
       "section": "기본 조작",
-      "title": "저장과 안전 모드",
-      "text": "저장 버튼으로 직접 저장 슬롯 1~3에 저장하거나 불러옵니다. 3분마다 자동 저장 칸에도 따로 남습니다. ?는 모든 조작을 모은 도움말입니다. 왼쪽의 [T] 안전 모드를 켜 두면 강이나 산 앞에서 멈추고, 그 칸을 다시 누르면 건너갑니다",
+      "title": "강과 고도 넘기",
+      "text": "강(~)이나 높이가 다른 땅(^)으로 걸어가 보세요. 왼쪽의 [T] 안전 모드가 켜져 있으면 그 앞에서 멈추고, 위에 무엇을 감지했는지와 깎일 체력이 뜹니다. 그 칸을 다시 눌러 건너가 보세요",
       "en": {
         "section": "Basics",
-        "title": "Saving and safe mode",
-        "text": "The save button saves to or loads from your slots 1 to 3; every 3 minutes a copy also goes to the autosave slot. ? is the help with every control. With [T] safe mode on (left), you stop before a river or a hill; press that cell again to cross"
+        "title": "Crossing rivers and slopes",
+        "text": "Walk toward a river (~) or ground of a different height (^). With [T] safe mode on (left), you stop in front of it, and the top shows what was seen and the health it would cost. Click that cell again to cross"
+      }
+    },
+    {
+      "id": "top",
+      "section": "기본 조작",
+      "title": "저장과 도움말",
+      "text": "저장 버튼으로 직접 저장 슬롯 1~3에 저장하거나 불러옵니다. 3분마다 자동 저장 칸에도 따로 남습니다. ?는 모든 조작을 모은 도움말입니다",
+      "en": {
+        "section": "Basics",
+        "title": "Saving and help",
+        "text": "The save button saves to or loads from your slots 1 to 3; every 3 minutes a copy also goes to the autosave slot. ? is the help with every control"
       }
     },
     {

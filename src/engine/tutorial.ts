@@ -52,7 +52,11 @@ const RULES: Record<string, Rule> = {
   vitals: { ack: true, done: () => false },
   // Getting about first: everything after happens out on the map.
   walk: { where: "map", done: (s) => Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y)) >= WALK_AWAY },
-  // The top bar (time, saving, help) and safe mode: read once out on the map, where they matter.
+  // Safe mode tried for real: stopped at a river or a slope, then across it at a cost in health. The stop is
+  // noted by the engine as it happens (tutorial.halted), and the crossing is the hurt it leaves; onStart clears
+  // older ones.
+  safe: { where: "map", onStart: (s) => { s.hurtBy = undefined; if (s.tutorial) s.tutorial.halted = false; }, done: (s) => !!s.tutorial?.halted && (s.hurtBy === "water" || s.hurtBy === "hill") },
+  // Saving and help: read once out on the map.
   top: { ack: true, done: () => false },
   // Then food: hunger runs down from the start, and food is always laid near the base.
   food: { where: "map", search: true, done: (s) => FOOD.reduce((n, id) => n + countOf(s, id), 0) >= 4 },
@@ -92,6 +96,7 @@ export const TUTORIAL: TutorialStep[] = tutorialData.steps.map(({ en, ...ko }) =
 const PAST: Record<string, (s: GameState) => boolean> = {
   vitals: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
   walk: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
+  safe: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
   top: (s) => has(s, "open_kiln") || FOOD.some((id) => countOf(s, id) > 0),
   food: (s) => has(s, "open_kiln"),
   bag: (s) => has(s, "open_kiln") || countOf(s, "clay") >= 12,
@@ -115,6 +120,8 @@ export interface TutorialState {
   tips?: string[];
   /** The last step whose start was acted on (onStart), so it happens once. */
   started?: number;
+  /** Safe mode has stopped the player at least once since the safe step came up. */
+  halted?: boolean;
 }
 
 export const newTutorial = (): TutorialState => ({ step: 0, off: false });
