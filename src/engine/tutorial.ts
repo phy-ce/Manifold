@@ -44,7 +44,7 @@ const WALK_AWAY = 6;
 
 export const TUTORIAL: TutorialStep[] = [
   // What the top bar's meters mean, before anything can go wrong. Nothing to do: the card's button moves on.
-  { id: "vitals", section: "기본 조작", title: "몸 상태 보기", ack: true, text: "위쪽 줄의 체력, 허기, 무게를 보세요. 허기는 시간이 지나며 줄고, 0이 되면 체력이 깎입니다. 허기가 절반 넘게 차 있으면 체력이 천천히 돌아옵니다. 체력이 0이 되면 쓰러져 기지로 돌아오고, 기지에서 멀수록 가진 재료를 더 잃습니다. 무게는 들고 있는 짐입니다. 무거울수록 느리게 걷고, 한도를 넘으면 걷지도 캐지도 못합니다", done: () => false },
+  { id: "vitals", section: "기본 조작", title: "몸 상태 보기", ack: true, text: "위쪽 줄의 체력, 허기, 무게를 보세요. 허기는 시간이 지나며 줄고, 0이 되면 체력이 깎입니다. 허기가 절반 넘게 차 있으면 체력이 천천히 돌아옵니다. 체력이 0이 되면 쓰러져 기지로 돌아오고, 기지에서 멀수록 가진 재료를 더 잃습니다. 무게는 들고 있는 짐입니다. 무거울수록 느리게 걷고, 한도를 넘으면 걷지도 캐지도 못합니다. 짐을 덜려면 가방(I)을 열고 아이템을 클릭해 집은 뒤 버리기를 누르세요", done: () => false },
   // Getting about first: everything after happens out on the map.
   { id: "walk", section: "기본 조작", title: "걸어 보기", where: "map", text: "M을 눌러 지도로 나가, WASD로 걷거나 지도의 칸을 눌러 걸어가 보세요. 기지에서 6칸 떨어진 곳까지 가면 됩니다. M을 다시 누르면 기지로 돌아옵니다", done: (s) => Math.max(Math.abs(s.player.x - BASE.x), Math.abs(s.player.y - BASE.y)) >= WALK_AWAY },
   // Then food: hunger runs down from the start, and food is always laid near the base.
