@@ -8,13 +8,24 @@ describe("S0 tutorial", () => {
   it("starts a new game on its first step, which sends the player out to the map", () => {
     const s = createGame(1);
     advanceTutorial(s);
-    expect(currentStep(s)?.id).toBe("clay");
+    expect(currentStep(s)?.id).toBe("food");
     expect(elsewhere(s, currentStep(s)!, true)).toBe(true);
     expect(elsewhere(s, currentStep(s)!, false)).toBe(false);
   });
 
+  it("asks for food first, picked or cooked, then clay", () => {
+    const s = createGame(1);
+    addTo(s.inv, "Mu", 3);
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("food");
+    addTo(s.inv, "Bc", 1);
+    advanceTutorial(s);
+    expect(currentStep(s)?.id).toBe("clay");
+  });
+
   it("moves on once the step is done, and never back", () => {
     const s = createGame(1);
+    addTo(s.inv, "Mu", 4);
     addTo(s.inv, "Kn", 12);
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("kiln");

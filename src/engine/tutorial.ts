@@ -18,9 +18,13 @@ export interface TutorialStep {
 /** Whether the player has a machine, built and standing or still in hand. */
 const has = (s: GameState, type: string): boolean => s.nodes.some((n) => n.type === type) || countOf(s, type) > 0 || s.cursor?.id === type;
 const stands = (s: GameState, type: string): boolean => s.nodes.some((n) => n.type === type);
+/** What counts as food for the first step: picked or cooked. */
+const FOOD = ["Be", "Mu", "Bc", "Mc"];
 
 export const TUTORIAL: TutorialStep[] = [
-  { id: "clay", where: "map", search: true, text: "지도로 나가 왼쪽 찾기 칸에 \"점토\"를 검색하고, 가까운 광맥을 눌러 걸어간 뒤 F(또는 광맥 그림)를 눌러 점토 12개를 캐세요", done: (s) => countOf(s, "clay") >= 12 },
+  // Food first: hunger runs down from the start, and food is the one thing always laid near the base.
+  { id: "food", where: "map", search: true, text: "지도로 나가 왼쪽 찾기 칸에 \"버섯\"이나 \"산딸기\"를 검색하고, 가까운 곳을 눌러 걸어간 뒤 F로 먹을 것 4개를 주우세요. 배가 고프면 가방(I)에서 음식에 마우스를 올리고 E로 먹습니다", done: (s) => FOOD.reduce((n, id) => n + countOf(s, id), 0) >= 4 },
+  { id: "clay", where: "map", search: true, text: "찾기 칸에 \"점토\"를 검색하고, 가까운 광맥을 눌러 걸어간 뒤 F(또는 광맥 그림)를 눌러 점토 12개를 캐세요", done: (s) => countOf(s, "clay") >= 12 },
   { id: "kiln", where: "base", text: "기지로 돌아와 작업대를 열고 노천 가마를 고른 뒤, 박자에 맞춰 Space를 눌러 만드세요", done: (s) => has(s, "open_kiln") },
   { id: "place-kiln", where: "base", text: "인벤토리의 노천 가마를 집어 보드 빈 곳을 눌러 설치하세요", done: (s) => stands(s, "open_kiln") },
   { id: "fuel", where: "map", search: true, text: "찾기 칸에 \"석탄\"이나 \"갈탄\"을 검색해 연료 4개를 캐고, 벽돌을 구울 점토도 12개 캐 오세요", done: (s) => countOf(s, "clay") >= 12 && countOf(s, "coal") >= 4 },
@@ -35,6 +39,7 @@ export const TUTORIAL: TutorialStep[] = [
 
 /** Steps a later step makes pointless: once the player has the thing a step leads to, it and everything before go. */
 const PAST: Record<string, (s: GameState) => boolean> = {
+  food: (s) => has(s, "open_kiln"),
   clay: (s) => has(s, "open_kiln"),
   kiln: (s) => has(s, "open_kiln"),
   "place-kiln": (s) => stands(s, "open_kiln"),
