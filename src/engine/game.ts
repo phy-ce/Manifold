@@ -221,6 +221,8 @@ export interface GameState {
   safeWalk: boolean;
   /** The hazard safe mode last stopped the player at, until the next walk. */
   halt?: (Hazard & { target: Point }) | null;
+  /** The cell the last walk stopped in front of because it was too steep to step onto (tooSteep). */
+  steep?: Point | null;
   /** Crossing a hazard the player was warned of, until back on safe ground. */
   passing?: boolean;
   inv: Slots;
@@ -1070,6 +1072,23 @@ function stepDamage(s: GameState, from: Point, to: Point): number {
   const [, kind, height] = terrain(to.x, to.y, s.seed);
   if (kind === "t-water") return WATER_DAMAGE;
   return Math.abs(height - terrain(from.x, from.y, s.seed)[2]);
+}
+
+/**
+ * The most a single step may climb or drop on the surface. Ground MAX_CLIMB + 1 or more higher or lower than the
+ * cell the player stands on cannot be walked onto at all, as things are; a step of MAX_CLIMB costs health instead.
+ */
+export const MAX_CLIMB = 1;
+
+/** Whether a step on the surface is too steep to take: a change of height over MAX_CLIMB. */
+export function tooSteep(s: GameState, from: Point, to: Point): boolean {
+  if (s.z < 0) return false;
+  const here = terrain(from.x, from.y, s.seed)[2];
+  const steep = (x: number, y: number) => Math.abs(terrain(x, y, s.seed)[2] - here) > MAX_CLIMB;
+  if (!steep(to.x, to.y)) return false;
+  // Never a trap: on a cell with no gentler way off (a stair coming up on a peak, say), any step is allowed.
+  for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if ((dx || dy) && !steep(from.x + dx, from.y + dy)) return true;
+  return false;
 }
 
 /** What a step would cost, as far as the player knows. Unseen ground looks safe. */
@@ -2630,6 +2649,14 @@ function walk(s: GameState): void {
     s.path = [];
     return;
   }
+  // Too steep to climb or drop at all: the walk stops in front of it, safe mode or not.
+  if (tooSteep(s, s.player, s.path[0])) {
+    s.steep = { ...s.path[0] };
+    s.facing = { x: Math.sign(s.path[0].x - s.player.x), y: Math.sign(s.path[0].y - s.player.y) };
+    s.path = [];
+    return;
+  }
+  s.steep = null;
   // Safe mode stops short of a hazard the player knows of, and says what it is. Once told and asked
   // again, the player crosses that stretch of hazard; the next one stops them again.
   const ahead = s.safeWalk && !s.passing ? hazardOf(s, s.player, s.path[0]) : null;

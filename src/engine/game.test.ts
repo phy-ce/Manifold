@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { familyOf, itemMatches, FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
 import {
   GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, LOAD_SLOW, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
-  REVEAL, NOTE_MAX, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
+  REVEAL, NOTE_MAX, MAX_CLIMB, tooSteep, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
 import { BASE, biomeAt, cellsOf, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 import { gameWithVeins, withVeinsNearBase } from "./testWorld";
@@ -179,8 +179,12 @@ describe("endless map", () => {
     for (const target of [{ x: 600, y: 0 }, { x: -600, y: 0 }, { x: 0, y: 400 }, { x: 0, y: -400 }]) {
       const s = createGame(5);
       const before = s.sites.length;
-      walkTo(s, target);
-      arrive(s);
+      // Straight there; where a slope too steep stops the walk, step past it as a way round would.
+      for (let tries = 0; tries < 200 && (s.player.x !== target.x || s.player.y !== target.y); tries += 1) {
+        walkTo(s, target);
+        arrive(s);
+        if (s.steep) s.player = { ...s.steep };
+      }
       expect(s.player).toEqual(target);
       expect(s.sites.length).toBeGreaterThan(before + 3);
     }
@@ -1549,7 +1553,7 @@ describe("survival", () => {
     const dry = (x: number, y: number) => terrain(x, y, s.seed)[1] !== "t-water";
     let at: { x: number; y: number } | undefined;
     for (let x = 1; x < 600 && !at; x += 1) for (let y = -60; y < 60 && !at; y += 1) {
-      if (dry(x, y) && dry(x + 1, y) && height(x, y) === 0 && height(x + 1, y) >= 2 && !s.sites.some((v) => cellsOf(v).some((c) => c.x === x + 1 && c.y === y))) at = { x, y };
+      if (dry(x, y) && dry(x + 1, y) && height(x, y) === 0 && height(x + 1, y) === 1 && !s.sites.some((v) => cellsOf(v).some((c) => c.x === x + 1 && c.y === y))) at = { x, y };
     }
     s.player = at!;
     // Safe mode warns only of ground the player has seen.
@@ -1561,6 +1565,7 @@ describe("survival", () => {
     expect(s.player).toEqual(at);
   });
 
+it("won't step onto ground two or more levels higher or lower, safe mode or not, and marks where it stopped", () => {    const s = createGame(1);    const height = (x: number, y: number) => terrain(x, y, s.seed)[2];    const dry = (x: number, y: number) => terrain(x, y, s.seed)[1] !== "t-water";    let at: { x: number; y: number } | undefined;    for (let x = 1; x < 900 && !at; x += 1) for (let y = -80; y < 80 && !at; y += 1) {      if (dry(x, y) && dry(x + 1, y) && height(x, y) === 0 && height(x + 1, y) >= 2 && height(x - 1, y) === 0) at = { x, y };    }    s.player = at!;    setSafeWalk(s, false);    const hp = s.hp;    walkTo(s, { x: at!.x + 1, y: at!.y });    for (let i = 0; i < 20 && s.path.length; i += 1) step(s);    expect(s.player).toEqual(at);    expect(s.steep).toEqual({ x: at!.x + 1, y: at!.y });    expect(s.hp).toBe(hp);    expect(tooSteep(s, at!, { x: at!.x + 1, y: at!.y })).toBe(true);    expect(MAX_CLIMB).toBe(1);  });
   it("collapses to the base, loses 30% of what is carried, and keeps stored goods", () => {
     const s = createGame(1);
     s.inv[0] = { id: "Lm", n: 10 };

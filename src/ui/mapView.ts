@@ -313,6 +313,8 @@ export class MapView {
   private readonly warn = document.createElement("div");
   /** What safe mode stopped for, shown for a moment at the top of the screen. */
   private readonly haltFlash = document.createElement("div");
+  /** The too-steep cell last noted, so the note shows once per stop. */
+  private steepShown = "";
   private veins = new Map<number, Vein>();
   private hit = 0;
   private drawnVein = "";
@@ -691,6 +693,18 @@ export class MapView {
         this.haltFlash.classList.add("hit");
       }
     }
+    // A step too steep to take stopped the walk: the same box and note, once per stop.
+    const steep = s.steep ? `${s.steep.x},${s.steep.y}` : "";
+    if (steep !== this.steepShown) {
+      this.steepShown = steep;
+      if (s.steep) {
+        this.emphasize([s.steep], "strong");
+        this.haltFlash.textContent = tr("너무 가파름");
+        this.haltFlash.classList.remove("hit");
+        void this.haltFlash.offsetWidth;
+        this.haltFlash.classList.add("hit");
+      }
+    }
     this.fight.draw();
     this.drawVein(s);
     const cave = s.z < 0;
@@ -711,7 +725,7 @@ export class MapView {
     // On the surface the map only changes when the player moves, a cell empties or something blinks; underground creatures move every step.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0) + (site.note ? 31 : 0) + 7 * (site.cells?.filter((c) => c.left <= 0).length ?? 0), 0);
     const live = cave || s.mobs.length || this.marking() ? `${s.time},${Math.floor(performance.now() / 150)}` : "";
-    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${live}`;
+    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(this.viewW / 2);
@@ -719,9 +733,10 @@ export class MapView {
     if (cave) this.paintUnder(s, probing);
     else this.paint(s);
     // Where safe mode stopped: the hazard cell boxed in red, as long as the stop holds.
-    if (s.halt) {
-      const vx = s.halt.x - this.originX;
-      const vy = s.halt.y - this.originY;
+    for (const cell of [s.halt, s.steep]) {
+      if (!cell) continue;
+      const vx = cell.x - this.originX;
+      const vy = cell.y - this.originY;
       this.ctx.strokeStyle = COLOR.wolf;
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(vx * CELL_W + 1, vy * CELL_H + 1, CELL_W - 2, CELL_H - 2);
