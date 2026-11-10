@@ -158,11 +158,11 @@
       "id": "ore",
       "section": "철",
       "title": "철광석 찾기",
-      "text": "철광석도 직접 찾아야 합니다. 멀리 돌아다녀야 할 수 있으니 먹을 것을 챙기세요. 한 번 본 광맥은 찾기 칸에 \"철광석\"이나 \"갈철석\"을 검색하면 나옵니다. 철광석 18개를 캐고, 연료도 넉넉히 캐 오세요",
+      "text": "철광석도 직접 찾아야 합니다. 멀리 돌아다녀야 할 수 있으니 먹을 것을 챙기세요. 설원에 가 보면 괜찮을지도 모릅니다. 하지만 그곳엔 무시무시한 것이 산다는 소문이 있습니다... 한 번 본 광맥은 찾기 칸에 \"철광석\"을 검색하면 나옵니다. 철광석 18개를 캐고, 연료도 넉넉히 캐 오세요",
       "en": {
         "section": "Iron",
         "title": "Find iron ore",
-        "text": "Iron ore has to be found too. You may need to go far, so take food. Once you have seen a vein, search \"iron ore\" or \"limonite\" to find it again. Dig 18 iron ore, and plenty of fuel"
+        "text": "Iron ore has to be found too. You may need to go far, so take food. The snowfield might be worth a look. But they say something dreadful lives there... Once you have seen a vein, search \"iron ore\" to find it again. Dig 18 iron ore, and plenty of fuel"
       }
     },
     {
