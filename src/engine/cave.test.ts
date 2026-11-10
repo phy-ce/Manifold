@@ -5,7 +5,7 @@ import { CAVE, CAVES, PUMP, SURFACE_ORES, familyOf, inLayer, layerOres, matches 
 import {
   GameState, addTo, atBase, caveDoorHere, countOf, createGame, createTestGame, enterCave, leaveCave, loadSave, mine, nearestStair,
   FISTS, attack, attackNearest, weaponOf, clearLine, onThisMap, setNote, siteHere, siteSpotHere, stairHere, startProbe, step, underSeenAt, walkStep, walkTo,
-  SAVE_VERSION,
+  SAVE_VERSION, actionKey, creaturesInSight,
 } from "./game";
 import {
   BASE, CELL_ASPECT, CHUNK, FLOOR, HABITAT, Point, ROCK, chunkOf, chunkSites, entrancesIn, nearCave, nearEntrance, safePath, terrain, biomeAt, underCell,
@@ -356,6 +356,17 @@ describe("underground creatures", () => {
     s.mobs = [{ id: 0, kind: "melee", ...far, wait: 0, cool: 0, hp: 10 }];
     for (let i = 0; i < 40; i += 1) { keepFed(s); step(s); }
     expect(s.mobs[0]).toMatchObject(far);
+  });
+
+  it("gives F to the fight while a creature is in sight, and back to the ground once it is gone", () => {
+    const { s, m } = setup([1, 1]);
+    const before = actionKey(s);
+    s.mobs = [{ id: 0, kind: "melee", ...m, wait: 0, cool: 99999, hp: 2 }];
+    expect(creaturesInSight(s).map((x) => x.id)).toEqual([0]);
+    expect(actionKey(s)).toBe("fight");
+    s.mobs = [];
+    expect(actionKey(s)).toBe(before);
+    expect(before).not.toBe("fight");
   });
 
   it("is struck with bare hands in reach, only once the blow is ready, and dies at no health", () => {

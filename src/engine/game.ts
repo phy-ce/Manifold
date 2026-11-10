@@ -896,6 +896,21 @@ export const isVisible = (s: GameState, x: number, y: number): boolean =>
 
 export const isWeak = (s: GameState): boolean => s.time < s.weakUntil;
 
+/** The live creatures the player can see now, nearest first. */
+export function creaturesInSight(s: GameState): Mob[] {
+  return s.mobs.filter((m) => m.hp > 0 && mobVisible(s, m) && isVisible(s, m.x, m.y))
+    .sort((a, b) => steps8(a, s.player) - steps8(b, s.player) || a.id - b.id);
+}
+
+/**
+ * What F is for right now, the one place this is decided: with a creature in sight F only fights, and working
+ * the ground waits; otherwise it works the place underfoot. C closes in on a creature, so F never walks.
+ */
+export function actionKey(s: GameState): "fight" | "work" | "none" {
+  if (creaturesInSight(s).length) return "fight";
+  return siteHere(s) ? "work" : "none";
+}
+
 /** A vein cell and the site it belongs to. For a site without cells, the cell is a stand-in. */
 export interface VeinSpot {
   site: Site;

@@ -1,6 +1,7 @@
 ﻿import { tr } from "../i18n";
-import { GameState, Mob, attack, canStrike, creatureInfo, isVisible, mobVisible, walkTo, weaponOf } from "../engine/game";
-import { underCell, ROCK } from "../engine/world";
+import { GameState, Mob, attack, canStrike, creatureInfo, creaturesInSight, mobVisible, walkTo, weaponOf } from "../engine/game";
+import { BIOMES } from "../content";
+import { biomeAt, underCell, ROCK } from "../engine/world";
 import { SOUND } from "./sound";
 import { keyHint, setKeyHint } from "./keyHint";
 
@@ -90,6 +91,9 @@ export class FightPanel {
   private readonly title = document.createElement("strong");
   private readonly status = document.createElement("span");
   private readonly key = keyHint("F", "", "off");
+  private readonly near = keyHint("C", "", "off");
+  /** What the idle view was last drawn for, so standing still with nothing in sight costs nothing. */
+  private idle = "";
   private readonly canvas = document.createElement("canvas");
   private readonly ctx: CanvasRenderingContext2D;
   private readonly frame = new ImageData(W, H);
@@ -106,8 +110,8 @@ export class FightPanel {
   private queued: { id: number; until: number } | null = null;
 
   constructor(private readonly game: () => GameState, private readonly changed: () => void) {
+    // Always on screen: the view the way the player faces, with creatures in it when there are any.
     this.root.className = "box fight-panel";
-    this.root.hidden = true;
     this.head.className = "fight-head";
     this.canvas.className = "fight-view";
     this.canvas.width = W;
@@ -115,8 +119,9 @@ export class FightPanel {
     this.canvas.tabIndex = 0;
     this.canvas.setAttribute("role", "button");
     this.ctx = this.canvas.getContext("2d", { alpha: false })!;
-    // The F key, always in the header so nothing shifts: lit when a creature is in reach, dim otherwise.
-    this.head.append(this.title, this.key, this.status);
+    // F and C, always in the header so nothing shifts: F lit when a creature is in reach, C when one is seen out of it.
+    this.title.textContent = tr("시야");
+    this.head.append(this.title, this.key, this.near, this.status);
     this.root.append(this.head, this.canvas);
     // On press, not release: a click only fires when the button comes back up, which feels late in a fight.
     this.canvas.addEventListener("pointerdown", (event) => {
@@ -135,19 +140,25 @@ export class FightPanel {
     });
   }
 
-  get showing(): boolean { return !this.root.hidden; }
+  /** Whether a creature is in sight, so F fights. */
+  get showing(): boolean { return creaturesInSight(this.game()).length > 0; }
 
-  /**
-   * F: the same as pressing the nearest creature in sight, so it is buffered and flashes too. In reach it is
-   * struck; out of reach the player closes in on it.
-   */
+  /** F: the same as pressing the nearest creature in reach, so it is buffered and flashes too. F never walks. */
   strikeNearest(): boolean {
     const s = this.game();
-    if (!this.showing) return false;
-    const target = s.mobs.filter((m) => mobVisible(s, m) && isVisible(s, m.x, m.y))
-      .sort((a, b) => steps8(a, s.player) - steps8(b, s.player))[0];
-    if (!target) return false;
+    const target = creaturesInSight(s)[0];
+    if (!target || steps8(target, s.player) > weaponOf(s).range) return false;
     this.strike(target.id);
+    return true;
+  }
+
+  /** C: walks up to the nearest creature in sight that is out of reach. */
+  approachNearest(): boolean {
+    const s = this.game();
+    const target = creaturesInSight(s)[0];
+    if (!target || steps8(target, s.player) <= weaponOf(s).range) return false;
+    walkTo(s, { x: target.x, y: target.y });
+    this.changed();
     return true;
   }
 
@@ -180,10 +191,10 @@ export class FightPanel {
   }
 
   /**
-   * Open snowfield, nothing to cast against: a dim sky over pale snow, both fading into haze toward the
-   * horizon. Flecks in the snow are fixed to the ground, so they slide as the view turns.
+   * Open ground, nothing to cast against: a dim sky over the biome's ground (`near`, its colour close by), both
+   * fading into haze toward the horizon. Flecks are fixed to the ground, so they slide as the view turns.
    */
-  private paintSnowfield(px: number, py: number, dx: number, dy: number): void {
+  private paintOpen(px: number, py: number, dx: number, dy: number, near: [number, number, number]): void {
     const haze = [92, 100, 112];
     for (let y = 0; y < H; y++) {
       const fade = Math.abs(y - H / 2 + .5) / (H / 2);
@@ -194,12 +205,12 @@ export class FightPanel {
       }
       // A floor row's distance; nearer rows are brighter snow.
       const row = (H / 2) / Math.max(.5, y - H / 2 + .5);
-      const near = Math.min(1, fade * 1.6);
-      const base = [haze[0] + (196 - haze[0]) * near, haze[1] + (206 - haze[1]) * near, haze[2] + (218 - haze[2]) * near];
+      const close = Math.min(1, fade * 1.6);
+      const base = [0, 1, 2].map((i) => haze[i] + (near[i] - haze[i]) * close);
       for (let x = 0; x < W; x++) {
         const plane = (x + .5 - W / 2) / FOCAL;
         const gx = Math.floor((px + (dx - dy * plane) * row) * 4), gy = Math.floor((py + (dy + dx * plane) * row) * 4);
-        const fleck = ((Math.imul(gx, 73856093) ^ Math.imul(gy, 19349663)) >>> 0) % 23 === 0 ? 14 * near : 0;
+        const fleck = ((Math.imul(gx, 73856093) ^ Math.imul(gy, 19349663)) >>> 0) % 23 === 0 ? 14 * close : 0;
         this.pixel(x, y, base[0] - fleck, base[1] - fleck, base[2] - fleck * .6);
       }
     }
@@ -209,11 +220,26 @@ export class FightPanel {
     const s = this.game();
     // Underground the walls are the rock around; on the surface there is nothing to cast against.
     const cave = s.z < 0;
-    const seen = s.mobs.filter((m) => m.hp > 0 && mobVisible(s, m) && isVisible(s, m.x, m.y));
-    seen.sort((a, b) => Math.hypot(a.x - s.player.x, a.y - s.player.y) - Math.hypot(b.x - s.player.x, b.y - s.player.y) || a.id - b.id);
-    const wasHidden = this.root.hidden;
-    this.root.hidden = !seen.length;
-    if (!seen.length) { this.last = 0; this.queued = null; return; }
+    const seen = creaturesInSight(s);
+    const weapon = weaponOf(s);
+    const inReach = seen.some((m) => steps8(m, s.player) <= weapon.range);
+    // The key hints say what F and C would do right now; with nothing in sight both are dim.
+    setKeyHint(this.key, "F", tr("공격"), inReach && canStrike(s) ? "on" : "off");
+    setKeyHint(this.near, "C", tr("다가가기"), seen.length && !inReach ? "on" : "off");
+    this.status.textContent = `${tr("사거리")} ${weapon.range}${tr("칸")}`;
+    const wasIdle = !!this.idle;
+    if (!seen.length) {
+      this.queued = null;
+      // Nothing in sight: the view looks the way the player faces, and is drawn again only when that changes.
+      const facing = s.facing ?? { x: 0, y: 1 };
+      const idle = `${s.z},${s.player.x},${s.player.y},${facing.x},${facing.y}`;
+      if (idle === this.idle) return;
+      this.idle = idle;
+      this.angle = Math.atan2(facing.y, facing.x);
+      this.canvas.setAttribute("aria-label", tr("시야"));
+    } else {
+      this.idle = "";
+    }
     const now = performance.now();
     // A blow pressed early lands as soon as the weapon is ready, if it is still wanted.
     if (this.queued && (now > this.queued.until || !s.mobs.some((m) => m.id === this.queued!.id))) this.queued = null;
@@ -223,21 +249,17 @@ export class FightPanel {
       this.strike(id);
       return;
     }
+    // With a creature in sight the view turns to the nearest, quickly the first time and smoothly after.
     const target = seen[0];
-    const desired = Math.atan2(target.y - s.player.y, target.x - s.player.x);
-    if (wasHidden || this.z !== s.z) this.angle = desired;
-    const delta = Math.atan2(Math.sin(desired - this.angle), Math.cos(desired - this.angle));
-    this.angle += delta * (1 - Math.exp(-Math.min(150, now - this.last) / 180));
+    if (target) {
+      const desired = Math.atan2(target.y - s.player.y, target.x - s.player.x);
+      if (wasIdle || this.z !== s.z) this.angle = desired;
+      const delta = Math.atan2(Math.sin(desired - this.angle), Math.cos(desired - this.angle));
+      this.angle += delta * (1 - Math.exp(-Math.min(150, now - this.last) / 180));
+      this.canvas.setAttribute("aria-label", `${tr("시야")}: ${seen.map((m) => `${tr(creatureInfo(m.kind).name)} ${m.hp}/${creatureInfo(m.kind).hp}`).join(", ")}`);
+    }
     this.last = now;
     this.z = s.z;
-    const weapon = weaponOf(s);
-    this.title.textContent = tr("전투");
-    this.status.textContent = `${tr("사거리")} ${weapon.range}${tr("칸")} · ${canStrike(s) ? tr("공격 가능") : tr("준비 중")}`;
-    // The key hint says what F would do right now.
-    const inReach = seen.some((m) => steps8(m, s.player) <= weapon.range);
-    const keyText = inReach ? tr("공격") : tr("다가가기");
-    setKeyHint(this.key, "F", keyText, inReach && canStrike(s) ? "on" : "off");
-    this.canvas.setAttribute("aria-label", `${tr("전투")}: ${seen.map((m) => `${tr(creatureInfo(m.kind).name)} ${m.hp}/${creatureInfo(m.kind).hp}`).join(", ")}`);
     this.picks.fill(-1);
     this.depth.fill(Infinity);
     const px = s.player.x + .5, py = s.player.y + .5;
@@ -250,7 +272,9 @@ export class FightPanel {
       }
     } else {
       this.walls.fill(Infinity);
-      this.paintSnowfield(px, py, dx, dy);
+      const ground = BIOMES[biomeAt(s.player.x, s.player.y, s.seed)].ground;
+      const near: [number, number, number] = [1, 3, 5].map((i) => parseInt(ground.slice(i, i + 2), 16)) as [number, number, number];
+      this.paintOpen(px, py, dx, dy, near);
     }
     // DDA ray lengths are perpendicular camera depths, shared with billboard projection.
     for (let x = 0; cave && x < W; x++) {
