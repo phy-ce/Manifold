@@ -2,8 +2,9 @@
 // It docks beside the game so it can stay open next to a machine window.
 import { tr } from "../i18n";
 import {
-  FUEL_GROUP, machineRhythm, Recipe, burners, buildUses, compareItems, formLabel, fuelValue, indexItems, isFuel, isGroup, itemCode, itemName, itemSource, machineBurn, machineManual, machineName,
+  FUEL_GROUP, machineRhythm, Recipe, burners, buildUses, compareItems, formLabel, fuelValue, indexItems, isFuel, isGroup, itemName, itemSource, machineBurn, machineManual, machineName,
   machinePower, machinePowerOut, recipesFor, usesOf,
+  itemMatches,
 } from "../content";
 import { GameState, bagHolds, countOf, itemStats, fillFromBag, nodeById, runsRecipe } from "../engine/game";
 import { knownMembers, makeSlot, paintSlot } from "./slots";
@@ -126,7 +127,7 @@ export class ItemIndex {
     const query = this.search.value.trim().toLowerCase();
     // Same order as stacks everywhere else: raw materials, metals by shape, made goods by depth, then machines.
     const found = indexItems(this.game().stage).filter((id) =>
-      !query || itemName(id).toLowerCase().includes(query) || itemCode(id).toLowerCase().includes(query)).sort(compareItems);
+      itemMatches(id, query)).sort(compareItems);
     // A page is whole rows of what fits across, so no page but the last has a gap.
     const columns = getComputedStyle(this.grid).gridTemplateColumns.split(" ").filter((c) => c.endsWith("px")).length;
     const perPage = columns ? columns * GRID_ROWS : GRID_PAGE;

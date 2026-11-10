@@ -447,6 +447,15 @@ export function categoryNames(id: string): string[] {
   if (FORAGE.includes(id)) names.push(tr("음식"));
   return names;
 }
+/**
+ * Whether an item answers a search: by its name or code, or by a category it belongs to, so "점토" finds kaolin
+ * and "연료" every coal. The one rule for every search box (the map's and the index's); `query` is lowercased.
+ */
+export function itemMatches(id: string, query: string, extra: string[] = []): boolean {
+  if (!query) return true;
+  return [itemName(id), itemCode(id), ...categoryNames(id), ...extra].some((t) => t.toLowerCase().includes(query));
+}
+
 /** The items a group stands for: an ore family or group, or every fuel. Empty for a plain item. */
 export const membersOf = (id: string): string[] => (id === FUEL_GROUP ? FUELS : groupMembers(id));
 export const isGroup = (id: string): boolean => membersOf(id).length > 0;
