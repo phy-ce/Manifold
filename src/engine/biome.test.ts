@@ -41,6 +41,38 @@ describe("biomes", () => {
     }
   });
 
+  it("lays biomes in whole regions, never specks: away from the base no patch is smaller than a good field", () => {
+    const [x0, y0, w, h] = [200, 120, 360, 220];
+    for (const seed of [1, 4, 7]) {
+      const grid = Array.from({ length: h }, (_, y) => Array.from({ length: w }, (_, x) => biomeAt(x0 + x, y0 + y, seed)));
+      const seen = Array.from({ length: h }, () => new Array<boolean>(w).fill(false));
+      let smallest = Infinity;
+      for (let y = 0; y < h; y += 1) {
+        for (let x = 0; x < w; x += 1) {
+          if (seen[y][x]) continue;
+          // Flood one patch; a patch cut by the window's edge may be bigger than it looks, so it isn't counted.
+          const id = grid[y][x];
+          const todo = [[x, y]];
+          seen[y][x] = true;
+          let size = 0;
+          let edge = false;
+          while (todo.length) {
+            const [cx, cy] = todo.pop()!;
+            size += 1;
+            if (cx === 0 || cy === 0 || cx === w - 1 || cy === h - 1) edge = true;
+            for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+              if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny][nx] || grid[ny][nx] !== id) continue;
+              seen[ny][nx] = true;
+              todo.push([nx, ny]);
+            }
+          }
+          if (!edge) smallest = Math.min(smallest, size);
+        }
+      }
+      expect(smallest, `seed ${seed}`).toBeGreaterThan(150);
+    }
+  });
+
   it("runs rivers only through plain and forest, and finds a river near the base", () => {
     const seed = 3;
     for (let x = -1200; x < 1200; x += 3) {

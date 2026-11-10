@@ -215,6 +215,56 @@ function climate(x: number, y: number, seed: number): number {
   return Math.min(1, Math.max(0, (v - 0.5) * 2 + 0.5));
 }
 
+/** The biome the climate gives at one point: height first, then warmth and wetness. */
+function climateBiome(x: number, y: number, seed: number): { id: string; wet: number } {
+  const high = climate(x, y, seed + 101);
+  const warm = climate(x, y, seed + 202);
+  const wet = climate(x, y, seed + 303);
+  const id = high > 0.78 ? "mountain" : warm < 0.24 ? "snow" : warm > 0.7 && wet < 0.45 ? "desert" : wet > 0.66 ? "marsh" : wet > 0.48 ? "forest" : "plains";
+  return { id, wet };
+}
+
+/** Each region's biome, worked out once: a region is asked for by every cell in it. */
+const regionCache = new Map<string, { id: string; wet: number }>();
+
+/**
+ * Biomes come in whole regions, never in specks: the map is cut into regions about `regionSize` cells across
+ * (each the cells nearest one jittered point), and a region takes the climate's biome at its point. The cut is
+ * bent by a slow noise (`regionWarp` of a region), so the borders wander instead of running straight. Before
+ * this a cell read the climate on its own, and a biome that needs two fields at once, like the hot and dry
+ * desert, came out as strips a couple of cells wide.
+ */
+function regionBiome(x: number, y: number, seed: number): { id: string; wet: number } {
+  const size = BIOME_WORLD.regionSize;
+  const bend = size * BIOME_WORLD.regionWarp;
+  // Measured with rows squashed back to cells' true shape, so regions come out round rather than tall.
+  const px = x + (valueNoise(x, y, seed + 505, size) - 0.5) * 2 * bend;
+  const py = y / CELL_ASPECT + (valueNoise(x, y, seed + 506, size) - 0.5) * 2 * bend;
+  const gx = Math.floor(px / size);
+  const gy = Math.floor(py / size);
+  let best = Infinity;
+  let bx = gx;
+  let by = gy;
+  for (let j = gy - 1; j <= gy + 1; j += 1) {
+    for (let i = gx - 1; i <= gx + 1; i += 1) {
+      const cx = (i + 0.15 + 0.7 * hash(i, j, seed + 701)) * size;
+      const cy = (j + 0.15 + 0.7 * hash(i, j, seed + 702)) * size;
+      const dist = (cx - px) ** 2 + (cy - py) ** 2;
+      if (dist < best) [best, bx, by] = [dist, i, j];
+    }
+  }
+  const key = `${seed},${bx},${by}`;
+  let found = regionCache.get(key);
+  if (!found) {
+    if (regionCache.size > 4096) regionCache.clear();
+    const cx = (bx + 0.15 + 0.7 * hash(bx, by, seed + 701)) * size;
+    const cy = (by + 0.15 + 0.7 * hash(bx, by, seed + 702)) * size;
+    found = climateBiome(Math.round(cx), Math.round(cy * CELL_ASPECT), seed);
+    regionCache.set(key, found);
+  }
+  return found;
+}
+
 /**
  * The biome of a cell, from three slow fields: height, warmth and wetness. Around the base it is always
  * plain, and for a good way out only plain or forest, so every seed starts the same way and has a river near.
@@ -222,10 +272,7 @@ function climate(x: number, y: number, seed: number): number {
 export function biomeAt(x: number, y: number, seed: number): string {
   const d = Math.hypot(x - BASE.x, (y - BASE.y) / CELL_ASPECT);
   if (d < BIOME_WORLD.starterRadius) return "plains";
-  const high = climate(x, y, seed + 101);
-  const warm = climate(x, y, seed + 202);
-  const wet = climate(x, y, seed + 303);
-  const id = high > 0.78 ? "mountain" : warm < 0.24 ? "snow" : warm > 0.7 && wet < 0.45 ? "desert" : wet > 0.66 ? "marsh" : wet > 0.48 ? "forest" : "plains";
+  const { id, wet } = regionBiome(x, y, seed);
   // The mild belt's edge wanders a little, so it doesn't end in a circle.
   const mild = BIOME_WORLD.temperateRadius + valueNoise(x, y, seed + 404, 20) * 25;
   if (d < mild && id !== "plains" && id !== "forest") return wet > 0.5 ? "forest" : "plains";

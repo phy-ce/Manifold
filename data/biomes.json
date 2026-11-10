@@ -1,5 +1,7 @@
 {
   "climateScale": 56,
+  "regionSize": 40,
+  "regionWarp": 0.22,
   "lakeScale": 7,
   "temperateRadius": 75,
   "starterRadius": 24,

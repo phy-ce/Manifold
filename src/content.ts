@@ -137,7 +137,7 @@ export interface Biome {
   rules?: { walk?: number; hunger?: number; winterHunger?: number; vision?: number };
 }
 const biomeData = localize(biomeJson) as unknown as {
-  climateScale: number; lakeScale: number; temperateRadius: number; starterRadius: number;
+  climateScale: number; regionSize: number; regionWarp: number; lakeScale: number; temperateRadius: number; starterRadius: number;
   biomes: Record<string, Omit<Biome, "id">>;
   yeti: Yeti;
 };
@@ -156,7 +156,7 @@ export interface Yeti {
 export const YETI: Yeti = biomeData.yeti;
 export const BIOMES: Record<string, Biome> = Object.fromEntries(Object.entries(biomeData.biomes).map(([id, b]) => [id, { id, ...b } as Biome]));
 export const BIOME_WORLD = {
-  climateScale: biomeData.climateScale, lakeScale: biomeData.lakeScale,
+  climateScale: biomeData.climateScale, regionSize: biomeData.regionSize, regionWarp: biomeData.regionWarp, lakeScale: biomeData.lakeScale,
   temperateRadius: biomeData.temperateRadius, starterRadius: biomeData.starterRadius,
 };
 /**
