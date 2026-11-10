@@ -2,19 +2,22 @@
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
 import { BIOMES, CAVE, CAVES, WATER, YETI, categoryNames, forageSeasons, itemCode, itemColor, itemName } from "../content";
-import { GameState, NOTE_MAX, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
+import { GameState, NOTE_MAX, actionKey, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, groundColor, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { CLICK, keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
 import { FightPanel } from "./fightPanel";
 
-/** Size of the window onto the endless map, which stays centred on the player. */
-const VIEW_W = 60;
-const VIEW_H = 20;
+/**
+ * The window onto the endless map stays centred on the player and fills the middle of the screen, up to this
+ * many cells (1080×900px at 1920×1080). A smaller screen shows fewer cells at the same size.
+ */
+const MAX_VIEW_W = 120;
+const MAX_VIEW_H = 50;
 const CELL_W = 9;
 const CELL_H = 18;
-/** The most results listed; the list scrolls inside its box. */
-const MAX_RESULTS = 40;
+/** Height of one search result row and the gap under it, matching .route-row in style.css (--control + --gap-sm). */
+const RESULT_ROW = 36;
 /**
  * How strongly the map points a cell out, by level. `ms` is how long it lasts; a blink flashes amber on and off,
  * otherwise the amber fades out; `fill` is how solid the amber is; `outline` draws a box round the cell.
@@ -229,7 +232,15 @@ const siteName = (s: GameState, site: Site): string =>
   site.ore === CAVE ? tr("자연 동굴") : site.ore === WATER ? `${WATER_SITE[waterKind(site.x, site.y, s.seed)]} ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.left <= 0 ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
 
 export class MapView {
+  /** The map itself, in the middle of the screen. */
   readonly root = document.createElement("section");
+  /** Everything about the map, in the left column: where, keys, the view ahead, the place underfoot, search. */
+  readonly side = document.createElement("div");
+  private viewW = 60;
+  private viewH = 20;
+  /** Which page of search results shows; the list never scrolls. */
+  private resultPage = 0;
+  private readonly pagerBar = document.createElement("div");
   private readonly canvas = document.createElement("canvas");
   private readonly ctx = this.canvas.getContext("2d")!;
   private readonly panel = document.createElement("div");
@@ -268,18 +279,25 @@ export class MapView {
   private originY = 0;
 
   constructor(private readonly game: () => GameState, private readonly changed: () => void) {
-    this.root.className = "map-view";
+    this.root.className = "box map-box map-view";
+    this.side.className = "map-side";
     this.fight = new FightPanel(game, changed);
-    const scale = window.devicePixelRatio || 1;
     this.canvas.className = "map";
-    this.canvas.width = VIEW_W * CELL_W * scale;
-    this.canvas.height = VIEW_H * CELL_H * scale;
-    this.canvas.style.width = `${VIEW_W * CELL_W}px`;
-    this.canvas.style.height = `${VIEW_H * CELL_H}px`;
     this.canvas.setAttribute("aria-label", tr("지도, 칸을 클릭해 이동"));
-    this.ctx.scale(scale, scale);
-    this.ctx.textBaseline = "middle";
-    this.ctx.textAlign = "center";
+    this.setView(this.viewW, this.viewH);
+    // The map takes as many whole cells as fit in the middle of the screen.
+    new ResizeObserver(() => {
+      const box = this.root.getBoundingClientRect();
+      if (!box.width) return; // hidden while the base shows
+      const pad = parseFloat(getComputedStyle(this.root).paddingLeft) * 2 + 2;
+      const w = Math.min(MAX_VIEW_W, Math.max(20, Math.floor((box.width - pad) / CELL_W)));
+      const h = Math.min(MAX_VIEW_H, Math.max(10, Math.floor((box.height - pad) / CELL_H)));
+      if (w !== this.viewW || h !== this.viewH) {
+        this.setView(w, h);
+        this.drawnMap = "";
+        this.draw();
+      }
+    }).observe(this.root);
     this.canvas.addEventListener("click", (e) => {
       const [x, y] = this.cellAt(e);
       const s = this.game();
@@ -336,15 +354,13 @@ export class MapView {
     });
     this.panel.append(this.head, this.note, this.vein);
 
-    const mapBox = document.createElement("div");
-    mapBox.className = "box scroll map-box";
-    // Every line above the map keeps to one line: long text is cut short rather than wrapped, so the map never moves.
-    this.place.className = "bar-row map-line";
+    // Every line in the column keeps to one line: long text is cut short rather than wrapped, so nothing moves.
+    this.place.className = "box map-line";
     const walkMode = document.createElement("div");
-    walkMode.className = "map-tools";
+    walkMode.className = "box map-tools";
     // One switch: safe mode stops a walk short of a known hazard and says what it is.
     this.safe.type = "button";
-    this.safe.className = "tech";
+    this.safe.className = "key-button";
     this.safe.dataset.tip = tr("켜면 위험 지역에 들어가기 전에 멈추고 알려 줍니다 (T)");
     this.safe.addEventListener("click", () => {
       const s = this.game();
@@ -369,9 +385,10 @@ export class MapView {
     };
     action(this.enter, tr("동굴로 들어가기"), enterCave);
     action(this.leave, tr("나가기"), leaveCave);
-    action(this.probe, tr("탐사"), startProbe, tr("멈춰서 주변 바위를 두드려 광맥을 찾습니다 (Q)"));
+    action(this.probe, "", startProbe, tr("멈춰서 주변 바위를 두드려 광맥을 찾습니다 (Q)"));
+    this.probe.className = "key-button";
     walkMode.append(this.caveBar);
-    mapBox.append(this.place, walkMode, this.warn, this.canvas);
+    this.root.append(this.canvas);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -393,12 +410,35 @@ export class MapView {
     const tools = document.createElement("div");
     tools.className = "bar-row";
     tools.append(this.hideButton);
+    this.pagerBar.className = "pager";
+    tools.append(this.pagerBar);
     finder.append(this.search, tools, this.results);
+    // The results come in pages of as many rows as fit; a taller screen shows more per page.
+    new ResizeObserver(() => {
+      this.drawnResults = "";
+      this.drawResults();
+    }).observe(this.results);
 
-    const side = document.createElement("div");
-    side.className = "map-side";
-    side.append(this.fight.root, this.panel, finder);
-    this.root.append(mapBox, side);
+    this.side.append(this.place, walkMode, this.warn, this.fight.root, this.panel, finder);
+  }
+
+  /** Sizes the map canvas to so many cells, sharp on high-density screens. */
+  private setView(w: number, h: number): void {
+    const scale = window.devicePixelRatio || 1;
+    this.viewW = w;
+    this.viewH = h;
+    this.canvas.width = w * CELL_W * scale;
+    this.canvas.height = h * CELL_H * scale;
+    this.canvas.style.width = `${w * CELL_W}px`;
+    this.canvas.style.height = `${h * CELL_H}px`;
+    this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    this.ctx.textBaseline = "middle";
+    this.ctx.textAlign = "center";
+  }
+
+  /** C: walks up to the nearest creature in sight. */
+  approach(): void {
+    this.fight.approachNearest();
   }
 
   private cellAt(e: MouseEvent): [number, number] {
@@ -459,16 +499,15 @@ export class MapView {
   }
 
   /**
-   * F, the one action key: with a creature in sight it fights; otherwise it works the place underfoot, digging a
-   * vein, picking food or filling a drum, the same as pressing the picture. Held, only a fight repeats.
+   * F, the one action key, as actionKey decides: with a creature in sight it only fights; otherwise it works the
+   * place underfoot, digging a vein, picking food or filling a drum, the same as pressing the picture. Held, only
+   * a fight repeats.
    */
   useKey(repeat: boolean): void {
-    if (this.fight.showing) {
+    const use = actionKey(this.game());
+    if (use === "fight") {
       if (!repeat || canStrike(this.game())) this.fight.strikeNearest();
-      return;
-    }
-    if (repeat || !siteHere(this.game())) return;
-    this.work();
+    } else if (use === "work" && !repeat) this.work();
   }
 
   /** Works the vein; with nothing left to dig here, shows again where the vein goes on. */
@@ -552,9 +591,10 @@ export class MapView {
   draw(): void {
     const s = this.game();
     this.changeLayer();
-    this.safe.classList.toggle("selected", s.safeWalk);
-    const safeLabel = s.safeWalk ? tr("안전 모드: 켜짐") : tr("안전 모드: 꺼짐");
-    if (this.safe.textContent !== safeLabel) this.safe.textContent = safeLabel;
+    // The safe switch and prospecting read as key hints: lit while on.
+    const safeLabel = keyHintHtml("T", tr("안전"), s.safeWalk ? "on" : "off");
+    if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;
+    this.safe.setAttribute("aria-pressed", String(s.safeWalk));
     // Where safe mode stopped the walk: what lies ahead, what it costs, and how to go on anyway.
     const halt = s.halt;
     const warning = halt ? `${keyHintHtml(CLICK(), tr("건너기"))} -${halt.damage}` : "";
@@ -569,9 +609,8 @@ export class MapView {
     this.enter.hidden = !caveDoorHere(s);
     this.leave.hidden = !stairHere(s);
     this.probe.hidden = !cave;
-    this.probe.classList.toggle("selected", probing >= 0);
-    const probeLabel = probing >= 0 ? `${tr("탐사 중")} ${"▮".repeat(Math.round(probing * 4)).padEnd(4, "▯")}` : tr("탐사");
-    if (this.probe.textContent !== probeLabel) this.probe.textContent = probeLabel;
+    const probeLabel = keyHintHtml("Q", probing >= 0 ? `${tr("탐사")} ${"▮".repeat(Math.round(probing * 4)).padEnd(4, "▯")}` : tr("탐사"), probing >= 0 ? "on" : "off");
+    if (this.probe.dataset.shown !== probeLabel) this.probe.innerHTML = this.probe.dataset.shown = probeLabel;
     this.caveBar.hidden = this.enter.hidden && this.leave.hidden && this.probe.hidden;
     // Newly found vein cells blink for a moment.
     const found = cave ? new Set(knownCells(s).keys()) : new Set<string>();
@@ -586,8 +625,8 @@ export class MapView {
     const key = `${s.z},${s.player.x},${s.player.y},${s.path.length},${s.sites.length},${emptied},${s.season},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
-    this.originX = s.player.x - Math.floor(VIEW_W / 2);
-    this.originY = s.player.y - Math.floor(VIEW_H / 2);
+    this.originX = s.player.x - Math.floor(this.viewW / 2);
+    this.originY = s.player.y - Math.floor(this.viewH / 2);
     if (cave) this.paintUnder(s, probing);
     else this.paint(s);
     // The way home may be off screen, so always say how far away it is: underground, the nearest stair seen.
@@ -604,13 +643,13 @@ export class MapView {
 
   private paint(s: GameState): void {
     const g = this.ctx;
-    g.clearRect(0, 0, VIEW_W * CELL_W, VIEW_H * CELL_H);
+    g.clearRect(0, 0, this.viewW * CELL_W, this.viewH * CELL_H);
     g.font = "12px GalmuriMono11, 'JetBrains Mono', Consolas, monospace";
     const doors = new Map(s.sites.filter((site) => site.ore === CAVE && onThisMap(s, site)).map((site) => [`${site.x},${site.y}`, site]));
     const veins = knownCells(s);
     const path = new Set(s.path.map((p) => `${p.x},${p.y}`));
-    for (let vy = 0; vy < VIEW_H; vy += 1) {
-      for (let vx = 0; vx < VIEW_W; vx += 1) {
+    for (let vy = 0; vy < this.viewH; vy += 1) {
+      for (let vx = 0; vx < this.viewW; vx += 1) {
         const x = this.originX + vx;
         const y = this.originY + vy;
         if (!isRevealed(s, x, y)) continue;
@@ -649,7 +688,7 @@ export class MapView {
     for (const mob of s.mobs) {
       const vx = mob.x - this.originX;
       const vy = mob.y - this.originY;
-      if (!mobVisible(s, mob) || !isVisible(s, mob.x, mob.y) || vx < 0 || vy < 0 || vx >= VIEW_W || vy >= VIEW_H) continue;
+      if (!mobVisible(s, mob) || !isVisible(s, mob.x, mob.y) || vx < 0 || vy < 0 || vx >= this.viewW || vy >= this.viewH) continue;
       g.fillStyle = COLOR.seenBg;
       g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
       g.fillStyle = COLOR.yeti;
@@ -664,7 +703,7 @@ export class MapView {
   private noteMark(x: number, y: number, small: boolean): void {
     const vx = x - this.originX;
     const vy = y - this.originY;
-    if (vx < 0 || vy < 0 || vx >= VIEW_W || vy >= VIEW_H) return;
+    if (vx < 0 || vy < 0 || vx >= this.viewW || vy >= this.viewH) return;
     const g = this.ctx;
     g.fillStyle = COLOR.probe;
     if (small) {
@@ -682,13 +721,13 @@ export class MapView {
    */
   private paintUnder(s: GameState, probing: number): void {
     const g = this.ctx;
-    g.clearRect(0, 0, VIEW_W * CELL_W, VIEW_H * CELL_H);
+    g.clearRect(0, 0, this.viewW * CELL_W, this.viewH * CELL_H);
     g.font = "12px GalmuriMono11, 'JetBrains Mono', Consolas, monospace";
     const veins = knownCells(s);
     const stairs = new Set(s.sites.filter((v) => v.ore === CAVE).map((v) => `${v.x},${v.y}`));
     const path = new Set(s.path.map((p) => `${p.x},${p.y}`));
-    for (let vy = 0; vy < VIEW_H; vy += 1) {
-      for (let vx = 0; vx < VIEW_W; vx += 1) {
+    for (let vy = 0; vy < this.viewH; vy += 1) {
+      for (let vx = 0; vx < this.viewW; vx += 1) {
         const x = this.originX + vx;
         const y = this.originY + vy;
         if (!underSeenAt(s, x, y)) continue;
@@ -719,7 +758,7 @@ export class MapView {
     const put = (x: number, y: number, glyph: string, color: string, alpha = 1) => {
       const vx = x - this.originX;
       const vy = y - this.originY;
-      if (vx < 0 || vy < 0 || vx >= VIEW_W || vy >= VIEW_H) return;
+      if (vx < 0 || vy < 0 || vx >= this.viewW || vy >= this.viewH) return;
       g.globalAlpha = alpha;
       g.fillStyle = COLOR.memoryBg;
       g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
@@ -767,10 +806,15 @@ export class MapView {
     const emptied = s.sites.filter((v) => v.left <= 0).length;
     const prospected = s.sites.filter((v) => v.found).length;
     const key = `${query}|${s.z}|${s.player.x},${s.player.y}|${s.sites.length}|${emptied}|${prospected}|${this.hideEmpty}`;
-    if (key === this.drawnResults) return;
-    this.drawnResults = key;
+    // A page holds as many rows as the box has room for.
+    const perPage = Math.max(1, Math.floor((this.results.clientHeight + 4) / RESULT_ROW));
+    const full = `${key}|${perPage}|${this.resultPage}`;
+    if (full === this.drawnResults) return;
+    if (!this.drawnResults.startsWith(`${key}|`)) this.resultPage = 0; // a new search starts on its first page
+    this.drawnResults = `${key}|${perPage}|${this.resultPage}`;
     if (!query) {
       this.results.replaceChildren();
+      this.pagerBar.replaceChildren();
       return;
     }
     const steps = (v: Site) => Math.max(Math.abs(v.x - s.player.x), Math.abs(v.y - s.player.y));
@@ -780,7 +824,26 @@ export class MapView {
       .filter((v) => here(v) || !!v.note)
       // By name, code or place name, or by category: "점토" finds every clay vein, "연료" every coal.
       .filter((v) => [itemName(v.ore), itemCode(v.ore), siteName(s, v), v.note ?? "", ...categoryNames(v.ore)].some((t) => t.toLowerCase().includes(query)));
-    const found = orderSites(matching, steps, this.hideEmpty).slice(0, MAX_RESULTS);
+    const all = orderSites(matching, steps, this.hideEmpty);
+    const pages = Math.max(1, Math.ceil(all.length / perPage));
+    this.resultPage = Math.min(this.resultPage, pages - 1);
+    this.drawnResults = `${key}|${perPage}|${this.resultPage}`;
+    const found = all.slice(this.resultPage * perPage, (this.resultPage + 1) * perPage);
+    const turn = (label: string, to: number) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tech";
+      b.textContent = label;
+      b.disabled = to < 0 || to >= pages;
+      b.addEventListener("click", () => {
+        this.resultPage = to;
+        this.drawResults();
+      });
+      return b;
+    };
+    const count = document.createElement("span");
+    count.textContent = `${this.resultPage + 1}/${pages}`;
+    this.pagerBar.replaceChildren(...(pages > 1 ? [turn("<", this.resultPage - 1), count, turn(">", this.resultPage + 1)] : []));
     this.results.replaceChildren(...found.map((site) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -824,16 +887,17 @@ export class MapView {
 
   private drawVein(s: GameState): void {
     const site = siteHere(s);
-    // A fight takes the panel's place: there is no digging with a creature in sight.
-    this.panel.hidden = !site || this.fight.showing;
+    // The panel keeps its room in the column with nothing underfoot, so the search below never moves.
+    this.panel.classList.toggle("vacant", !site);
     if (!site) return;
     // The note box shows this place's note, unless the player is typing in it.
     if (document.activeElement !== this.note && this.note.value !== (site.note ?? "")) this.note.value = site.note ?? "";
     const river = site.ore === WATER;
     // The season or a drum decides whether food or water can be had at all; F works only on a cell with something in it.
+    // With a creature in sight F only fights (actionKey), so working here waits and its hint goes dim.
     const open = river ? true : canHarvest(s, site);
     const target = harvestTarget(s);
-    const ready = !!target && canWork(s, target);
+    const ready = !!target && canWork(s, target) && actionKey(s) === "work";
     this.vein.disabled = !ready;
     this.vein.setAttribute("aria-label", river ? tr("빈 철 드럼통에 물 뜨기") : `${itemName(site.ore)} ${tr("캐기")}`);
     this.pointNext(false);

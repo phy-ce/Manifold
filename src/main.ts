@@ -18,6 +18,7 @@ import { Scenery } from "./ui/scenery";
 import { setSound, soundOn } from "./ui/sound";
 import { MapView } from "./ui/mapView";
 import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
+import { keyHintHtml } from "./ui/keyHint";
 import { applyTheme } from "./ui/theme";
 import { installTooltip } from "./ui/tooltip";
 
@@ -72,10 +73,6 @@ reset.className = "tech";
 reset.textContent = tr("새 게임");
 const vitals = document.createElement("div");
 vitals.className = "vitals";
-const indexButton = document.createElement("button");
-indexButton.type = "button";
-indexButton.className = "tech";
-indexButton.textContent = tr("도감");
 const saveButton = document.createElement("button");
 saveButton.type = "button";
 saveButton.className = "tech";
@@ -164,7 +161,7 @@ guideAgain.addEventListener("click", () => {
 });
 const menu = new MenuWindow([soundButton, guideAgain, testStart, reset]);
 menuButton.addEventListener("click", () => menu.open());
-topActions.append(travel, indexButton, speedBar, saveButton, helpButton, menuButton);
+topActions.append(travel, speedBar, saveButton, helpButton, menuButton);
 top.append(topStatus, topActions);
 
 // A small number shows the damage taken, and the screen's edges glow red for a moment, stronger for a
@@ -200,9 +197,9 @@ function showHurt(amount: number): void {
   }, HURT_MS);
 }
 
-// The S0 tutorial: one line saying what to do next, with a way to turn it off.
+// The S0 tutorial: a card at the foot of the right column saying what to do next, with a way to turn it off.
 const guide = document.createElement("div");
-guide.className = "tutorial";
+guide.className = "box tutorial";
 guide.setAttribute("role", "status");
 guide.hidden = true;
 const guideTag = document.createElement("span");
@@ -217,7 +214,10 @@ guideOff.addEventListener("click", () => {
   if (state.tutorial) state.tutorial.off = true;
   redraw();
 });
-guide.append(guideTag, guideText, guideOff);
+const guideHead = document.createElement("div");
+guideHead.className = "tutorial-head";
+guideHead.append(guideTag, guideOff);
+guide.append(guideHead, guideText);
 const notice = document.createElement("div");
 notice.className = "notice";
 notice.hidden = true;
@@ -295,13 +295,18 @@ const map = new MapView(game, () => {
 
 const itemIndex = new ItemIndex(game, () => windowView.openNode, redraw);
 windowView.showItem = (id) => itemIndex.show(id);
-indexButton.addEventListener("click", () => itemIndex.toggle());
-indexButton.dataset.tip = tr("단축키 G");
 travel.dataset.tip = tr("단축키 M");
 // Physical keys, so these still work while the keyboard is set to Korean.
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-  if (e.code === "KeyG") itemIndex.toggle();
+  if (e.code === "KeyG") {
+    e.preventDefault(); // the G must not land in the search box it focuses
+    itemIndex.focus();
+  }
+  if (e.code === "KeyI") {
+    invBox.hidden = !invBox.hidden;
+    redraw();
+  }
   if (e.code === "KeyT") {
     setSafeWalk(state, !state.safeWalk);
     redraw();
@@ -351,14 +356,25 @@ window.addEventListener("keydown", (e) => {
   if (e.code !== "KeyF" || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
   map.useKey(e.repeat);
 });
+// C closes in on the nearest creature in sight: F never walks, so a fight is never a step taken by mistake.
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "KeyC" || e.repeat || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
+  map.approach();
+});
 window.addEventListener("blur", () => heldWalk.clear());
 
+// The bag shows twice: its slots as a hotbar under the map, always there, and with the gear in the window I opens
+// over the map. Both are the same slots, so either can be used.
 const invBox = document.createElement("section");
-invBox.className = "box";
+invBox.className = "box inv-pop";
+invBox.hidden = true;
 invBox.setAttribute("aria-label", tr("인벤토리"));
 const invGrid = document.createElement("div");
-invGrid.className = "slot-grid wide";
-const invSlots = state.inv.map((_, i) => {
+invGrid.className = "slot-grid bag-grid";
+const hotbar = document.createElement("section");
+hotbar.className = "box hotbar";
+hotbar.setAttribute("aria-label", tr("가방"));
+const bagSlot = (i: number) => {
   const b = makeSlot(() => {
     clickStack(state, state.inv, i, "left");
     redraw();
@@ -374,7 +390,10 @@ const invSlots = state.inv.map((_, i) => {
   });
   b.dataset.inv = String(i);
   return b;
-});
+};
+const invSlots = state.inv.map((_, i) => bagSlot(i));
+const hotSlots = state.inv.map((_, i) => bagSlot(i));
+hotbar.append(...hotSlots);
 
 const sortButton = document.createElement("button");
 sortButton.type = "button";
@@ -420,7 +439,12 @@ window.addEventListener("keydown", (e) => {
 invGrid.append(...invSlots);
 const invTools = document.createElement("div");
 invTools.className = "bar-row";
-invTools.append(sortButton, trashButton);
+const invTitle = document.createElement("strong");
+invTitle.textContent = tr("가방");
+const invKey = document.createElement("span");
+invKey.className = "push";
+invKey.innerHTML = keyHintHtml("I", "", "on");
+invTools.append(invTitle, sortButton, trashButton, invKey);
 const gearSlots = GEAR_SLOTS.map(([slot, name]) => {
   const b = makeSlot(() => {
     clickGear(state, slot);
@@ -451,17 +475,27 @@ keepPlaying.addEventListener("click", () => {
 });
 win.firstElementChild!.append(keepPlaying);
 
-document.body.append(itemIndex.root);
 // The biome's landscape behind everything, first in the page so all else stands over it.
 const scenery = new Scenery();
 document.body.prepend(scenery.root);
-app.append(top, guide, notice, graph.root, map.root, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
+// The screen (docs/design/interface.md): one bar along the top; the left column for the map's tools, the map in
+// the middle, the item index on the right with the tutorial card at its foot; the bag's hotbar under the map.
+// At the base the board takes the left column and the middle together.
+map.side.classList.add("left-col");
+const rightCol = document.createElement("div");
+rightCol.className = "right-col";
+rightCol.append(itemIndex.root, guide);
+app.append(top, map.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
 
 // Escape first closes whatever is open; only with nothing to cancel does it open the menu.
 // This runs in the capture phase, before the windows' own Escape handlers close them.
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.target instanceof HTMLInputElement) return;
   if (menu.isOpen) return menu.close();
+  if (!invBox.hidden) {
+    invBox.hidden = true;
+    return;
+  }
   const busy = windowView.isOpen || routeView.isOpen || !saveView.root.hidden || !help.root.hidden || graph.busy;
   if (!busy) menu.open();
 }, true);
@@ -504,6 +538,7 @@ function redraw(): void {
   const showBase = home && screen === "base";
   graph.root.hidden = !showBase;
   map.root.hidden = showBase;
+  map.side.hidden = showBase;
 
   const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : underground(state) ? tr("출구로") : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;
@@ -544,7 +579,10 @@ function redraw(): void {
   } else if (!notice.hidden && performance.now() > noticeUntil) {
     notice.hidden = true;
   }
-  state.inv.forEach((stack, i) => paintSlot(invSlots[i], stack));
+  state.inv.forEach((stack, i) => {
+    paintSlot(hotSlots[i], stack);
+    if (!invBox.hidden) paintSlot(invSlots[i], stack);
+  });
   for (const { slot, name, b } of gearSlots) {
     const id = state.gear[slot];
     paintSlot(b, id ? { id, n: 1 } : null, "gear", undefined, { name, fits: gearFor(slot) });

@@ -20,7 +20,7 @@ const has = (s: GameState, type: string): boolean => s.nodes.some((n) => n.type 
 const stands = (s: GameState, type: string): boolean => s.nodes.some((n) => n.type === type);
 
 export const TUTORIAL: TutorialStep[] = [
-  { id: "clay", where: "map", search: true, text: "지도로 나가 오른쪽 찾기 칸에 \"점토\"를 검색하고, 가까운 광맥을 눌러 걸어간 뒤 F(또는 광맥 그림)를 눌러 점토 12개를 캐세요", done: (s) => countOf(s, "clay") >= 12 },
+  { id: "clay", where: "map", search: true, text: "지도로 나가 왼쪽 찾기 칸에 \"점토\"를 검색하고, 가까운 광맥을 눌러 걸어간 뒤 F(또는 광맥 그림)를 눌러 점토 12개를 캐세요", done: (s) => countOf(s, "clay") >= 12 },
   { id: "kiln", where: "base", text: "기지로 돌아와 작업대를 열고 노천 가마를 고른 뒤, 박자에 맞춰 Space를 눌러 만드세요", done: (s) => has(s, "open_kiln") },
   { id: "place-kiln", where: "base", text: "인벤토리의 노천 가마를 집어 보드 빈 곳을 눌러 설치하세요", done: (s) => stands(s, "open_kiln") },
   { id: "fuel", where: "map", search: true, text: "찾기 칸에 \"석탄\"이나 \"갈탄\"을 검색해 연료 4개를 캐고, 벽돌을 구울 점토도 12개 캐 오세요", done: (s) => countOf(s, "clay") >= 12 && countOf(s, "coal") >= 4 },

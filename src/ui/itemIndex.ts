@@ -66,8 +66,8 @@ export class ItemIndex {
     private readonly openNode: () => number | null,
     private readonly changed: () => void,
   ) {
-    this.root.className = "dock";
-    this.root.hidden = true;
+    this.root.className = "box dock";
+    // Always open: the right column of the screen.
     this.root.setAttribute("aria-label", tr("아이템 도감"));
     this.search.id = "index-search";
     this.search.type = "search";
@@ -80,7 +80,13 @@ export class ItemIndex {
     this.grid.className = "dock-grid";
     this.detail.className = "dock-detail";
     this.root.append(this.search, this.grid, this.gridBar, this.detail);
-    this.drawGrid();
+    // The page size depends on how many slots fit across, which is only known once the dock is laid out.
+    let across = -1;
+    new ResizeObserver(() => {
+      if (this.grid.clientWidth === across) return;
+      across = this.grid.clientWidth;
+      this.drawGrid();
+    }).observe(this.grid);
 
     // Like the classic mod: hover any item, then R for recipes or U for uses.
     window.addEventListener("keydown", (e) => {
@@ -92,15 +98,10 @@ export class ItemIndex {
     });
   }
 
-  toggle(): void {
-    this.setOpen(this.root.hidden === true);
-  }
-
-  private setOpen(open: boolean): void {
-    this.root.hidden = !open;
-    document.body.classList.toggle("dock-open", open);
-    // The page size depends on how many slots fit across, which is only known once the dock shows.
-    if (open) this.drawGrid();
+  /** G: the index is always open in the right column, so the key goes straight to its search box. */
+  focus(): void {
+    this.search.focus();
+    this.search.select();
   }
 
   show(id: string, tab: Tab = "recipes", remember = true): void {
@@ -112,7 +113,6 @@ export class ItemIndex {
     if (next !== this.item || tab !== this.tab) this.cardPage = 0;
     this.item = next;
     this.tab = tab;
-    this.setOpen(true);
     this.drawDetail();
   }
 

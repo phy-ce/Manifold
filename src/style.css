@@ -35,8 +35,32 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 
 /* Layout primitives */
-#app { position: relative; z-index: 1; height: 100%; padding: var(--gap-lg) calc(var(--gap) * 2); display: flex; flex-direction: column; gap: var(--gap-lg); }
-#app > .box { flex: none; }
+/*
+ * The screen is one fixed grid and nothing in it scrolls (docs/design/interface.md): a bar along the top; a left
+ * column for the map's tools; the map in the middle; the item index on the right, always open, with the tutorial
+ * card at its foot; the bag's hotbar under the map. At the base the board takes the left column and the middle.
+ * --side is 49 units (392px); the top bar 5 units (40px).
+ */
+:root { --side: calc(var(--gap) * 49); --top-h: calc(var(--gap) * 5); }
+#app {
+  position: relative; z-index: 1; height: 100%; padding: var(--gap); display: grid; gap: var(--gap);
+  grid-template-columns: var(--side) minmax(0, 1fr) var(--side);
+  grid-template-rows: var(--top-h) minmax(0, 1fr) auto;
+  grid-template-areas: "top top top" "left centre right" "left bar right";
+}
+#app > .top { grid-area: top; }
+#app > .left-col { grid-area: left; }
+#app > .map-view { grid-area: centre; }
+#app > .graph-view { grid-column: 1 / 3; grid-row: 2; }
+.right-col { grid-area: right; display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
+.hotbar { grid-area: bar; justify-self: center; display: flex; gap: var(--gap-sm); padding: var(--gap); }
+/* Windows leave the right column uncovered, so the index stays usable beside them. */
+.window-back { right: calc(var(--side) + var(--gap)) !important; }
+/* I: the bag with the gear, over the middle of the map. */
+.inv-pop { grid-area: centre; align-self: center; justify-self: center; z-index: 10; display: grid; gap: var(--gap); background: var(--panel); border-color: var(--dim); box-shadow: 0 12px 40px rgb(0 0 0 / 60%); }
+.inv-pop .bar-row { margin: 0; flex-wrap: nowrap; }
+.inv-pop .bag-grid { grid-template-columns: repeat(4, var(--slot)); }
+.inv-pop .gear-grid { display: grid; grid-template-columns: repeat(2, var(--slot)); gap: var(--gap-sm); }
 .box { background: color-mix(in srgb, var(--panel) 86%, transparent); border: 1px solid var(--line); padding: var(--gap-lg); min-width: 0; }
 /* The biome's landscape behind the whole screen (src/ui/scenery.ts): two layers that cross-fade, never touchable.
    Panels let a little of it through; the map keeps a solid back so it reads cleanly. */
@@ -70,11 +94,13 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .meter.vital.low, .meter.vital.low .meter-bar { color: var(--alert); animation: pulse .7s steps(2) infinite; }
 /* Holds the room of a warning that is not showing, so the bar keeps its width. */
 .reserve { visibility: hidden; }
-.notice { padding: var(--gap); border: 1px solid var(--alert); color: var(--alert); font-weight: 700; }
-/* The tutorial line: what to do next, under the goal. */
-.tutorial { display: flex; align-items: center; gap: var(--gap); padding: var(--gap-sm) var(--gap); border: 1px dashed var(--fire); }
+/* A collapse: over the top of the map for a few seconds. */
+.notice { grid-area: centre; align-self: start; justify-self: center; z-index: 5; margin-top: var(--gap); padding: var(--gap); background: var(--panel); border: 1px solid var(--alert); color: var(--alert); font-weight: 700; }
+/* The tutorial card: what to do next, at the foot of the right column like a notification. Fixed height. */
+.tutorial { flex: none; height: calc(var(--gap) * 12); display: grid; grid-template-rows: auto 1fr; gap: var(--gap-sm); padding: var(--gap); border: 1px dashed var(--fire); overflow: hidden; }
+.tutorial-head { display: flex; align-items: center; gap: var(--gap); }
 .tutorial-tag { flex: none; padding: 0 var(--gap-sm); color: var(--fire); border: 1px solid var(--fire); }
-.tutorial-text { flex: 1 1 auto; min-width: 0; }
+.tutorial-text { min-width: 0; line-height: 1.5; overflow: hidden; }
 .tutorial-target { outline: 2px solid var(--fire); outline-offset: 2px; animation: tutorial-pulse 1.6s ease-in-out infinite; }
 @keyframes tutorial-pulse { 50% { outline-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .tutorial-target { animation: none; } }
@@ -113,16 +139,24 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .n { bottom: 1px; color: var(--fg); }
 
 /* Map */
-.map-view, .graph-view { flex: 1; min-height: 0; display: grid; gap: var(--gap-lg); }
-.map-view { grid-template-columns: max-content minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: start; }
+.map-view, .graph-view { min-height: 0; min-width: 0; display: grid; gap: var(--gap-lg); }
+/* The map fills the middle with whole cells (MapView sizes its canvas), centred in its box. */
+.map-view { place-items: center; overflow: hidden; }
 .graph-view { grid-template-rows: auto auto auto minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
-/* The side column runs the full height; the search results take what is left and scroll inside it, so none is cut off. */
-.map-side { display: flex; flex-direction: column; gap: var(--gap-lg); min-width: 0; min-height: 0; align-self: stretch; }
-.map-side > .box { flex: none; }
+/* The left column: blocks of fixed height top to bottom; search results take what is left, in pages, never scrolled. */
+.map-side { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; min-height: 0; overflow: hidden; }
+.map-side > * { flex: none; }
 .map-side > .finder { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.map-results { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--gap-sm); }
+.map-side > .box { padding: var(--gap); }
+.map-results { flex: 1 1 auto; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: var(--gap-sm); }
+.map-results .route-row { height: var(--control); }
+/* With nothing underfoot the place panel keeps its room, empty, so the search below never moves. */
+.vein-panel.vacant { visibility: hidden; }
+/* A switch that reads as a key hint: [T] 안전, [Q] 탐사. */
+.key-button { flex: none; padding: 0 var(--gap-sm); }
+.key-button:hover kbd { border-color: var(--go); }
 .map-results .route-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .site-note { width: 100%; min-height: var(--control); margin-bottom: var(--gap-sm); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .finder { gap: var(--gap); }
@@ -148,7 +182,7 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .key-hint kbd { display: inline-block; min-width: 18px; line-height: 16px; padding: 0 4px; text-align: center; font: inherit; font-weight: 700; border: 1px solid var(--dim); border-bottom-width: 2px; background: var(--bg); }
 .key-hint.on { color: var(--fire); }
 .key-hint.on kbd { border-color: var(--fire); color: var(--fire); }
-.fight-view { display: block; width: 384px; max-width: 100%; height: auto; aspect-ratio: 16 / 9; margin: var(--gap-sm) auto 0; background: #090d12; image-rendering: pixelated; cursor: crosshair; touch-action: manipulation; }
+.fight-view { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; margin: var(--gap-sm) auto 0; background: #090d12; image-rendering: pixelated; cursor: crosshair; touch-action: manipulation; }
 .fight-view:focus-visible { outline: 1px solid var(--go); outline-offset: 2px; }
 .rock { color: var(--rock); } .hit { color: var(--bg); background: var(--fire); }
 
@@ -248,8 +282,12 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .recipe .state.run { color: var(--fire); }
 .recipe .state.blocked { color: var(--alert); font-weight: 700; }
 .top .modes .tech { min-width: var(--control); }
-.top { flex-wrap: nowrap; align-items: flex-start; }
-.top-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 1 1 auto; min-width: 0; }
+/* The top bar is one line of fixed height: what doesn't fit is cut, never wrapped. */
+.top { flex-wrap: nowrap; align-items: center; padding: 0 var(--gap); background: color-mix(in srgb, var(--panel) 86%, transparent); border: 1px solid var(--line); overflow: hidden; }
+.top .tech { min-height: calc(var(--top-h) - var(--gap) * 1.5); padding-block: 0; }
+.top-status { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--gap-lg); flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+.top-status .vitals { flex-wrap: nowrap; }
+.top .goal { flex: none; flex-wrap: nowrap; padding-block: 0; }
 .top-actions { display: flex; align-items: center; gap: var(--gap); flex: none; margin-left: auto; }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
 /* Where safe mode stopped a walk. The line is always there, empty or not, so the map below never moves. */
@@ -358,9 +396,8 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .amount { color: var(--fire); text-align: center; white-space: pre; }
 .facility.building { border-style: dashed; color: var(--go); }
 
-/* Item index: docked beside the game so it stays usable next to a window */
-:root { --dock: calc(var(--node-w) * 2.4); }
-.dock { position: fixed; top: 0; right: 0; bottom: 0; z-index: 25; width: var(--dock); max-width: 100%; display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap); background: var(--panel); border-left: 1px solid var(--dim); overflow: hidden; }
+/* Item index: always open in the right column, so it stays usable next to a window */
+.dock { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap); overflow: hidden; }
 .dock input { width: 100%; min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .dock input:focus { outline: 2px solid var(--go); outline-offset: -2px; }
 /* The index grid draws each icon's same 34x20 characters at 2px instead of 3px: 44px slots, nothing lost. */
@@ -382,8 +419,6 @@ button:focus-visible { outline: 2px solid var(--fire); outline-offset: 1px; }
 .fire-left { display: inline-flex; align-items: center; gap: var(--gap-sm); }
 .gauge { display: inline-block; width: calc(var(--gap) * 6); height: var(--gap-sm); border: 1px solid var(--line); background: var(--bg); }
 .gauge i { display: block; height: 100%; background: var(--fire); }
-body.dock-open #app { margin-right: var(--dock); }
-body.dock-open .window-back { right: var(--dock); }
 
 /* Route settings */
 .route-window { width: calc(var(--node-w) * 2.4); max-width: 100%; }
