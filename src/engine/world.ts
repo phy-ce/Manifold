@@ -331,8 +331,8 @@ export function generateSites(seed: number): Site[] {
   const taken = new Set([`${BASE.x},${BASE.y}`, cellKey(nearCave(seed))]);
   const free = (x: number, y: number) => !taken.has(`${x},${y}`);
   const below = new Set<string>();
-  // No vein is promised near the base: the map is rolled there like anywhere else. Only food is laid close by.
-  // (VEINS.starter can name families to promise again, at a distance, if a stage ever needs it.)
+  // Only clay is promised near the base, the first thing S0 needs, and food: everything else is rolled there like
+  // anywhere else and has to be found. (VEINS.starter names the families laid close, at a distance.)
   const starters = VEINS.starter.families.map((family) => SURFACE_ORES.find((id) => familyOf(id) === family)!).filter(Boolean);
   for (const ore of [...starters, ...FORAGE]) {
     const forage = FORAGE.includes(ore);

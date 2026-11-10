@@ -14,7 +14,7 @@
   "familyWeight": { "iron_ore": 35, "coal": 35, "copper_ore": 20, "clay": 10, "limestone": 15 },
   "forageChance": 0.25,
   "veins": { "sizeScale": 4, "perChunk": [0.08, 0.01], "coreWeight": 3,
-    "starter": { "families": [], "distance": [12, 32] },
+    "starter": { "families": ["clay"], "distance": [12, 32] },
     "surfaceCells": { "scarce": [3, 4], "normal": [3, 5], "rich": [5, 6] },
     "caveCells": { "scarce": [4, 6], "normal": [5, 8], "rich": [8, 10] },
     "caveWeights": { "floor": 1, "wall": 2, "buried": 0.5 },

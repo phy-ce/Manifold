@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
+import { familyOf, FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
 import {
   GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, LOAD_SLOW, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
   REVEAL, NOTE_MAX, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
@@ -147,11 +147,11 @@ describe("world", () => {
     expect(generateSites(7)).not.toEqual(generateSites(8));
   });
 
-  it("promises no vein near the base: only food is laid there, the rest is rolled like anywhere else", () => {
-    expect(VEINS.starter.families).toEqual([]);
+  it("promises only clay and food near the base: the rest is rolled like anywhere else", () => {
+    expect(VEINS.starter.families).toEqual(["clay"]);
     for (let seed = 1; seed <= 300; seed += 1) {
       const sites = generateSites(seed);
-      expect(sites.filter((x) => SURFACE_ORES.includes(x.ore))).toEqual([]);
+      expect(sites.filter((x) => SURFACE_ORES.includes(x.ore)).map((x) => familyOf(x.ore))).toEqual(["clay"]);
       expect(sites.some((x) => FORAGE.includes(x.ore))).toBe(true);
     }
   });
