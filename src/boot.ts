@@ -33,6 +33,27 @@ function askLanguage(): Promise<Language> {
   });
 }
 
+/**
+ * Full screen keeps Esc for the game: Esc closes windows and opens the menu, and a browser's full screen would
+ * also leave on it. So F11 goes into the page's own full screen, and there the Escape key is locked to the page
+ * (Keyboard Lock, in Chrome and Edge): a short press reaches the game, holding it leaves, as the browser itself
+ * says. Where the lock is missing (Firefox), Esc still leaves full screen as before.
+ */
+function setUpFullScreen(): void {
+  const keyboard = (navigator as Navigator & { keyboard?: { lock?: (keys: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
+  addEventListener("keydown", (e) => {
+    if (e.key !== "F11" || !document.documentElement.requestFullscreen) return;
+    e.preventDefault();
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen().catch(() => undefined);
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (document.fullscreenElement) void keyboard?.lock?.(["Escape"]).catch(() => undefined);
+    else keyboard?.unlock?.();
+  });
+}
+setUpFullScreen();
+
 const language = keptLanguage() ?? await askLanguage();
 setLanguage(language);
 document.documentElement.lang = language;
