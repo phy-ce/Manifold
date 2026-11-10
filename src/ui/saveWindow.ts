@@ -3,14 +3,27 @@ import { dateLocale, tr } from "../i18n";
 import { GameState, OLDEST_SAVE, SAVE_VERSION } from "../engine/game";
 
 const SLOTS = 3;
-const slotKey = (n: number) => `modpack-simulator-slot-${n}`;
+/** The automatic slot: apart from the player's own 1 to 3, and never written over them. */
+const AUTO = "auto";
+const slotKey = (n: number | typeof AUTO) => `modpack-simulator-slot-${n}`;
+/** How often play is copied into the automatic slot. The running game itself is saved every few seconds. */
+export const AUTO_SAVE_MS = 3 * 60 * 1000;
+
+/** Copies the game into the automatic slot, a point to go back to. */
+export function autoSave(state: GameState): void {
+  try {
+    localStorage.setItem(slotKey(AUTO), JSON.stringify({ savedAt: new Date().toLocaleString(dateLocale()), state }));
+  } catch {
+    // Storage full or blocked: the running game's own save still works.
+  }
+}
 
 interface Saved {
   savedAt: string;
   state: GameState;
 }
 
-function read(n: number): Saved | null {
+function read(n: number | typeof AUTO): Saved | null {
   try {
     const raw = localStorage.getItem(slotKey(n));
     const saved = raw ? (JSON.parse(raw) as Saved) : null;
@@ -74,7 +87,28 @@ export class SaveWindow {
   }
 
   private draw(): void {
-    this.list.replaceChildren(...Array.from({ length: SLOTS }, (_, i) => {
+    // The automatic slot first, on its own: it can only be loaded. Then the player's own slots.
+    const heading = (text: string) => {
+      const h = document.createElement("div");
+      h.className = "slot-label save-heading";
+      h.textContent = text;
+      return h;
+    };
+    const auto = read(AUTO);
+    const autoRow = document.createElement("div");
+    autoRow.className = "bar-row";
+    const autoLabel = document.createElement("span");
+    autoLabel.textContent = auto ? auto.savedAt : tr("비어 있음");
+    const autoLoad = this.button(tr("불러오기"), !!auto, () => {
+      if (auto) this.loadState(auto.state);
+    });
+    autoLoad.classList.add("push");
+    autoRow.append(autoLabel, autoLoad);
+    this.list.replaceChildren(heading(tr("자동 저장")), autoRow, heading(tr("직접 저장")), ...this.slotRows());
+  }
+
+  private slotRows(): HTMLElement[] {
+    return Array.from({ length: SLOTS }, (_, i) => {
       const n = i + 1;
       const saved = read(n);
       const row = document.createElement("div");
@@ -97,6 +131,6 @@ export class SaveWindow {
       });
       row.append(label, store, load);
       return row;
-    }));
+    });
   }
 }

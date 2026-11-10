@@ -12,7 +12,7 @@ import { ItemIndex } from "./ui/itemIndex";
 import { MachineWindow } from "./ui/machineWindow";
 import { RouteWindow } from "./ui/routeWindow";
 import { HelpWindow } from "./ui/helpWindow";
-import { SaveWindow } from "./ui/saveWindow";
+import { AUTO_SAVE_MS, SaveWindow, autoSave } from "./ui/saveWindow";
 import { MenuWindow } from "./ui/menuWindow";
 import { Scenery } from "./ui/scenery";
 import { Weather } from "./ui/weather";
@@ -707,6 +707,8 @@ let last = performance.now();
 let backlog = 0;
 let frame = 0;
 let saveClock = 0;
+/** Play time since the last copy into the automatic slot; paused time does not count. */
+let autoClock = 0;
 
 /** The world only changes every STEP_MS, so the screen doesn't need to redraw any faster. */
 function tick(): void {
@@ -722,6 +724,11 @@ function tick(): void {
     backlog -= STEP_MS;
   }
   saveClock += dt;
+  if (pace > 0) autoClock += dt;
+  if (autoClock >= AUTO_SAVE_MS) {
+    autoClock = 0;
+    autoSave(state);
+  }
   frame += 1;
   windowView.draw(frame);
   routeView.draw();

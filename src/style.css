@@ -202,6 +202,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .finder input { width: 100%; min-height: var(--control); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
 .save-list { display: grid; gap: var(--gap); }
 .save-list .bar-row { margin: 0; }
+.save-list .save-heading { margin-top: var(--gap-sm); text-align: left; }
 .t-plain { color: var(--faint); } .t-hill { color: var(--dim); } .t-water { color: var(--water); }
 .t-path { color: var(--fire); } .t-base { color: var(--fg); font-weight: 700; } .t-me { color: var(--go); font-weight: 700; }
 .t-fog { color: #1e2732; } .t-site { font-weight: 700; }
