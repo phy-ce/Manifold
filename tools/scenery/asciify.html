@@ -1,0 +1,86 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>asciify</title>
+<!--
+  Turns a painted landscape into coloured ASCII, the same way every time. Opened by tools/scenery/build.mjs in a
+  headless browser and screenshotted to a PNG, so the game only ships the finished picture.
+  Query: ?src=source/forest.png&w=1920&h=1080&cell=6
+-->
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+<canvas id="out"></canvas>
+<script>
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const W = Number(q.get("w") || 1920), H = Number(q.get("h") || 1080);
+  // A cell is as wide as a glyph and a little taller, like the game's own text: 0.6 wide for each 1 tall.
+  const CH = Number(q.get("cell") || 10), CW = Math.round(CH * 0.6);
+  const cols = Math.floor(W / CW), rows = Math.floor(H / CH);
+  // Dark to bright. A space for the darkest leaves the picture's shadows as true black gaps.
+  const RAMP = " .'`,:;-~=+*o%#@";
+
+  const img = new Image();
+  img.src = q.get("src");
+  await img.decode();
+
+  // Sample the picture once per cell: draw it down to the grid size and read each cell's average colour.
+  const grid = document.createElement("canvas");
+  grid.width = cols; grid.height = rows;
+  const gx = grid.getContext("2d", { willReadFrequently: true });
+  gx.imageSmoothingEnabled = true;
+  gx.imageSmoothingQuality = "high";
+  // Crop the picture to the output's shape (W×H in pixels), centred, then squeeze that into the grid: cells are
+  // taller than wide, so the grid's own proportions differ, and each cell must take its true patch of the picture.
+  const want = W / H, have = img.width / img.height;
+  const sw = have > want ? img.height * want : img.width;
+  const sh = have > want ? img.height : img.width / want;
+  gx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, 0, 0, cols, rows);
+  const px = gx.getImageData(0, 0, cols, rows).data;
+
+  // Light per cell, sharpened against its neighbourhood so outlines (tree tops against mist, a ridge against
+  // the sky) carry into the glyphs instead of melting into one dark mass.
+  const n = cols * rows;
+  const base = new Float32Array(n);
+  for (let i = 0; i < n; i++) base[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
+  const blur = new Float32Array(n);
+  const R = 3;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    let sum = 0, count = 0;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const yy = y + dy, xx = x + dx;
+      if (yy < 0 || yy >= rows || xx < 0 || xx >= cols) continue;
+      sum += base[yy * cols + xx]; count++;
+    }
+    blur[y * cols + x] = sum / count;
+  }
+  const lum = new Float32Array(n);
+  for (let i = 0; i < n; i++) lum[i] = base[i] + (base[i] - blur[i]) * 1.6;
+  // Levels by rank: each cell's glyph is set by where its light stands among all cells, so every glyph of the
+  // ramp is used about equally and a dark painting keeps its detail. Ties break by position: same input, same output.
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => lum[a] - lum[b] || a - b);
+  const rank = new Float32Array(n);
+  order.forEach((cell, k) => { rank[cell] = k / (n - 1); });
+
+  const out = document.getElementById("out");
+  out.width = W; out.height = H;
+  const g = out.getContext("2d");
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  g.font = `bold ${CH}px "Consolas", "DejaVu Sans Mono", monospace`;
+  g.textAlign = "center"; g.textBaseline = "middle";
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    const i = y * cols + x;
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(rank[i] * RAMP.length))];
+    if (ch === " ") continue;
+    // The glyph carries the cell's own colour: brightened with a gamma lift and a little more saturation, since
+    // thin glyph strokes on black read far darker and greyer than the solid paint they stand for.
+    const [r0, g0, b0] = [px[i * 4], px[i * 4 + 1], px[i * 4 + 2]];
+    const grey = (r0 + g0 + b0) / 3;
+    const tone = (v) => Math.min(255, 255 * Math.pow(Math.max(0, grey + (v - grey) * 1.35) / 255, 0.55)) | 0;
+    g.fillStyle = `rgb(${tone(r0)},${tone(g0)},${tone(b0)})`;
+    g.fillText(ch, x * CW + CW / 2, y * CH + CH / 2);
+  }
+  document.title = "done";
+})();
+</script>
