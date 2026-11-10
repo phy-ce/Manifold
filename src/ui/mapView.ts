@@ -375,7 +375,7 @@ export class MapView {
     });
 
     this.panel.className = "box vein-panel";
-    this.head.className = "bar-row";
+    this.head.className = "vein-head";
     this.vein.type = "button";
     this.vein.className = "vein";
     this.vein.append(this.art);
@@ -1034,9 +1034,10 @@ export class MapView {
     const gauges = site.cells
       ? gauge(tr("칸"), cell?.left ?? 0, cell ? cell.total ?? cell.left : 0, 6) + gauge(tr("광맥"), known.left, known.total, 8)
       : gauge("", site.left, site.total, 14);
-    this.head.innerHTML = `<span style="color:${itemColor(site.ore)}">${itemCode(site.ore)}</span><span>${siteName(s, site)}</span>` +
-      `<span class="push reserve-gauges">${gauges}</span>` +
-      (open ? "" : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}${tr("에만 수확")}</span>`) +
-      keyHintHtml("F", actionWord(site), ready ? "on" : "off");
+    // Two fixed lines, whatever the gauges hold: the name with the F hint at its right, then the gauges (or the
+    // seasons a patch can be picked in). Nothing wraps, so the hint never jumps from one line to the other.
+    this.head.innerHTML = `<div class="vein-line"><span style="color:${itemColor(site.ore)}">${itemCode(site.ore)}</span><span class="vein-name">${siteName(s, site)}</span>` +
+      `<span class="push">${keyHintHtml("F", actionWord(site), ready ? "on" : "off")}</span></div>` +
+      `<div class="vein-line">${open ? `<span class="reserve-gauges">${gauges}</span>` : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}${tr("에만 수확")}</span>`}</div>`;
   }
 }
