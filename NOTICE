@@ -8,3 +8,7 @@ Licensed under the Apache License, Version 2.0. If you redistribute this
 work or a derivative of it, in source or binary form, you must keep this
 NOTICE file (or its attribution text) in your distribution, as required by
 section 4(d) of the License.
+
+Third-party:
+- Galmuri pixel font (GalmuriMono11), by Minseo Lee (quiple), licensed under the SIL Open Font
+  License 1.1. The font file is src/assets/fonts/GalmuriMono11.woff2; its license is src/assets/fonts/Galmuri-OFL.md.
