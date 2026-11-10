@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import era from "../data/steam-era.json";
 import materials from "../data/materials.json";
 import ores from "../data/ores.json";
+import biomes from "../data/biomes.json";
+import tutorial from "../data/tutorial.json";
 import { EN, getLanguage, localize, setLanguage, tr } from "./i18n";
 
 const korean = /[가-힣]/;
@@ -24,7 +26,7 @@ describe("translation", () => {
   });
 
   it("has English for every string in the game data", () => {
-    expect([...new Set(stringsIn([era, ores, materials]))].filter((key) => EN[key] === undefined)).toEqual([]);
+    expect([...new Set(stringsIn([era, ores, materials, biomes, tutorial]))].filter((key) => EN[key] === undefined)).toEqual([]);
   });
 
   it("leaves no Korean outside tr() in the code", () => {

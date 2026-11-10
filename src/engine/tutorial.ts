@@ -62,7 +62,8 @@ const RULES: Record<string, Rule> = {
   index: { ack: true, done: () => false },
   kiln: { where: "base", done: (s) => has(s, "open_kiln") },
   "place-kiln": { where: "base", done: (s) => stands(s, "open_kiln") },
-  fuel: { where: "map", search: true, done: (s) => countOf(s, "clay") >= 12 && countOf(s, "coal") >= 4 },
+  // Clay for 6 bricks (2 each) and for the bloomery itself (10), so the bloomery can follow straight on.
+  fuel: { where: "map", search: true, done: (s) => countOf(s, "clay") >= 22 && countOf(s, "coal") >= 4 },
   bricks: { where: "base", done: (s) => countOf(s, "brick") >= 6 },
   bloomery: { where: "base", done: (s) => stands(s, "bloomery") },
   ore: { where: "map", search: true, done: (s) => countOf(s, "iron_ore") >= 18 },
@@ -102,6 +103,8 @@ const PAST: Record<string, (s: GameState) => boolean> = {
 export interface TutorialState {
   step: number;
   off: boolean;
+  /** The tips already shown (by id in data/tutorial.json "tips"), each shown once. */
+  tips?: string[];
   /** The last step whose start was acted on (onStart), so it happens once. */
   started?: number;
 }
@@ -134,6 +137,31 @@ export const SECTIONS: { name: string; steps: number[] }[] = TUTORIAL.reduce((li
   else list.push({ name: step.section, steps: [i] });
   return list;
 }, [] as { name: string; steps: number[] }[]);
+
+/** A tip: a card shown once when the player first meets something, outside the steps and after S0 too. */
+export interface Tip { id: string; title: string; text: string }
+/** When each tip comes up. Its words are in data/tutorial.json "tips". */
+const TIP_WHEN: Record<string, (s: GameState) => boolean> = {
+  // The first time underground: caves are where the creatures are.
+  cave: (s) => s.z < 0,
+};
+
+/** The tip to show now, or null: none while the tutorial is turned off, and each only once. */
+export function pendingTip(s: GameState): Tip | null {
+  const t = s.tutorial;
+  if (!t || t.off) return null;
+  const tips = tutorialData.tips as Record<string, { title: string; text: string }>;
+  for (const [id, when] of Object.entries(TIP_WHEN)) {
+    if (!t.tips?.includes(id) && when(s) && tips[id]) return { id, ...tips[id] };
+  }
+  return null;
+}
+
+/** The player has read a tip: it does not come again. */
+export function dismissTip(s: GameState, id: string): void {
+  if (!s.tutorial) return;
+  s.tutorial.tips = [...(s.tutorial.tips ?? []), id];
+}
 
 /** The player has read a step that is only for reading: on to the next. */
 export function acknowledgeStep(s: GameState): void {

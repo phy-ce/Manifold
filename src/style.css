@@ -135,6 +135,9 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
    over the panels and under windows (it sits in #app, below .window-back). Its width is the column's, less the margin. */
 .tutorial { position: fixed; right: calc(var(--gap) * 2); bottom: calc(var(--gap) * 2); z-index: 15; width: calc(var(--side) - var(--gap) * 2); display: grid; gap: var(--gap); padding: var(--gap-lg); background: var(--panel); border: 1px solid var(--fire); box-shadow: 0 12px 32px rgb(0 0 0 / 55%); }
 .tutorial-next { justify-self: end; }
+/* The folded tutorial: a small box in the same corner with the section number; a click opens the card again. */
+.tutorial-mini { position: fixed; right: calc(var(--gap) * 2); bottom: calc(var(--gap) * 2); z-index: 15; min-width: calc(var(--gap) * 6); height: calc(var(--gap) * 5); padding: 0 var(--gap); color: var(--fire); background: var(--panel); border: 1px solid var(--fire); box-shadow: 0 8px 24px rgb(0 0 0 / 55%); font-weight: 700; }
+.tutorial-mini:hover { color: var(--bg); background: var(--fire); }
 .tutorial-head { display: flex; align-items: center; gap: var(--gap); }
 .tutorial-tag { flex: none; padding: 0 var(--gap-sm); color: var(--fire); border: 1px solid var(--fire); }
 .tutorial-text { min-width: 0; line-height: 1.6; }
@@ -206,6 +209,11 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .t-plain { color: var(--faint); } .t-hill { color: var(--dim); } .t-water { color: var(--water); }
 .t-path { color: var(--fire); } .t-base { color: var(--fg); font-weight: 700; } .t-me { color: var(--go); font-weight: 700; }
 .t-fog { color: #1e2732; } .t-site { font-weight: 700; }
+/* The place panel's head: two fixed lines that never wrap, the F hint always at the right of the first. */
+.vein-head { display: grid; gap: var(--gap-sm); margin-bottom: var(--gap-sm); }
+.vein-line { display: flex; align-items: center; gap: var(--gap); min-width: 0; height: calc(var(--text-sm) * 1.8); white-space: nowrap; overflow: hidden; }
+.vein-line .vein-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vein-line .push { flex: none; }
 .vein { display: block; text-align: left; user-select: none; }
 .vein pre { font-family: var(--art-mono); }
 .vein:active pre { transform: translateY(1px); }

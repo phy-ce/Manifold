@@ -1,8 +1,8 @@
-import { SECTIONS, TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
+import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, HurtCause, creatureInfo, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
+import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -157,6 +157,7 @@ guideAgain.className = "tech";
 guideAgain.textContent = tr("튜토리얼 다시 보기");
 guideAgain.addEventListener("click", () => {
   state.tutorial = { step: 0, off: false };
+  guideFolded = false;
   advanceTutorial(state);
   menu.close();
   redraw();
@@ -214,24 +215,48 @@ const guideTag = document.createElement("span");
 guideTag.className = "tutorial-tag";
 const guideText = document.createElement("span");
 guideText.className = "tutorial-text";
-const guideOff = document.createElement("button");
-guideOff.type = "button";
-guideOff.className = "tech push";
-guideOff.textContent = tr("튜토리얼 끄기");
-guideOff.addEventListener("click", () => {
-  if (state.tutorial) state.tutorial.off = true;
+// Folding the card leaves a small box in the corner showing the section; clicking it opens the card again.
+// Kept in the browser, as a preference of the screen, not of the game.
+const FOLD_KEY = "manifold-tutorial-folded";
+let guideFolded = (() => {
+  try {
+    return localStorage.getItem(FOLD_KEY) === "1";
+  } catch {
+    return false;
+  }
+})();
+const setFolded = (folded: boolean) => {
+  guideFolded = folded;
+  try {
+    localStorage.setItem(FOLD_KEY, folded ? "1" : "0");
+  } catch {
+    // Only a convenience.
+  }
   redraw();
-});
+};
+const guideFold = document.createElement("button");
+guideFold.type = "button";
+guideFold.className = "tech push";
+guideFold.textContent = tr("접기");
+guideFold.addEventListener("click", () => setFolded(true));
+const guideMini = document.createElement("button");
+guideMini.type = "button";
+guideMini.className = "tutorial-mini";
+guideMini.hidden = true;
+guideMini.setAttribute("aria-label", tr("튜토리얼"));
+guideMini.addEventListener("click", () => setFolded(false));
 const guideHead = document.createElement("div");
 guideHead.className = "tutorial-head";
-guideHead.append(guideTag, guideOff);
+guideHead.append(guideTag, guideFold);
 // A step that is only for reading moves on with this.
 const guideNext = document.createElement("button");
 guideNext.type = "button";
 guideNext.className = "tech tutorial-next";
 guideNext.textContent = tr("다음");
 guideNext.addEventListener("click", () => {
-  acknowledgeStep(state);
+  const tip = pendingTip(state);
+  if (tip) dismissTip(state, tip.id);
+  else acknowledgeStep(state);
   redraw();
 });
 const guideList = document.createElement("div");
@@ -315,6 +340,12 @@ const map = new MapView(game, () => {
 const itemIndex = new ItemIndex(game, () => windowView.openNode, redraw);
 windowView.showItem = (id) => itemIndex.show(id);
 travel.dataset.tip = tr("단축키 M");
+/** How long M is held on a stair to climb out of a cave, in ms. */
+const CLIMB_HOLD_MS = 500;
+let climbTimer = 0;
+window.addEventListener("keyup", (e) => {
+  if (e.code === "KeyM") clearTimeout(climbTimer);
+});
 // Physical keys, so these still work while the keyboard is set to Korean.
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
@@ -332,7 +363,14 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.code === "KeyM") {
     closeWindows();
-    travel.click();
+    // On a stair, M has to be held to climb out, so a tap on the way past never pulls the player up by accident.
+    if (underground(state) && stairHere(state)) {
+      clearTimeout(climbTimer);
+      climbTimer = window.setTimeout(() => {
+        if (underground(state) && stairHere(state)) leaveCave(state);
+        redraw();
+      }, CLIMB_HOLD_MS);
+    } else travel.click();
   }
 });
 
@@ -540,7 +578,7 @@ rightCol.className = "right-col";
 rightCol.append(itemIndex.root);
 // The tutorial card floats over the foot of the right column, as tall as its text, never cut short; inside #app so
 // windows still cover it.
-app.append(guide);
+app.append(guide, guideMini);
 app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
 
 // Escape first closes whatever is open; only with nothing to cancel does it open the menu.
@@ -559,7 +597,8 @@ window.addEventListener("keydown", (e) => {
 travel.addEventListener("click", () => {
   const stair = underground(state) ? nearestStair(state) : undefined;
   if (atBase(state)) screen = screen === "base" ? "map" : "base";
-  // Underground the way home starts at the nearest stair the player has seen.
+  // On the stair the button climbs out; elsewhere underground it walks to the nearest stair the player has seen.
+  else if (stairHere(state)) leaveCave(state);
   else if (stair) walkTo(state, stair);
   else if (!underground(state)) walkTo(state, BASE);
   redraw();
@@ -612,7 +651,7 @@ function redraw(): void {
   map.root.hidden = showBase;
   map.side.hidden = showBase;
 
-  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : underground(state) ? tr("출구로") : tr("기지로 복귀");
+  const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : underground(state) ? (stairHere(state) ? tr("나가기") : tr("출구로")) : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;
   const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
   const { item, amount } = stage.goal;
@@ -671,9 +710,20 @@ function redraw(): void {
     const next = STAGES[state.stage];
     win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `${tr("다음 단계:")} ${next.id} ${next.name}` : `${next.id}${tr("은 아직 준비 중입니다.")}`;
   }
-  const lesson = currentStep(state);
-  guide.hidden = !lesson;
-  guideNext.hidden = !lesson?.ack;
+  // A tip (the first cave, say) takes the card for a moment, ahead of the step; then the step comes back.
+  const tip = pendingTip(state);
+  const lesson = tip ? null : currentStep(state);
+  // Folded, only the corner box shows; a tip opens the card regardless, as it comes once.
+  guide.hidden = (!lesson && !tip) || (guideFolded && !tip);
+  guideMini.hidden = !lesson || !guideFolded || !!tip;
+  guideList.hidden = !!tip;
+  guideNext.hidden = !tip && !lesson?.ack;
+  const nextLabel = tip ? tr("확인") : tr("다음");
+  if (guideNext.textContent !== nextLabel) guideNext.textContent = nextLabel;
+  if (tip) {
+    if (guideTag.textContent !== tr(tip.title)) guideTag.textContent = tr(tip.title);
+    if (guideText.textContent !== tr(tip.text)) guideText.textContent = tr(tip.text);
+  }
   vitals.classList.toggle("tutorial-target", lesson?.id === "vitals");
   bagKey.classList.toggle("tutorial-target", lesson?.id === "bag");
   itemIndex.root.classList.toggle("tutorial-target", lesson?.id === "index");
@@ -683,6 +733,8 @@ function redraw(): void {
     const at = state.tutorial!.step;
     const part = SECTIONS.findIndex((p) => p.steps.includes(at));
     const tag = `${part + 1}/${SECTIONS.length} ${tr(SECTIONS[part].name)}`;
+    const mini = `${part + 1}/${SECTIONS.length}`;
+    if (guideMini.textContent !== mini) guideMini.textContent = mini;
     if (guideTag.textContent !== tag) guideTag.textContent = tag;
     const list = SECTIONS[part].steps.map((i) => {
       const mark = i < at ? "[x]" : i === at ? "[>]" : "[ ]";
