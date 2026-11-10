@@ -90,10 +90,12 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .era-title span { font-size: var(--text-lg); }
 .era-title small { margin-top: var(--gap-lg); font-size: var(--text-sm); color: #94a2b0; }
 /* The dark back covers the whole screen; a machine or line window centres in the space left of the index, and
-   while one is open the index column is lifted above the dark back (main.ts sets #app.index-beside) so it stays
-   usable beside the window. The top bar dims with everything else, so no edge cuts across it. */
+   while one is open the index column sits above the dark back (main.ts sets #app.index-beside), dimmed like the
+   rest and lit while pointed at, so it stays usable beside the window. The top bar dims with everything else. */
 .window-back.beside-index { padding-right: calc(var(--side) + var(--gap) * 3); }
-#app.index-beside > .right-col { position: relative; z-index: 21; }
+#app.index-beside > .right-col { position: relative; z-index: 21; filter: brightness(.3); transition: filter .15s; }
+/* Dimmed like everything behind the window, so the screen reads as one layer; pointing at it brings it up. */
+#app.index-beside > .right-col:hover, #app.index-beside > .right-col:focus-within { filter: none; }
 /* The tutorial card floats over that column, so it comes up with it: its steps are often about the window. */
 #app.index-beside > .tutorial, #app.index-beside > .tutorial-mini { z-index: 22; }
 /* I: the bag with the gear, over the middle of the map. */
