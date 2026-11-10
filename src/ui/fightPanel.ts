@@ -12,6 +12,8 @@ const HIT_MS = 180;
 const BUFFER_MS = 450;
 /** The most cells a wall ray crosses underground. */
 const RAY_STEPS = 48;
+/** How many cells past the map's sight the surface view still draws, ahead of the player, fading into haze. */
+const VIEW_EXTRA = 5;
 const steps8 = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 /** A hash of a wall cell and a spot on its face, in 0..1. */
@@ -225,9 +227,14 @@ export class FightPanel {
     data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
   }
 
-  /** Remembered cells stay in fog; visibility is refreshed only when its inputs change. */
+  /**
+   * The ground the view draws, sampled again only when the player moves or turns. The view is the player's eyes,
+   * not the map: it draws the land ahead some cells past what the map counts as seen (VIEW_EXTRA), fading into
+   * haze, so a forest shows its trees even where sight on the map is short. Behind the player only what is in
+   * sight is drawn; the view never looks back anyway.
+   */
   private sampleSurface(s: GameState): void {
-    const radius = Math.ceil(visionAt(s, s.player)) + 1;
+    const radius = Math.ceil(visionAt(s, s.player)) + VIEW_EXTRA;
     const key = `${s.seed},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${radius}`;
     if (key === this.surfaceKey) return;
     this.surfaceKey = key;
@@ -240,7 +247,8 @@ export class FightPanel {
     this.plants.length = 0;
     for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
       const wx = this.surfaceX + x, wy = this.surfaceY + y;
-      if (!isVisible(s, wx, wy)) continue;
+      const ahead = s.facing ? (wx - s.player.x) * s.facing.x + (wy - s.player.y) * s.facing.y : 1;
+      if (!isVisible(s, wx, wy) && (ahead <= 0 || Math.hypot(wx - s.player.x, wy - s.player.y) > radius)) continue;
       const [glyph, cls, height] = terrain(wx, wy, s.seed);
       const id = biomeAt(wx, wy, s.seed), biome = BIOMES[id];
       const color = parseInt(biome.ground.slice(1), 16);
