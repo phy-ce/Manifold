@@ -2622,7 +2622,9 @@ function walk(s: GameState): void {
   if (!s.path.length) return;
   s.walkTimer += STEP_MS;
   if (s.walkTimer < walkTime(s)) return;
-  s.walkTimer = 0;
+  // What runs over carries into the next step, so a step takes what walkTime says on average, not the next whole
+  // STEP_MS above it (0.15 s used to walk at 0.2 s, and 0.21 s at 0.3 s).
+  s.walkTimer -= walkTime(s);
   // A creature in the way stops the walk; there's no walking through it.
   if (s.mobs.some((mob) => mob.x === s.path[0].x && mob.y === s.path[0].y)) {
     s.path = [];

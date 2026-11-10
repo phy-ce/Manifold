@@ -2,7 +2,7 @@
 // underground; and how much of a vein they know of.
 import { describe, expect, it } from "vitest";
 import { CAVE } from "../content";
-import { CAVE_DARK, FAN_DEGREES, REVEAL, SIGHT_AROUND, walkStep, createGame, enterCave, isRevealed, isVisible, knownReserve, step, underSeenAt, visionAt, walkTo } from "./game";
+import { CAVE_DARK, FAN_DEGREES, REVEAL, SIGHT_AROUND, STEP_MS, WALK_MS, walkTime, walkStep, createGame, enterCave, isRevealed, isVisible, knownReserve, step, underSeenAt, visionAt, walkTo } from "./game";
 import { ROCK, Site, terrain, underCell } from "./world";
 
 /** A world with the player on flat open plain, facing east after one step. */
@@ -13,6 +13,24 @@ function facingEast() {
   for (let i = 0; i < 20 && s.path.length; i += 1) step(s);
   return s;
 }
+
+describe("walking pace", () => {
+  it("takes walkTime per step on average, not the next whole tick above it", () => {
+    const s = facingEast();
+    s.safeWalk = false;
+    const per = walkTime(s);
+    expect(per).toBe(WALK_MS);
+    const from = s.player.x;
+    walkTo(s, { x: from + 30, y: s.player.y });
+    let ticks = 0;
+    while (s.path.length && ticks < 1000) {
+      step(s);
+      ticks += 1;
+    }
+    // 30 steps of 150 ms is 45 ticks of 100 ms; dropping the overrun made it 60.
+    expect(ticks).toBeLessThanOrEqual(Math.ceil((30 * per) / STEP_MS) + 1);
+  });
+});
 
 describe("sight", () => {
   it("turns the player the way a key points even when they can't step, and the fan turns with them", () => {
