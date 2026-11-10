@@ -245,23 +245,43 @@ guideMini.className = "tutorial-mini";
 guideMini.hidden = true;
 guideMini.setAttribute("aria-label", tr("튜토리얼"));
 guideMini.addEventListener("click", () => setFolded(false));
-const guideHead = document.createElement("div");
-guideHead.className = "tutorial-head";
-guideHead.append(guideTag, guideFold);
-// A step that is only for reading moves on with this.
-const guideNext = document.createElement("button");
-guideNext.type = "button";
-guideNext.className = "tech tutorial-next";
-guideNext.textContent = tr("다음");
-guideNext.addEventListener("click", () => {
+/**
+ * The step the card shows when the player looks back with 이전: an earlier step's words, read again. Progress is
+ * not touched; null shows the current step.
+ */
+let guidePeek: number | null = null;
+const guideButton = (label: string, run: () => void) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "tech";
+  b.textContent = label;
+  b.addEventListener("click", () => {
+    run();
+    redraw();
+  });
+  return b;
+};
+// 이전 looks back a step; 다음 comes forward again, and on the current step moves on from one only for reading
+// (or closes a tip). Both at the top right; 접기 sits in the card's corner, where the folded box will be.
+const guidePrev = guideButton(tr("이전"), () => {
+  const at = guidePeek ?? state.tutorial?.step ?? 0;
+  guidePeek = Math.max(0, at - 1);
+});
+const guideNext = guideButton(tr("다음"), () => {
   const tip = pendingTip(state);
   if (tip) dismissTip(state, tip.id);
+  else if (guidePeek !== null) guidePeek = guidePeek + 1 >= (state.tutorial?.step ?? 0) ? null : guidePeek + 1;
   else acknowledgeStep(state);
-  redraw();
 });
+guidePrev.classList.add("push");
+guideFold.classList.remove("push");
+guideFold.classList.add("tutorial-fold");
+const guideHead = document.createElement("div");
+guideHead.className = "tutorial-head";
+guideHead.append(guideTag, guidePrev, guideNext);
 const guideList = document.createElement("div");
 guideList.className = "tutorial-list";
-guide.append(guideHead, guideList, guideText, guideNext);
+guide.append(guideHead, guideList, guideText, guideFold);
 const notice = document.createElement("div");
 notice.className = "notice";
 notice.hidden = true;
@@ -719,7 +739,12 @@ function redraw(): void {
   guide.hidden = (!lesson && !tip) || (guideFolded && !tip);
   guideMini.hidden = !lesson || !guideFolded || !!tip;
   guideList.hidden = !!tip;
-  guideNext.hidden = !tip && !lesson?.ack;
+  // Looking back past the current step makes no sense once progress has caught up with it.
+  if (guidePeek !== null && guidePeek >= (state.tutorial?.step ?? 0)) guidePeek = null;
+  guidePrev.hidden = !!tip;
+  guidePrev.disabled = (guidePeek ?? state.tutorial?.step ?? 0) <= 0;
+  guideNext.disabled = !tip && guidePeek === null && !lesson?.ack;
+  guideFold.hidden = !!tip;
   const nextLabel = tip ? tr("확인") : tr("다음");
   if (guideNext.textContent !== nextLabel) guideNext.textContent = nextLabel;
   if (tip) {
@@ -732,19 +757,22 @@ function redraw(): void {
   document.querySelector(".codex-go")?.classList.toggle("tutorial-target", lesson?.id === "fill");
   guideAgain.disabled = state.stage > 0;
   if (lesson) {
-    // One section at a time: its name and number, its steps as a checklist, and what to do for the current one.
+    // One section at a time: its name and number, its steps as a checklist, and what to do for the step shown
+    // (the current one, or the one looked back at with 이전). The marks always follow real progress.
     const at = state.tutorial!.step;
-    const part = SECTIONS.findIndex((p) => p.steps.includes(at));
+    const shown = guidePeek ?? at;
+    const part = SECTIONS.findIndex((p) => p.steps.includes(shown));
     const tag = `${part + 1}/${SECTIONS.length} ${tr(SECTIONS[part].name)}`;
     const mini = `${part + 1}/${SECTIONS.length}`;
     if (guideMini.textContent !== mini) guideMini.textContent = mini;
     if (guideTag.textContent !== tag) guideTag.textContent = tag;
     const list = SECTIONS[part].steps.map((i) => {
       const mark = i < at ? "[x]" : i === at ? "[>]" : "[ ]";
-      return `<div class="tutorial-item ${i < at ? "done" : i === at ? "now" : ""}">${mark} ${tr(TUTORIAL[i].title)}</div>`;
+      const look = i === shown && shown !== at ? " look" : "";
+      return `<div class="tutorial-item ${i < at ? "done" : i === at ? "now" : ""}${look}">${mark} ${tr(TUTORIAL[i].title)}</div>`;
     }).join("");
     if (guideList.dataset.shown !== list) guideList.innerHTML = guideList.dataset.shown = list;
-    const text = tr(lesson.text);
+    const text = tr(TUTORIAL[shown].text);
     if (guideText.textContent !== text) guideText.textContent = text;
   }
   // The travel button is pointed out when the step needs the player somewhere else.

@@ -144,6 +144,13 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .tutorial-next { justify-self: end; }
 /* The folded tutorial: a small box in the same corner with the section number; a click opens the card again. */
 .tutorial-mini { position: fixed; right: calc(var(--gap) * 2); bottom: calc(var(--gap) * 2); z-index: 15; min-width: calc(var(--gap) * 6); height: calc(var(--gap) * 5); padding: 0 var(--gap); color: var(--fire); background: var(--panel); border: 1px solid var(--fire); box-shadow: 0 8px 24px rgb(0 0 0 / 55%); font-weight: 700; }
+/* 접기 sits in the card's own bottom-right corner, the same size and place as the folded box, so folding and
+   opening happen under the pointer. The card keeps room for it below the text. */
+.tutorial { padding-bottom: calc(var(--gap) * 6); }
+.tutorial .tutorial-fold { position: absolute; right: -1px; bottom: -1px; min-width: calc(var(--gap) * 6); height: calc(var(--gap) * 5); padding: 0 var(--gap); color: var(--fire); border: 1px solid var(--fire); font-weight: 700; }
+.tutorial .tutorial-fold:hover { color: var(--bg); background: var(--fire); }
+.tutorial-head .tech[disabled] { color: var(--faint); border-color: var(--line); cursor: default; }
+.tutorial-list .tutorial-item.look { color: var(--fg); background: var(--line); }
 .tutorial-mini:hover { color: var(--bg); background: var(--fire); }
 .tutorial-head { display: flex; align-items: center; gap: var(--gap); }
 .tutorial-tag { flex: none; padding: 0 var(--gap-sm); color: var(--fire); border: 1px solid var(--fire); }
