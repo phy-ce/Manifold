@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addTo, createGame, isRevealed, loadSave, placeMachine } from "./game";
-import { familyOf } from "../content";
+import { WORKBENCH, familyOf } from "../content";
 import { TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./tutorial";
 import { BASE } from "./world";
 
@@ -73,12 +73,13 @@ describe("S0 tutorial", () => {
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("index");
     acknowledgeStep(s);
-    expect(currentStep(s)?.id).toBe("kiln");
+    expect(currentStep(s)?.id).toBe("fill");
     s.inv = s.inv.map(() => null);
     advanceTutorial(s);
-    expect(currentStep(s)?.id).toBe("kiln");
+    expect(currentStep(s)?.id).toBe("fill");
   });
 
+it("moves from filling to making once the workbench holds 12 clay", () => {    const s = createGame(1);    addTo(s.inv, "Mu", 4);    addTo(s.inv, "Kn", 12);    advanceTutorial(s);    acknowledgeStep(s);    expect(currentStep(s)?.id).toBe("fill");    const bench = s.nodes.find((n) => n.type === WORKBENCH)!;    bench.ins.a = { id: "Kn", n: 12 };    advanceTutorial(s);    expect(currentStep(s)?.id).toBe("kiln");  });
   it("skips the steps a player has already gone past", () => {
     const s = createGame(1);
     placeMachine(s, "bloomery", 0, 0);

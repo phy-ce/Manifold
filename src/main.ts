@@ -727,6 +727,7 @@ function redraw(): void {
   vitals.classList.toggle("tutorial-target", lesson?.id === "vitals");
   bagKey.classList.toggle("tutorial-target", lesson?.id === "bag");
   itemIndex.root.classList.toggle("tutorial-target", lesson?.id === "index");
+  document.querySelector(".codex-go")?.classList.toggle("tutorial-target", lesson?.id === "fill");
   guideAgain.disabled = state.stage > 0;
   if (lesson) {
     // One section at a time: its name and number, its steps as a checklist, and what to do for the current one.

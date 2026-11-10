@@ -3,7 +3,7 @@
 // past (they built the thing it leads to) is skipped. The words are data (data/tutorial.json, in Korean;
 // English in src/i18n.ts like all other text); what each step checks is code, here.
 import { GameState, atBase, countOf, revealWay } from "./game";
-import { familyOf } from "../content";
+import { WORKBENCH, familyOf } from "../content";
 import { BASE } from "./world";
 import tutorialData from "../../data/tutorial.json";
 
@@ -60,6 +60,8 @@ const RULES: Record<string, Rule> = {
   clay: { where: "map", search: true, onStart: lightClay, done: (s) => countOf(s, "clay") >= 12 },
   // Before the first craft: how windows open and close, and how to look a recipe up in the index beside them.
   index: { ack: true, done: () => false },
+  // The workbench filled through the index's +: the way to feed any machine from the bag.
+  fill: { where: "base", done: (s) => has(s, "open_kiln") || s.nodes.some((n) => n.type === WORKBENCH && Object.values(n.ins).reduce((sum, st) => sum + (st && familyOf(st.id) === "clay" ? st.n : 0), 0) >= 12) },
   kiln: { where: "base", done: (s) => has(s, "open_kiln") },
   "place-kiln": { where: "base", done: (s) => stands(s, "open_kiln") },
   // Clay for 6 bricks (2 each) and for the bloomery itself (10), so the bloomery can follow straight on.
@@ -90,6 +92,7 @@ const PAST: Record<string, (s: GameState) => boolean> = {
   bag: (s) => has(s, "open_kiln") || countOf(s, "clay") >= 12,
   clay: (s) => has(s, "open_kiln"),
   index: (s) => has(s, "open_kiln"),
+  fill: (s) => has(s, "open_kiln"),
   kiln: (s) => has(s, "open_kiln"),
   "place-kiln": (s) => stands(s, "open_kiln"),
   fuel: (s) => has(s, "bloomery"),
