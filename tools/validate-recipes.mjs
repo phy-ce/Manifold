@@ -206,7 +206,7 @@ for (const id of Object.keys(items)) {
   // A family is used when a recipe asks for it or for one of its groups.
   const used = asked(id) || Object.entries(groupFamily).some(([group, family]) => family === id && asked(group));
   const isGoal = milestones.some((m) => m.goal.item === id);
-  if (!used && !isGoal && !variants[id] && !data.food?.[id] && !data.stockpiled?.includes(id) && !data.awaitingUse?.includes(id) && !data.ruleItems?.includes(id) && !["power", "all", "main", "byproduct"].includes(id)) errors.push(`쓰이지 않는 재료: ${name(id)}`);
+  if (!used && !isGoal && !variants[id] && !data.food?.[id] && !data.stockpiled?.includes(id) && !data.awaitingUse?.includes(id) && !data.gear?.[id] && !data.ruleItems?.includes(id) && !["power", "all", "main", "byproduct"].includes(id)) errors.push(`쓰이지 않는 재료: ${name(id)}`);
 }
 
 for (const { milestone, counts, raw, surplus, power, needsFlange } of report) {

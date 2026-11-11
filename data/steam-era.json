@@ -6,7 +6,7 @@
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
     "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "pyrite": "황철석", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
-    "wood": "나무", "stone": "돌", "meat": "날고기", "roast_meat": "구운 고기", "hide": "가죽", "antler": "사슴뿔", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
+    "wood": "나무", "stone": "돌", "meat": "날고기", "roast_meat": "구운 고기", "hide": "가죽", "antler": "사슴뿔", "bone": "뼈", "wood_pick": "나무 곡괭이", "stone_pick": "돌 곡괭이", "bone_pick": "뼈 곡괭이", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
     "steam_drum": "증기 드럼", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
     "steel_plate": "강판", "steel_shaft": "강철 축", "copper_wire": "구리선", "port_flange": "포트 증설 플랜지",
@@ -14,10 +14,16 @@
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "wood": 1, "stone": 2, "meat": 0.5, "roast_meat": 0.5, "hide": 1, "antler": 0.5, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
+    "wood": 1, "stone": 2, "meat": 0.5, "roast_meat": 0.5, "hide": 1, "antler": 0.5, "bone": 0.5, "wood_pick": 1, "stone_pick": 1.5, "bone_pick": 1, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
   },
   "stockpiled": ["slag", "coal_tar", "sulfur"],
-  "awaitingUse": ["wood", "stone", "hide", "antler"],
+  "awaitingUse": ["hide", "antler"],
+  "dig": { "ore": 2400, "wood": 2000, "forage": 600, "water": 800 },
+  "tools": {
+    "wood_pick": { "cost": { "wood": 3 }, "work": 4 },
+    "stone_pick": { "cost": { "wood": 2, "stone": 3 }, "work": 5 },
+    "bone_pick": { "cost": { "wood": 2, "bone": 3 }, "work": 5 }
+  },
   "food": {
     "Be": { "hunger": 10, "hp": 0 },
     "Mu": { "hunger": 8, "hp": 0 },
@@ -38,7 +44,10 @@
     "iron_blade": { "slot": "weapon", "damage": 4, "range": 1, "cooldown": 700, "note": "공격력 4, 0.7초마다" },
     "iron_spear": { "slot": "weapon", "damage": 3, "range": 2, "cooldown": 1000, "note": "공격력 3, 두 칸 거리, 1초마다" },
     "iron_pack": { "slot": "back", "carry": 40, "note": "최대 무게 +40" },
-    "iron_pick": { "slot": "hand", "note": "효과 준비 중" }
+    "wood_pick": { "slot": "hand", "dig": 1.5, "note": "채집 속도 ×1.5" },
+    "stone_pick": { "slot": "hand", "dig": 2, "note": "채집 속도 ×2" },
+    "bone_pick": { "slot": "hand", "dig": 2.5, "note": "채집 속도 ×2.5" },
+    "iron_pick": { "slot": "hand", "dig": 3.5, "note": "채집 속도 ×3.5" }
   },
   "ruleItems": ["steam", "water_drum"],
   "kinds": { "water": "liquid", "coal_tar": "liquid", "steam": "gas" },
@@ -149,6 +158,7 @@
       "id": "S0", "era": "신화시대", "name": "신화시대",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "limestone", "Be", "Mu"],
       "unlockMachines": ["workbench", "open_kiln", "bloomery", "hand_forge", "construction_bench"],
+      "unlockTools": ["wood_pick", "stone_pick", "bone_pick"],
       "goal": { "item": "construction_bench", "amount": 1, "perMinute": 0.2 }
     },
     {

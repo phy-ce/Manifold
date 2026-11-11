@@ -269,6 +269,14 @@ export const stageOpening = (source: string): number => STAGES.findIndex((s) => 
 /** Machines open at a stage, counting every stage before it. */
 export const machinesAt = (stage: number): string[] =>
   STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockMachines);
+/** Hand tools a bench can make by a stage: picks of wood, stone and bone from the first age. */
+export const toolsAt = (stage: number): string[] =>
+  STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockTools ?? []);
+/** Everything a bench can make by a stage: machines, and the hand tools. */
+export const buildablesAt = (stage: number): string[] => [...machinesAt(stage), ...toolsAt(stage)];
+/** How long one dig, pick or fill takes by hand, by what is worked (ms). A pick in hand divides it, but not for food or water. */
+const digData: Record<string, number> = era.dig;
+export const digBaseMs = (kind: "ore" | "wood" | "forage" | "water"): number => digData[kind];
 
 export interface Gear {
   slot: string;
@@ -277,6 +285,8 @@ export interface Gear {
   walk?: number;
   /** Adds to how much the player can carry. */
   carry?: number;
+  /** A pick: how many times faster it digs ore, fells trees and breaks stone than bare hands. */
+  dig?: number;
   /** A weapon: health taken from a creature per blow, how many cells away it reaches, and ms between blows. */
   damage?: number;
   range?: number;
@@ -316,7 +326,8 @@ export const machineForms = (type: string): string[] =>
   [...new Set(machineRecipes(type).flatMap((r) => (r.form ? [r.form] : [])))];
 
 /** A shape's name, or, on the construction bench, the machine it makes. The forming bench also beats blooms into ingots. */
-export const formLabel = (form: string): string => forms[form]?.label.trim() ?? (form === "ingot" ? tr("주괴") : machineName(form));
+export const formLabel = (form: string): string =>
+  forms[form]?.label.trim() ?? (form === "ingot" ? tr("주괴") : machines[form] ? machineName(form) : itemName(form));
 /** Shapes are grouped for picking: parts that go into other things, gear to wear, finished goods. */
 export const FORM_CATEGORIES: [string, string][] = Object.entries(materials.categories as Record<string, string>);
 export const formCategory = (form: string): string =>
@@ -332,7 +343,7 @@ export function formGroups(type: string, forms: string[], stage: number): [strin
     const groups = new Map<string, string[]>();
     for (const s of STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1)) {
       const era = tr(s.era);
-      groups.set(era, [...(groups.get(era) ?? []), ...s.unlockMachines.filter((m: string) => forms.includes(m))]);
+      groups.set(era, [...(groups.get(era) ?? []), ...[...s.unlockMachines, ...(s.unlockTools ?? [])].filter((m: string) => forms.includes(m))]);
     }
     return [...groups].filter(([, list]) => list.length);
   }
@@ -552,7 +563,8 @@ function knownRecipes(stage: number): Recipe[] {
   if (cached) return cached;
   // A bench only makes machines that are open by this stage.
   const opened = machinesAt(stage);
-  const open = opened.flatMap(machineRecipes).filter((r) => !r.disposal && (!isBuilder(r.machine) || opened.includes(r.form!)));
+  const buildable = buildablesAt(stage);
+  const open = opened.flatMap(machineRecipes).filter((r) => !r.disposal && (!isBuilder(r.machine) || buildable.includes(r.form!)));
   // Caves are open from the start, so their layer counts too.
   const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER, ...HUNTED]);
   const obtainable = (key: string) => [...have].some((id) => matches(id, key));

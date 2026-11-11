@@ -60,5 +60,15 @@ export function expandRecipes(era, materials) {
       out: { [type]: 1 },
     }));
 
-  return { items, variants, recipes: [...generated, ...era.recipes, ...builds] };
+  // Hand tools of the first age (picks of wood, stone and bone) are made on the workbench too, picked like a machine.
+  const tools = Object.entries(era.tools ?? {}).map(([id, tool]) => ({
+    id: `build_${id}`,
+    machine: WORKBENCH,
+    form: id,
+    time: tool.work ?? 5,
+    in: { ...tool.cost },
+    out: { [id]: 1 },
+  }));
+
+  return { items, variants, recipes: [...generated, ...era.recipes, ...builds, ...tools] };
 }

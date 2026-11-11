@@ -2,7 +2,7 @@
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
 import { BIOMES, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
-import { GameState, NOTE_MAX, actionKey, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
+import { GameState, NOTE_MAX, actionKey, digProgress, startDig, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { CLICK, keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
@@ -16,6 +16,8 @@ const MAX_VIEW_W = 120;
 const MAX_VIEW_H = 50;
 const CELL_W = 9;
 const CELL_H = 18;
+/** How many steps the dig bar under the player fills in. */
+const DIG_BAR = 12;
 /**
  * The map's zoom steps. At 1 and 2 the pixel font is drawn at 12px and 24px, the sizes it is crisp at; at 0.5 a
  * glyph would be 6px and unreadable, so cells are drawn as small blocks of the glyph's colour, like a minimap.
@@ -317,6 +319,8 @@ export class MapView {
   private readonly haltFlash = document.createElement("div");
   /** When the last drop shown happened; null until the first draw, so a loaded game shows no old one. */
   private dropShown: number | null = null;
+  /** When the last dig shown came up; null until the first draw. */
+  private dugShown: number | null = null;
   /** The too-steep cell last noted, so the note shows once per stop. */
   private steepShown = "";
   private veins = new Map<number, Vein>();
@@ -601,20 +605,23 @@ export class MapView {
    * a fight repeats.
    */
   useKey(repeat: boolean): void {
-    const use = actionKey(this.game());
+    const s = this.game();
+    const use = actionKey(s);
     if (use === "fight") {
-      if (!repeat || canStrike(this.game())) this.fight.strikeNearest();
-    } else if (use === "work" && !repeat) this.work();
+      if (!repeat || canStrike(s)) this.fight.strikeNearest();
+    } else if (use === "work") {
+      // Held, F starts the next dig as soon as one ends; a dig under way just goes on.
+      if (!repeat) this.work();
+      else if (!s.dig) startDig(s);
+    }
   }
 
-  /** Works the vein; with nothing left to dig here, shows again where the vein goes on. */
+  /** Starts working the vein; with nothing left to dig here, shows again where the vein goes on. */
   private work(): void {
     const s = this.game();
-    // The cell being worked: a vein cell underfoot or in the wall beside, else the place itself (food, water).
-    const at = harvestTarget(s)?.cell ?? s.player;
-    if (mine(s)) {
-      this.hit = 4;
-      this.emphasize([at], "soft");
+    if (s.dig) return;
+    if (startDig(s)) {
+      // Nothing to show yet: the bar under the player fills, and the cell flashes when the dig comes up.
     } else if (tooHeavyToWork(s)) {
       // The load is the only thing in the way: the load meter jolts, so it is plain why nothing came up.
       window.dispatchEvent(new Event("manifold:too-heavy"));
@@ -749,16 +756,39 @@ export class MapView {
       this.emphasize(fresh, "medium");
     }
     this.known = { z: s.z, cells: found };
+    // A dig just came up: the vein picture flashes and the cell blinks, as a dig used to at once.
+    const dug = s.dug?.at ?? -1;
+    if (dug !== this.dugShown) {
+      if (this.dugShown !== null && s.dug) {
+        this.hit = 4;
+        this.emphasize([s.dug], "soft");
+      }
+      this.dugShown = dug;
+    }
+    const digging = digProgress(s);
     // On the surface the map only changes when the player moves, a cell empties or something blinks; underground creatures move every step.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0) + (site.note ? 31 : 0) + 7 * (site.cells?.filter((c) => c.left <= 0).length ?? 0), 0);
     const live = cave || s.mobs.length || this.marking() ? `${s.time},${Math.floor(performance.now() / 150)}` : "";
-    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${live}`;
+    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${digging === null ? "" : Math.round(digging * DIG_BAR)},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(this.viewW / 2);
     this.originY = s.player.y - Math.floor(this.viewH / 2);
     if (cave) this.paintUnder(s, probing);
     else this.paint(s);
+    // A dig under way: a bar three cells wide under the cell being worked, filling as it goes.
+    if (s.dig && digging !== null) {
+      const vx = s.dig.x - this.originX;
+      const vy = s.dig.y - this.originY;
+      const g = this.ctx;
+      const left = (vx - 1) * CELL_W + 1;
+      const top = (vy + 1) * CELL_H - 4;
+      const width = CELL_W * 3 - 2;
+      g.fillStyle = COLOR.seenBg;
+      g.fillRect(left - 1, top - 1, width + 2, 5);
+      g.fillStyle = COLOR.probe;
+      g.fillRect(left, top, Math.round((width * Math.round(digging * DIG_BAR)) / DIG_BAR), 3);
+    }
     // Where safe mode stopped: the hazard cell boxed in red, as long as the stop holds.
     for (const cell of [s.halt, s.steep]) {
       if (!cell) continue;

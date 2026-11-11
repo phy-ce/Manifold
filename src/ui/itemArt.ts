@@ -14,6 +14,7 @@ const SHAPE_OF: Record<string, string> = {
   brick: "brick", steam_module: "steam_module", slag: "slag",
   iron: "ingot", copper: "ingot", steam_drum: "steam_drum", pig_iron: "ingot", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
+  wood_pick: "pick", stone_pick: "pick", bone_pick: "pick",
 };
 
 const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear"]);
@@ -34,7 +35,7 @@ const LUMPS: Record<string, Lump> = {
   stone: { seed: 31, grain: 0.45 },
   wood: { seed: 32, grain: 0.25 },
   meat: { seed: 33, grain: 0.2 }, roast_meat: { seed: 34, grain: 0.35 },
-  hide: { seed: 35, grain: 0.15 }, antler: { seed: 36, grain: 0.3 },
+  hide: { seed: 35, grain: 0.15 }, antler: { seed: 36, grain: 0.3 }, bone: { seed: 37, grain: 0.2 },
   coke: { seed: 42, grain: 0.8, holes: 14 },
   Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, grain: 0.7 },
   Py: { seed: 21, grain: 0.5, mineral: "pyrite" },

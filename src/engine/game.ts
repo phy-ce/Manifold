@@ -1,7 +1,7 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
-import { FORAGE, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { FORAGE, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, groundGather, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
 /** Version 19 put the caves into one underground layer under the surface. */
@@ -274,6 +274,10 @@ export interface GameState {
   hurtBy?: HurtCause;
   /** What the last beast killed left in the bag, and when, for the screen to show. */
   drop?: { got: Record<string, number>; at: number };
+  /** A dig, pick or fill under way at a cell: how long it has gone and how long it takes, in ms. */
+  dig?: { x: number; y: number; z: number; done: number; ms: number } | null;
+  /** Where and when the last dig came up, for the screen to flash the cell. */
+  dug?: { x: number; y: number; at: number };
   /** Index into STAGES of the stage being played. */
   stage: number;
   /** How many of each item have ever been made. Goals check this, so nothing is handed in. */
@@ -1394,6 +1398,51 @@ export function mine(s: GameState): boolean {
   return true;
 }
 
+/** How much faster the pick in hand digs than bare hands: 1 with none. */
+export const digSpeed = (s: GameState): number => (s.gear.hand ? gearOf(s.gear.hand)?.dig : undefined) ?? 1;
+
+/**
+ * How long one dig, pick or fill at a site takes. Ore, stone and felling go faster with a better pick; food is
+ * picked and water filled by hand, the same whatever is held.
+ */
+export function digTime(s: GameState, site: Site): number {
+  const kind = harvestKind(site);
+  if (kind === "water") return digBaseMs("water");
+  if (kind === "forage") return digBaseMs("forage");
+  return Math.round(digBaseMs(site.ore === "wood" ? "wood" : "ore") / digSpeed(s));
+}
+
+/**
+ * Starts working the place underfoot: the dig takes digTime, and only then does one ore, food or drum come up
+ * (see `mine`). False if there is nothing to work, it couldn't be carried, or one is already under way.
+ */
+export function startDig(s: GameState): boolean {
+  if (s.dig) return false;
+  const spot = harvestTarget(s);
+  if (!spot || !canWork(s, spot) || tooHeavyToWork(s)) return false;
+  s.dig = { x: spot.cell.x, y: spot.cell.y, z: s.z, done: 0, ms: digTime(s, spot.site) };
+  s.probe = null;
+  return true;
+}
+
+/** How far the dig under way has got, 0 to 1, or null with none. */
+export const digProgress = (s: GameState): number | null => (s.dig ? Math.min(1, s.dig.done / s.dig.ms) : null);
+
+/** The dig goes on while the player stays put at the same cell; walking off or the cell changing stops it. */
+function digOn(s: GameState): void {
+  const dig = s.dig;
+  if (!dig) return;
+  const spot = harvestTarget(s);
+  if (s.path.length || !spot || spot.cell.x !== dig.x || spot.cell.y !== dig.y || s.z !== dig.z) {
+    s.dig = null;
+    return;
+  }
+  dig.done += STEP_MS;
+  if (dig.done < dig.ms) return;
+  s.dig = null;
+  if (mine(s)) s.dug = { x: dig.x, y: dig.y, at: s.time };
+}
+
 /** Fills a site back toward its total. Only food and water refill, and they are single cells, so there are no shares to fill. */
 function refillSite(site: Site, upTo = site.total): void {
   site.left = Math.max(site.left, Math.min(site.total, upTo));
@@ -1594,7 +1643,7 @@ export function setForm(s: GameState, nodeId: number, form: string): boolean {
   const node = nodeById(s, nodeId);
   if (!atBase(s) || !node || node.form === form || !machineForms(node.type).includes(form)) return false;
   // The construction bench can only make what the stage has opened.
-  if (isBuilder(node.type) && !machinesAt(s.stage).includes(form)) return false;
+  if (isBuilder(node.type) && !buildablesAt(s.stage).includes(form)) return false;
   const inputs = Object.values(node.ins).filter((stack) => stack !== null);
   const returned: Stack[] = Object.entries(node.outs).filter(([, n]) => n).map(([id, n]) => ({ id, n }));
   node.form = form;
@@ -3145,6 +3194,7 @@ export function step(s: GameState, walkMs = STEP_MS): void {
   if (walkMs) walk(s, walkMs);
   // Walking off cancels prospecting; standing still for long enough finishes it.
   if (s.probe !== null && s.path.length) s.probe = null;
+  digOn(s);
   if (s.probe !== null && s.time - s.probe >= CAVES.probeMs) finishProbe(s);
   if (s.z < 0) creatures(s);
   else surfaceLife(s);

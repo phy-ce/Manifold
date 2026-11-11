@@ -1,6 +1,6 @@
 // Minecraft-style window: machine slots on top, the player's inventory below.
 import { tr } from "../i18n";
-import { machineRhythm, isBuilder, stageOpening, WATER, FUELS, machineBurn, machinesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, machinePower, unitOf } from "../content";
+import { machineRhythm, isBuilder, stageOpening, WATER, FUELS, machineBurn, buildablesAt, MOTOR, formGroups, formLabel, itemName, processOf, machineDifficulty, machineForms, machineManual, machineName, inputRole, outputRole, ENGINE, MANIFOLD, BELT_DRIVE, PRESSURE_PUMP, MODULE, PUMP, TANK, TAR, isStore, isPassive, indexItems, machinePower, unitOf } from "../content";
 import {
   BLAST, inBlastZone, GameNode, GameState, lineKinds, bagCount, riverPipeCost, INV_SLOTS, clickFuel, lacksFuel, SPRING_MAX, STEAM_MAX, TAR_TANK_CAP, canRemove, countOf, fitModule, needsModule, removeModule, setOverflow, expectedOutput, foundRivers, linkRiver, lacksPower, outputCap, powerLoad, riverOf, windMotor, clickInput, clickOutput, clickStack, isFirstWarehouse, moveToNode, nudgeFromStore, nudgeToNode, sortSlots, wheelInput, wheelStack, nodeById, nodeLabel, nodeProcess, recipeOf, failWork, removeNode, setForm, status, takeInput, takeOutput, takeStored, workMachine,
 } from "../engine/game";
@@ -393,7 +393,7 @@ export class MachineWindow {
   private buildForms(node: GameNode): void {
     const all = isStore(node.type) ? [] : machineForms(node.type);
     // A bench offers only the machines open so far.
-    const open = machinesAt(this.game().stage);
+    const open = buildablesAt(this.game().stage);
     const forms = isBuilder(node.type) ? all.filter((type) => open.includes(type)) : all;
     this.modes.replaceChildren();
     this.modes.hidden = forms.length < 2;
