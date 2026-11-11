@@ -1,8 +1,103 @@
-// Item icons, stored as rows of tones: 0 is the outline, 4 the brightest, "." is empty.
+// Item icons: 0-4 shade the item colour, a-e shade SECOND_COLOR, and "." is empty.
 // Hand-drawn silhouettes; characters and colours are applied at print time,
 // so one shape serves every metal.
 
 export const SHAPES: Record<string, string[]> = {
+  // One long bone with paired rounded knobs at both ends.
+  bone: [
+    "..........................",
+    "..........................",
+    "..........................",
+    "....000............000....",
+    "...04430..........04430...",
+    "..0443320........0443320..",
+    "..0433333000000004333210..",
+    "...04334444444444333210...",
+    "...04333333333333333210...",
+    "..0433222222222222333210..",
+    "..0321100000000000322110..",
+    "...02110..........02110...",
+    "....000............000....",
+    "..........................",
+    "..........................",
+    "..........................",
+  ],
+  // A single swept deer antler with separated branching tines.
+  antler: [
+    "..........................",
+    ".....40..........40.......",
+    ".....430........430.......",
+    ".....0430...40..430...40..",
+    "..40..0430..430.430..430..",
+    "..430..0430.0430430.430...",
+    "...430..0430.043430430....",
+    "....433004430.0434430.....",
+    ".....043333430043310......",
+    ".......001334443210.......",
+    "..........00343210........",
+    "...........043210.........",
+    "..........043210..........",
+    ".........043210...........",
+    ".........01110............",
+    "..........................",
+  ],
+  // A flat pelt with a neck, four splayed legs, and a small tail.
+  hide: [
+    "..........................",
+    ".........000000...........",
+    "........04333310..........",
+    "..000...043333210...000...",
+    "..043000443333321000310...",
+    "...0434433333333333210....",
+    "....04333343333333210.....",
+    ".....043334333333210......",
+    ".....043334333333210......",
+    "....04333343333333210.....",
+    "...0433333333333333210....",
+    "..043321003333100233210...",
+    "..03210...03310...02110...",
+    "...00......0210.....00....",
+    "............00............",
+    "..........................",
+  ],
+  // Matching bone-in roast: brown glaze, bright gloss and slanted char marks.
+  roast_meat: [
+    "..........................",
+    "..........................",
+    ".........00000000.........",
+    "........0d444433300.......",
+    ".aa....0d44333333320...aa.",
+    "aeea..0c443313331320..aeea",
+    "aeddaa0c433133313320aaddea",
+    ".aeddd0c331333133320dddea.",
+    "adccaa0c313331333120aaccda",
+    "acca..0c333313331320..acca",
+    ".aa...0c333133313210...aa.",
+    ".......0c33333132210......",
+    "........0cccccc2210.......",
+    ".........011111100........",
+    "..........................",
+    "..........................",
+  ],
+  // Manga meat: juicy red centre and pink gloss; ivory bone knobs, fat rim and marbling.
+  meat: [
+    "..........................",
+    "..........................",
+    ".........00000000.........",
+    "........0ee44433300.......",
+    ".aa....0e44433333320...aa.",
+    "aeea..0d443333333320..aeea",
+    "aeddaa0d4333d3333320aaddea",
+    ".aeddd0d33333d333320dddea.",
+    "adccaa0d33333dd33320aaccda",
+    "acca..0d3333d3333320..acca",
+    ".aa...0c333333333210...aa.",
+    ".......0c33333332210......",
+    "........0cccccc2210.......",
+    ".........011111100........",
+    "..........................",
+    "..........................",
+  ],
   // A turned shaft with thicker shoulders and a bright machined edge.
   shaft: [
     "..........................",
@@ -117,23 +212,24 @@ export const SHAPES: Record<string, string[]> = {
     "....0044444444444444100...",
     "....0000000000000000000...",
   ],
-  // Three rising wisps, without the hard outline of a solid part.
+  // Locomotive steam: round billows, lit from the upper left, rising from a small puff to big clouds, each puff's
+  // lower rim dark so the ones in front stand off those behind. Generated from circles, rows squashed for the cell.
   steam: [
     "..........................",
-    "........33................",
-    ".......3442...............",
-    ".......432.........33.....",
-    "........321.......3442....",
-    ".........321......432.....",
-    ".........432.......321....",
-    "........4432......432.....",
-    ".......4432......4432.....",
-    ".....34432......4432......",
-    "....34432......34432......",
-    "....4321..3442..4321......",
-    ".....321..34432..321......",
-    ".........4321.............",
-    "..........21..............",
+    "................444.......",
+    ".............444444443....",
+    "........444444444443331...",
+    "......444444331433333331..",
+    "......444333331333332221..",
+    "......43333222133322221...",
+    ".......13224444422244444..",
+    ".........1444443314444333.",
+    ".....444.44433333144333321",
+    "....444334333322213333222.",
+    "....33322.1322221..12221..",
+    "..4412221....1............",
+    ".4332.....................",
+    "..22......................",
     "..........................",
   ],
   // Slag poured out and set: a flat, glassy cake with flow ripples, bubbles and a drip off the edge.
@@ -736,6 +832,12 @@ export const SHAPES: Record<string, string[]> = {
   ],
 };
 
+/** Optional accent colour, keyed by shape; digit tones always retain the item colour. */
+export const SECOND_COLOR: Record<string, string> = {
+  meat: "#f2ead8",
+  roast_meat: "#f2ead8",
+};
+
 /** Metal parts read best in rounder characters; everything else in dense ones. */
 export const METAL_CHARS = ["#", "X", "%", "o", ":"];
 export const SOLID_CHARS = ["@", "#", "%", "*", "+"];
@@ -749,10 +851,11 @@ export function rampOf(color: string): string[] {
   return TONE_SCALE.map((k) => `rgb(${channels.map((c) => Math.min(255, Math.round(c * k))).join(",")})`);
 }
 
-export function printShape(rows: string[], chars: string[], ramp: string[]): string {
+export function printShape(rows: string[], chars: string[], ramp: string[], secondRamp: string[] = ramp): string {
   return rows.map((row) => [...row].map((tone) => {
     if (tone === ".") return " ";
-    const t = Number(tone);
-    return `<span style="color:${ramp[t]}">${chars[t]}</span>`;
+    const accent = tone >= "a" && tone <= "e";
+    const t = accent ? tone.charCodeAt(0) - 97 : Number(tone);
+    return `<span style="color:${(accent ? secondRamp : ramp)[t]}">${chars[t]}</span>`;
   }).join("")).join("\n");
 }

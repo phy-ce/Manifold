@@ -3,7 +3,7 @@
 import { familyMembers, formOf, isMachine, itemColor, membersOf } from "../content";
 import { hash } from "../engine/world";
 import { machineIcon, printCanvas } from "./art";
-import { METAL_CHARS, SHAPES, SOLID_CHARS, printShape, rampOf } from "./iconSprites";
+import { METAL_CHARS, SECOND_COLOR, SHAPES, SOLID_CHARS, printShape, rampOf } from "./iconSprites";
 import { GLYPH, SIZE, charGrid } from "./theme";
 
 const SHAPE_OF: Record<string, string> = {
@@ -18,6 +18,7 @@ const SHAPE_OF: Record<string, string> = {
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
   stick: "rod",
   wood: "log",
+  meat: "meat", roast_meat: "roast_meat", hide: "hide", antler: "antler", bone: "bone",
 };
 
 const METAL_SHAPES = new Set(["shaft", "wire", "flange", "coil", "core", "generator", "ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear", "axe", "shovel", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]);
@@ -38,8 +39,6 @@ const LUMPS: Record<string, Lump> = {
   pitch: { seed: 48, grain: 0.12, mineral: "anthracite" },
   Ls: { seed: 15, grain: 0.35 },
   stone: { seed: 31, grain: 0.45 },
-  meat: { seed: 33, grain: 0.2 }, roast_meat: { seed: 34, grain: 0.35 },
-  hide: { seed: 35, grain: 0.15 }, antler: { seed: 36, grain: 0.3 }, bone: { seed: 37, grain: 0.2 },
   coke: { seed: 42, grain: 0.8, holes: 14 },
   Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, grain: 0.7 },
   Py: { seed: 21, grain: 0.5, mineral: "pyrite" },
@@ -172,7 +171,12 @@ export function itemIcon(id: string): string {
     const shape = formOf(item) ?? SHAPE_OF[item];
     if (isMachine(item)) html = machineIcon(item, COLS, ROWS);
     else if (lump) html = drawLump(itemColor(item), lump);
-    else html = shape && SHAPES[shape] ? printShape(SHAPES[shape], METAL_SHAPES.has(shape) ? METAL_CHARS : SOLID_CHARS, rampOf(itemColor(item))) : "";
+    else {
+      const ramp = rampOf(itemColor(item));
+      const secondColor = shape ? SECOND_COLOR[shape] : undefined;
+      const secondRamp = secondColor ? rampOf(secondColor) : undefined;
+      html = shape && SHAPES[shape] ? printShape(SHAPES[shape], METAL_SHAPES.has(shape) ? METAL_CHARS : SOLID_CHARS, ramp, secondRamp) : "";
+    }
     cache.set(id, html);
   }
   return html;
