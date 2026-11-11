@@ -2,7 +2,7 @@ import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTut
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, eraName, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, face, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
+import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, TEST_SETS, TestSet, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, face, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -98,24 +98,35 @@ const speedButtons = SPEEDS.map(([label, value]) => {
   return b;
 });
 speedBar.append(...speedButtons);
-const testStart = document.createElement("button");
-testStart.type = "button";
-testStart.className = "tech";
-testStart.textContent = tr("테스트 시작");
-testStart.dataset.tip = tr("새 월드에서 지금까지 만든 단계가 모두 열린 채 시작합니다. 모든 광석과 금속, 부품, 기계 2대씩, 장비 한 벌, 선 재료가 있고, 모든 바이옴이 보이도록 지도를 넓게 밝혀 둡니다");
-testStart.addEventListener("click", () => {
-  if (testStart.dataset.armed !== "1") {
-    testStart.dataset.armed = "1";
-    testStart.textContent = tr("정말 초기화?");
-    setTimeout(() => {
-      testStart.dataset.armed = "";
-      testStart.textContent = tr("테스트 시작");
-    }, 3000);
-    return;
-  }
-  state = createTestGame(Math.floor(Math.random() * 100000));
-  save();
-  restart();
+// One button per test set, each asking once more before it wipes the game.
+const TEST_LABELS: Record<TestSet, [string, string]> = {
+  full: [tr("테스트: 전체"), tr("모든 단계, 광석과 금속, 부품, 기계 2대씩, 장비 한 벌")],
+  mythic: [tr("테스트: 신화시대"), tr("신화시대 재료와 기계 2대씩, 나무·돌·뼈 도구 전부")],
+  hunt: [tr("테스트: 사냥"), tr("사슴이 있는 평원이나 숲에서 창과 칼을 들고 시작")],
+  tools: [tr("테스트: 도구"), tr("모든 도구, 철 머리, 막대기와 재료")],
+};
+const testStarts = TEST_SETS.map((set) => {
+  const [label, tip] = TEST_LABELS[set];
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "tech";
+  b.textContent = label;
+  b.dataset.tip = tip;
+  b.addEventListener("click", () => {
+    if (b.dataset.armed !== "1") {
+      b.dataset.armed = "1";
+      b.textContent = tr("정말 초기화?");
+      setTimeout(() => {
+        b.dataset.armed = "";
+        b.textContent = label;
+      }, 3000);
+      return;
+    }
+    state = createTestGame(Math.floor(Math.random() * 100000), set);
+    save();
+    restart();
+  });
+  return b;
 });
 const help = new HelpWindow();
 const helpButton = document.createElement("button");
@@ -162,7 +173,7 @@ guideAgain.addEventListener("click", () => {
   menu.close();
   redraw();
 });
-const menu = new MenuWindow([soundButton, guideAgain, testStart, reset]);
+const menu = new MenuWindow([soundButton, guideAgain, ...testStarts, reset]);
 menuButton.addEventListener("click", () => menu.open());
 topActions.append(travel, speedBar, saveButton, helpButton, menuButton);
 top.append(topStatus, topActions);

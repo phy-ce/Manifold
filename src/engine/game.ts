@@ -1,7 +1,7 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
-import { FORAGE, HANDS, Job, ToolStats, fitsSlot, isTool, toolStats, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { FORAGE, HANDS, allTools, toolsAt, Job, ToolStats, fitsSlot, isTool, toolStats, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, groundGather, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
 /** Version 19 put the caves into one underground layer under the surface. */
@@ -227,8 +227,6 @@ export interface GameState {
   halt?: (Hazard & { target: Point }) | null;
   /** The cell the last walk stopped in front of because it was too steep to step onto (tooSteep). */
   steep?: Point | null;
-  /** Crossing a hazard the player was warned of, until back on safe ground. */
-  passing?: boolean;
   inv: Slots;
   /** The stack the player has picked up and is moving with the pointer. */
   cursor: Stack | null;
@@ -1233,14 +1231,11 @@ function routeTo(s: GameState, target: Point): Point[] {
 }
 
 /**
- * Starts walking. Too heavy a load keeps the player where they are. Asking again for the walk that safe
- * mode just stopped goes on into the hazard: the player has seen the warning.
+ * Starts walking. Too heavy a load keeps the player where they are. While safe mode is on, no walk goes
+ * into a known hazard, asked for however often: the player turns it off to cross.
  */
 export function walkTo(s: GameState, target: Point): boolean {
   if (overloaded(s)) return false;
-  // Going on after a stop: the same destination again, or the stopped-at cell itself (boxed red on the map).
-  const again = !!s.halt && ((s.halt.target.x === target.x && s.halt.target.y === target.y) || (s.halt.x === target.x && s.halt.y === target.y));
-  s.passing = again;
   s.halt = null;
   s.path = routeTo(s, target);
   s.walkTimer = 0;
@@ -1273,9 +1268,6 @@ export function walkStep(s: GameState, dx: number, dy: number): boolean {
     if (rock(x + sx, y + sy) || (sx && sy && (rock(x + sx, y) || rock(x, y + sy)))) return false;
   }
   const next = { x: s.player.x + sx, y: s.player.y + sy };
-  // The same step again, right after safe mode stopped it, goes ahead.
-  const again = !!s.halt && s.halt.x === next.x && s.halt.y === next.y;
-  s.passing = again || (!!s.passing && !!s.path.length);
   s.halt = null;
   s.path = [next];
   return true;
@@ -2887,9 +2879,8 @@ export function walk(s: GameState, ms: number): void {
     return;
   }
   s.steep = null;
-  // Safe mode stops short of a hazard the player knows of, and says what it is. Once told and asked
-  // again, the player crosses that stretch of hazard; the next one stops them again.
-  const ahead = s.safeWalk && !s.passing ? hazardOf(s, s.player, s.path[0]) : null;
+  // Safe mode stops short of a hazard the player knows of, and says what it is, every time until it is off.
+  const ahead = s.safeWalk ? hazardOf(s, s.player, s.path[0]) : null;
   if (ahead) {
     s.halt = { ...ahead, target: s.path.at(-1)! };
     // The tutorial's safe step asks to be stopped once; it is noted here, as the stop may not last.
@@ -2907,8 +2898,6 @@ export function walk(s: GameState, ms: number): void {
     return;
   }
   const cost = stepDamage(s, from, next);
-  // A step that cost nothing is safe ground again: safe mode warns of the next hazard.
-  if (s.passing && !cost) s.passing = false;
   reveal(s, s.player, ...sightOf(s, s.player), s.facing);
   nameRivers(s);
   gatherSpot(s);
@@ -3176,13 +3165,85 @@ export function trashCursor(s: GameState): void {
 /** How far around the base the test game shows the map, in cells: far enough to reach every biome. */
 const TEST_REVEAL = 160;
 
+/** The test starts there are: everything, the first age, hunting, and every tool. */
+export const TEST_SETS = ["full", "mythic", "hunt", "tools"] as const;
+export type TestSet = (typeof TEST_SETS)[number];
+
+/** Starts a test game of one set, on a world of its own, with no tutorial and the map shown far out. */
+export function createTestGame(seed: number, set: TestSet = "full"): GameState {
+  if (set === "full") return createFullTest(seed);
+  const s = createGame(seed);
+  if (s.tutorial) s.tutorial.off = true;
+  reveal(s, BASE, TEST_REVEAL);
+  nameRivers(s);
+  if (set === "tools") {
+    s.stage = PLAYABLE_STAGES - 1;
+    // Every tool, then every iron head and sticks to put more together.
+    const heads = ["pick", "axe", "shovel", "spear", "blade"].map((kind) => `iron_${kind}_head`);
+    stockShelves(s, [...allTools().map((id): [string, number] => [id, 1]), ...heads.map((id): [string, number] => [id, 2]), ["stick", 64], ["wood", 64], ["stone", 64], ["bone", 32], ["iron", 64]], 40, 360);
+    s.gear = { feet: { id: "iron_boots", n: 1 }, back: { id: "iron_pack", n: 1 }, left: { id: "iron_spear", n: 1 }, right: { id: "iron_pick", n: 1 } };
+    return s;
+  }
+  // The first age: its materials, what the deer leave, its machines two each, and its tools.
+  s.stage = 0;
+  const s0Tools = toolsAt(0);
+  stockShelves(s, [
+    ["wood", 64], ["stone", 64], ["Kn", 64], ["brick", 64], ["Mt", 32], ["Lg", 32], ["bloom", 16], ["iron", 32], ["stick", 32],
+    ["bone", 16], ["hide", 8], ["antler", 8], ["meat", 16], ["roast_meat", 16],
+    ...buildablesAt(0).filter((type) => type !== WORKBENCH).map((type): [string, number] => [type, 2]),
+    ...(set === "mythic" ? s0Tools.map((id): [string, number] => [id, 1]) : []),
+  ], 40, 360);
+  if (set === "mythic") {
+    s.gear = { ...s.gear, left: { id: "stone_axe", n: 1 }, right: { id: "stone_pick", n: 1 } };
+    return s;
+  }
+  // Hunting: out on deer ground with every spear and blade of the age, and deer grazing close by.
+  s.gear = { ...s.gear, left: { id: "stone_blade", n: 1 }, right: { id: "bone_spear", n: 1 } };
+  for (const id of s0Tools.filter((t) => /_(spear|blade)$/.test(t))) addTo(s.inv, id, 1);
+  addTo(s.inv, "roast_meat", 8);
+  const ground = deerGroundNear(s);
+  if (ground) {
+    s.player = ground;
+    reveal(s, ground, 24);
+    for (let i = 0; i < 6 && s.mobs.filter(isDeer).length < 3; i += 1) {
+      const angle = (i / 6) * Math.PI * 2;
+      const at = { x: Math.round(ground.x + Math.cos(angle) * 8), y: Math.round(ground.y + (Math.sin(angle) * 8) / CELL_ASPECT) };
+      if (deerCanStand(s, null, at.x, at.y)) s.mobs.push({ id: newMobId(s), kind: "deer", ...at, wait: 1000, cool: 0, hp: DEER.hp });
+    }
+  }
+  return s;
+}
+
+/** The nearest open plains or forest cell to the base, off it, ringed by more of the same. */
+function deerGroundNear(s: GameState): Point | null {
+  for (let r = 12; r <= TEST_REVEAL; r += 4) {
+    for (let a = 0; a < 16; a += 1) {
+      const at = { x: Math.round(BASE.x + Math.cos((a / 16) * Math.PI * 2) * r), y: Math.round(BASE.y + Math.sin((a / 16) * Math.PI * 2) * r) };
+      const ring = [0, 1, 2, 3, 4, 5].map((i) => ({ x: Math.round(at.x + Math.cos((i / 6) * Math.PI * 2) * 8), y: Math.round(at.y + (Math.sin((i / 6) * Math.PI * 2) * 8) / CELL_ASPECT) }));
+      if (deerCanStand(s, null, at.x, at.y) && ring.filter((p) => deerCanStand(s, null, p.x, p.y)).length >= 4) return at;
+    }
+  }
+  return null;
+}
+
+/** Fills warehouses side by side from x, y with the stacks, as many as it takes. */
+function stockShelves(s: GameState, stacks: [string, number][], x: number, y: number): void {
+  for (let i = 0; i < stacks.length; i += WARE_SLOTS) {
+    const shelf = newWarehouse(s, x + ((i / WARE_SLOTS) % 3) * 260, y + Math.floor(i / WARE_SLOTS / 3) * 160);
+    s.nodes.push(shelf);
+    stacks.slice(i, i + WARE_SLOTS).forEach(([id, n], j) => {
+      shelf.store[j] = isTool(id) ? { id, n: 1 } : { id, n };
+    });
+  }
+}
+
 /**
  * A running start for trying things out, on a world of its own: every playable stage open, a wound motor
  * driving a brick kiln from a warehouse of raw materials, warehouses of metals, parts and field kit, two of
  * every machine, the player fully equipped, line materials in the bag, and the map shown far enough out
  * to see every biome. No tutorial.
  */
-export function createTestGame(seed: number): GameState {
+function createFullTest(seed: number): GameState {
   const s = createGame(seed);
   if (s.tutorial) s.tutorial.off = true;
   const store = s.nodes[0];

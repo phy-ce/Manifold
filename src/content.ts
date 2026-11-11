@@ -317,6 +317,9 @@ export function toolsAt(stage: number): string[] {
   });
 }
 
+/** Every tool there is, every kind in every material, metal ones too. */
+export const allTools = (): string[] => Object.keys(variants).filter((id) => !!toolOf(id));
+
 const jobName = (job: Job): string => (job === "ore" ? tr("광물") : job === "wood" ? tr("벌목") : job === "forage" ? tr("채집") : tr("물"));
 /** A tool's line in its tooltip: what it is quicker at and how hard it hits, "광물 ×2 · 공격력 2". */
 function toolNote(id: string): string {

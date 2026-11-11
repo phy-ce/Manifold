@@ -26,10 +26,14 @@ const blown = (s: GameState, node: GameNode, seconds: number) => {
     step(s);
   }
 };
-/** Walks until there, going on past each hazard safe mode stops at, as a player who has read the warning does. */
+/** Walks until there, turning safe mode off at each hazard it stops at, as a player who has read the warning does. */
 const arrive = (s: GameState) => {
   for (let guard = 0; guard < 100000 && (s.path.length || s.halt); guard += 1) {
-    if (s.halt) walkTo(s, s.halt.target);
+    if (s.halt) {
+      const { target } = s.halt;
+      setSafeWalk(s, false);
+      walkTo(s, target);
+    }
     keepAlive(s);
     step(s);
   }
@@ -1274,6 +1278,19 @@ describe("test preset", () => {
     }
     expect(seen.size).toBeGreaterThanOrEqual(4);
     expect(createTestGame(5).sites.map((v) => `${v.x},${v.y}`)).not.toEqual(s.sites.map((v) => `${v.x},${v.y}`));
+  });
+
+  it("comes in sets: the first age, hunting among deer, and every tool", () => {
+    const mythic = createTestGame(1, "mythic");
+    expect(mythic.stage).toBe(0);
+    expect(mythic.tutorial?.off).toBe(true);
+    for (const id of ["wood", "stone", "brick", "bone_spear", "stone_axe", "tool_bench", "bloomery"]) expect([id, countOf(mythic, id) > 0]).toEqual([id, true]);
+    const hunt = createTestGame(1, "hunt");
+    expect(hunt.gear.right?.id).toBe("bone_spear");
+    expect(hunt.mobs.filter((m) => m.kind === "deer").length).toBeGreaterThan(0);
+    expect(atBase(hunt)).toBe(false);
+    const tools = createTestGame(1, "tools");
+    for (const id of ["wood_pick", "bone_shovel", "iron_axe", "iron_blade_head", "stick"]) expect([id, countOf(tools, id) > 0]).toEqual([id, true]);
   });
 
   it("keeps two of every machine open so far, built and ready to install", () => {
@@ -2627,14 +2644,21 @@ describe("safe walking", () => {
     expect(s.hp).toBe(hp);
   });
 
-  it("goes on into the hazard when the same walk is asked for again", () => {
+  it("never goes into the hazard while on, however often the walk is asked for; off, it goes", () => {
     const { s, target } = hilly();
     setSafeWalk(s, true);
     walkTo(s, target);
     walkOut(s);
     const at = { x: s.halt!.x, y: s.halt!.y };
+    const stoppedAt = { ...s.player };
+    for (const ask of [target, at]) {
+      walkTo(s, ask);
+      walkOut(s);
+      expect(s.player).toEqual(stoppedAt);
+      expect(s.halt).toBeTruthy();
+    }
+    setSafeWalk(s, false);
     walkTo(s, target);
-    expect(s.halt).toBeNull();
     let crossed = false;
     for (let i = 0; i < 5000 && s.path.length && !crossed; i += 1) {
       step(s);
