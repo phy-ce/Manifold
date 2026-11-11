@@ -321,6 +321,8 @@ export class MapView {
   private dropShown: number | null = null;
   /** When the last dig shown came up; null until the first draw. */
   private dugShown: number | null = null;
+  /** When the last broken tool shown broke; null until the first draw. */
+  private brokeShown: number | null = null;
   /** The too-steep cell last noted, so the note shows once per stop. */
   private steepShown = "";
   private veins = new Map<number, Vein>();
@@ -722,6 +724,18 @@ export class MapView {
       if (s.steep) {
         this.emphasize([s.steep], "strong");
         this.haltFlash.textContent = tr("너무 가파름");
+        this.haltFlash.classList.remove("hit", "gain");
+        void this.haltFlash.offsetWidth;
+        this.haltFlash.classList.add("hit");
+      }
+    }
+    // A tool worn out: "돌 곡괭이 부서짐", in the same place, amber.
+    const broke = s.broke?.at ?? -1;
+    if (broke !== this.brokeShown) {
+      const first = this.brokeShown === null;
+      this.brokeShown = broke;
+      if (s.broke && !first) {
+        this.haltFlash.textContent = `${itemName(s.broke.id)} ${tr("부서짐")}`;
         this.haltFlash.classList.remove("hit", "gain");
         void this.haltFlash.offsetWidth;
         this.haltFlash.classList.add("hit");

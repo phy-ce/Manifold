@@ -186,6 +186,10 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .slot .role { color: var(--dim); font-size: var(--text-xs); }
 .slot.byproduct { border-style: dashed; }
 .slot.full { border-color: var(--alert); animation: pulse .7s steps(2) infinite; }
+/* A tool's uses left: the slot fills from the bottom, green, then amber at half, red near breaking. */
+.slot.tool { --life-color: var(--go); background: linear-gradient(to top, color-mix(in srgb, var(--life-color) 22%, var(--bg)) calc(var(--life, 1) * 100%), var(--bg) calc(var(--life, 1) * 100%)); }
+.slot.tool-mid { --life-color: var(--fire); }
+.slot.tool-low { --life-color: var(--alert); }
 .icon { font-family: var(--art-mono); font-size: var(--glyph-icon); line-height: var(--glyph-icon); font-weight: 700; }
 .code, .n { position: absolute; right: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; background: rgb(16 21 28 / 72%); }
 .code { top: 1px; font-weight: 700; }

@@ -6,7 +6,7 @@
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
     "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "pyrite": "황철석", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
-    "wood": "나무", "stone": "돌", "meat": "날고기", "roast_meat": "구운 고기", "hide": "가죽", "antler": "사슴뿔", "bone": "뼈", "wood_pick": "나무 곡괭이", "stone_pick": "돌 곡괭이", "bone_pick": "뼈 곡괭이", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
+    "wood": "나무", "stone": "돌", "meat": "날고기", "roast_meat": "구운 고기", "hide": "가죽", "antler": "사슴뿔", "bone": "뼈", "stick": "막대기", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
     "steam_drum": "증기 드럼", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
     "steel_plate": "강판", "steel_shaft": "강철 축", "copper_wire": "구리선", "port_flange": "포트 증설 플랜지",
@@ -14,16 +14,25 @@
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "wood": 1, "stone": 2, "meat": 0.5, "roast_meat": 0.5, "hide": 1, "antler": 0.5, "bone": 0.5, "wood_pick": 1, "stone_pick": 1.5, "bone_pick": 1, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
+    "wood": 1, "stone": 2, "meat": 0.5, "roast_meat": 0.5, "hide": 1, "antler": 0.5, "bone": 0.5, "stick": 0.25, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
   },
   "stockpiled": ["slag", "coal_tar", "sulfur"],
   "awaitingUse": ["hide", "antler"],
   "dig": { "ore": 2400, "wood": 2000, "forage": 600, "water": 800 },
-  "tools": {
-    "wood_pick": { "cost": { "wood": 3 }, "work": 4 },
-    "stone_pick": { "cost": { "wood": 2, "stone": 3 }, "work": 5 },
-    "bone_pick": { "cost": { "wood": 2, "bone": 3 }, "work": 5 }
+  "toolKinds": {
+    "pick": { "jobs": ["ore"], "damage": 2, "range": 1, "cooldown": 900, "head": 3, "handle": 2 },
+    "axe": { "jobs": ["wood", "forage"], "damage": 3, "range": 1, "cooldown": 900, "head": 3, "handle": 2 },
+    "shovel": { "jobs": [], "damage": 1, "range": 1, "cooldown": 900, "head": 2, "handle": 2 },
+    "spear": { "jobs": [], "damage": 3, "range": 2, "cooldown": 1000, "head": 1, "handle": 3 },
+    "blade": { "jobs": [], "damage": 4, "range": 1, "cooldown": 700, "head": 2, "handle": 1 }
   },
+  "toolMaterials": {
+    "wood": { "name": "나무", "code": "Wo", "color": "#c8925a", "stage": "S0", "speed": 1.5, "power": 0.5, "durability": 40, "weight": 1 },
+    "stone": { "name": "돌", "code": "Rk", "color": "#d8bf8a", "stage": "S0", "speed": 2, "power": 0.75, "durability": 80, "weight": 2 },
+    "bone": { "name": "뼈", "code": "Bn", "color": "#ece4d0", "stage": "S0", "speed": 2.5, "power": 0.75, "durability": 60, "weight": 1 },
+    "iron": { "name": "철", "head": true, "speed": 3.5, "power": 1, "durability": 250, "weight": 4 }
+  },
+  "toolWork": 4,
   "food": {
     "Be": { "hunger": 10, "hp": 0 },
     "Mu": { "hunger": 8, "hp": 0 },
@@ -41,27 +50,23 @@
   "tiers": ["spring", "low", "high"],
   "gear": {
     "iron_boots": { "slot": "feet", "walk": 0.91, "note": "이동 속도 +10%" },
-    "iron_blade": { "slot": "weapon", "damage": 4, "range": 1, "cooldown": 700, "note": "공격력 4, 0.7초마다" },
-    "iron_spear": { "slot": "weapon", "damage": 3, "range": 2, "cooldown": 1000, "note": "공격력 3, 두 칸 거리, 1초마다" },
-    "iron_pack": { "slot": "back", "carry": 40, "note": "최대 무게 +40" },
-    "wood_pick": { "slot": "hand", "dig": 1.5, "note": "채집 속도 ×1.5" },
-    "stone_pick": { "slot": "hand", "dig": 2, "note": "채집 속도 ×2" },
-    "bone_pick": { "slot": "hand", "dig": 2.5, "note": "채집 속도 ×2.5" },
-    "iron_pick": { "slot": "hand", "dig": 3.5, "note": "채집 속도 ×3.5" }
+    "iron_pack": { "slot": "back", "carry": 40, "note": "최대 무게 +40" }
   },
   "ruleItems": ["steam", "water_drum"],
   "kinds": { "water": "liquid", "coal_tar": "liquid", "steam": "gas" },
   "drum": { "empty": "iron_drum", "liters": 5, "fills": { "water": "water_drum" } },
   "machines": {
     "workbench": { "name": "작업대", "difficulty": 1, "manual": "rhythm", "rhythm": [450, 450, 900], "cost": { "clay": 8 }, "work": 10 },
+    "tool_bench": { "name": "도구 작업대", "difficulty": 1, "manual": "rhythm", "rhythm": [450, 450], "cost": { "wood": 6, "stone": 4 }, "work": 8 },
+    "craft_bench": { "name": "가공대", "difficulty": 1, "manual": "rhythm", "rhythm": [700, 350], "cost": { "wood": 4, "brick": 6 }, "work": 12 },
     "open_kiln": { "name": "노천 가마", "burn": 1, "cost": { "clay": 12 }, "work": 10 },
     "bloomery": { "name": "괴철로", "burn": 1, "difficulty": 1, "manual": "bellows", "byproductSlots": 1, "cost": { "clay": 10, "brick": 6 }, "work": 20 },
     "hand_forge": { "name": "손 단조대", "difficulty": 1, "manual": "rhythm", "rhythm": [450], "cost": { "brick": 4, "bloom": 2 }, "work": 15 },
-    "construction_bench": { "name": "건설대", "difficulty": 1, "manual": "rhythm", "rhythm": [700, 350, 350, 1050], "cost": { "iron": 4, "brick": 8 }, "work": 15 },
+    "construction_bench": { "name": "건설대", "inherits": "workbench", "difficulty": 1, "manual": "rhythm", "rhythm": [700, 350, 350, 1050], "cost": { "iron": 4, "brick": 8 }, "work": 15 },
     "warehouse": { "name": "창고", "cost": { "iron_plate": 6, "iron_rod": 4, "iron_rivet": 8 }, "work": 25 },
     "brick_kiln": { "name": "벽돌 가마", "burn": 1, "cost": { "clay": 20 }, "work": 20 },
     "plate_hammer": { "name": "판금 망치", "power": 2, "difficulty": 1, "manual": "rhythm", "rhythm": [700], "cost": { "iron": 8 }, "work": 15 },
-    "forming_bench": { "name": "성형대", "power": 2, "difficulty": 2, "manual": "keys", "cost": { "iron": 6, "iron_plate": 4, "brick": 8 }, "work": 20 },
+    "forming_bench": { "name": "성형대", "inherits": "craft_bench", "power": 2, "difficulty": 2, "manual": "keys", "cost": { "iron": 6, "iron_plate": 4, "brick": 8 }, "work": 20 },
     "boiler_bench": { "name": "보일러 제작대", "power": 3, "difficulty": 3, "manual": "keys", "cost": { "iron_plate": 8, "iron_gear": 2, "iron_rivet": 8, "brick": 8 }, "work": 30 },
     "engine_bench": { "name": "기관 조립대", "power": 3, "difficulty": 4, "manual": "keys", "cost": { "iron_plate": 10, "iron_rod": 6, "iron_gear": 4, "iron_rivet": 12 }, "work": 40 },
 
@@ -106,11 +111,14 @@
     { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] },
     { "form": "boots", "machine": "forming_bench", "time": 8, "in": 1, "extra": { "iron_plate": 2, "iron_rivet": 4 }, "out": 1, "metals": ["iron"] },
     { "form": "pack", "machine": "forming_bench", "time": 12, "in": 1, "extra": { "iron_rod": 4, "iron_rivet": 6, "iron_belt": 2 }, "out": 1, "metals": ["iron"] },
-    { "form": "pick", "machine": "forming_bench", "time": 8, "in": 3, "extra": { "iron_rod": 1 }, "out": 1, "metals": ["iron"] },
-    { "form": "blade", "machine": "forming_bench", "time": 8, "in": 3, "extra": { "iron_rivet": 2 }, "out": 1, "metals": ["iron"] },
-    { "form": "spear", "machine": "forming_bench", "time": 8, "in": 2, "extra": { "iron_rod": 2 }, "out": 1, "metals": ["iron"] }
+    { "form": "pick_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "axe_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "shovel_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "spear_head", "machine": "craft_bench", "time": 6, "in": 1, "out": 1, "metals": ["iron"] },
+    { "form": "blade_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
+    { "id": "stick", "machine": "tool_bench", "form": "stick", "time": 2, "in": { "wood": 1 }, "out": { "stick": 2 } },
     { "id": "open_brick", "machine": "open_kiln", "time": 12, "in": { "clay": 2 }, "out": { "brick": 1 } },
     { "id": "open_berry", "machine": "open_kiln", "time": 8, "in": { "Be": 1 }, "out": { "Bc": 1 } },
     { "id": "open_mushroom", "machine": "open_kiln", "time": 8, "in": { "Mu": 1 }, "out": { "Mc": 1 } },
@@ -157,8 +165,7 @@
     {
       "id": "S0", "era": "신화시대", "name": "신화시대",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "limestone", "Be", "Mu"],
-      "unlockMachines": ["workbench", "open_kiln", "bloomery", "hand_forge", "construction_bench"],
-      "unlockTools": ["wood_pick", "stone_pick", "bone_pick"],
+      "unlockMachines": ["workbench", "tool_bench", "open_kiln", "bloomery", "hand_forge", "craft_bench", "construction_bench"],
       "goal": { "item": "construction_bench", "amount": 1, "perMinute": 0.2 }
     },
     {

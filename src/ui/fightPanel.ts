@@ -570,7 +570,7 @@ export class FightPanel {
     this.ctx.fillRect(W / 2 + 3, handY, 9, 14);
     this.ctx.fillStyle = "#6b5950";
     this.ctx.fillRect(W / 2 + 2, handY, 7, 5);
-    if (weapon.range > 1 || s.gear.weapon) {
+    if (weapon.range > 1 || weapon.hand) {
       this.ctx.fillStyle = "#555d61";
       this.ctx.fillRect(W / 2 + 5, handY - (weapon.range > 1 ? 18 : 11), 3, weapon.range > 1 ? 21 : 14);
       this.ctx.fillStyle = "#777b78";

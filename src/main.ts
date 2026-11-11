@@ -754,8 +754,7 @@ function redraw(): void {
     if (!invBox.hidden) paintSlot(invSlots[i], stack);
   });
   for (const { slot, name, b } of gearSlots) {
-    const id = state.gear[slot];
-    paintSlot(b, id ? { id, n: 1 } : null, "gear", undefined, { name, fits: gearFor(slot) });
+    paintSlot(b, state.gear[slot] ?? null, "gear", undefined, { name, fits: gearFor(slot) });
   }
   const wasHidden = held.hidden;
   held.hidden = !state.cursor;

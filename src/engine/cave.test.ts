@@ -385,10 +385,10 @@ describe("underground creatures", () => {
     const { s, m } = setup([2, 2]);
     s.mobs = [{ id: 0, kind: "melee", ...m, wait: 0, cool: 99999, hp: 50 }];
     expect(attack(s, 0)).toBe(false);
-    s.gear.weapon = "iron_spear";
+    s.gear.left = { id: "iron_spear", n: 1 };
     expect(attack(s, 0)).toBe(true);
     expect(s.mobs[0].hp).toBe(50 - 3);
-    s.gear.weapon = "iron_blade";
+    s.gear.left = { id: "iron_blade", n: 1 };
     s.time += 2000;
     expect(attack(s, 0)).toBe(false);
     const beside = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: s.player.x + dx, y: s.player.y + dy })).find((c) => open(s.seed, c.x, c.y))!;

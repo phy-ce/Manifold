@@ -439,7 +439,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick", "blade", "spear", "ingot"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "ingot", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]);
   });
 
   it("beats blooms into iron ingots on the forming bench as well as the hand forge", () => {
@@ -1261,7 +1261,7 @@ describe("test preset", () => {
   it("holds every ore, and sends the player out fully equipped with no tutorial", () => {
     const s = createTestGame(1);
     for (const ore of ["Kn", "Lm", "Py", "Mt", "Ml", "Cc", "Ls", "Lg", "Bt", "An"]) expect([ore, countOf(s, ore) > 0]).toEqual([ore, true]);
-    expect(s.gear).toEqual({ feet: "iron_boots", back: "iron_pack", hand: "iron_pick", weapon: "iron_blade" });
+    expect(s.gear).toEqual({ feet: { id: "iron_boots", n: 1 }, back: { id: "iron_pack", n: 1 }, left: { id: "iron_blade", n: 1 }, right: { id: "iron_pick", n: 1 } });
     expect(countOf(s, "iron_drum")).toBeGreaterThan(0);
     expect(s.tutorial?.off).toBe(true);
   });
@@ -3103,21 +3103,21 @@ describe("gear", () => {
     expect(s.gear.back).toBeUndefined();
     expect(s.cursor).toEqual({ id: "iron_boots", n: 1 });
     clickGear(s, "feet");
-    expect(s.gear.feet).toBe("iron_boots");
+    expect(s.gear.feet).toEqual({ id: "iron_boots", n: 1 });
     expect(s.cursor).toBeNull();
   });
 
   it("won't take an ordinary item", () => {
     const s = holding("iron");
-    clickGear(s, "hand");
-    expect(s.gear.hand).toBeUndefined();
+    clickGear(s, "right");
+    expect(s.gear.right).toBeUndefined();
   });
 
   it("comes back off into the hand", () => {
     const s = holding("iron_pick");
-    clickGear(s, "hand");
-    clickGear(s, "hand");
-    expect(s.gear.hand).toBeNull();
+    clickGear(s, "right");
+    clickGear(s, "right");
+    expect(s.gear.right).toBeNull();
     expect(s.cursor).toEqual({ id: "iron_pick", n: 1 });
   });
 
@@ -3133,7 +3133,7 @@ describe("gear", () => {
   it("boots shorten every step", () => {
     const s = createGame(1);
     const plain = walkTime(s);
-    s.gear.feet = "iron_boots";
+    s.gear.feet = { id: "iron_boots", n: 1 };
     expect(walkTime(s)).toBeCloseTo(plain * 0.91);
   });
 
@@ -3141,14 +3141,14 @@ describe("gear", () => {
     const s = createGame(1);
     s.inv[0] = { id: "iron", n: 25 };
     expect(overloaded(s)).toBe(true);
-    s.gear.back = "iron_pack";
+    s.gear.back = { id: "iron_pack", n: 1 };
     expect(carryLimit(s)).toBe(MAX_CARRY + 40);
     expect(overloaded(s)).toBe(false);
   });
 
   it("a pick doesn't change how much one strike takes: always one", () => {
     const s = gameWithVeins(1);
-    s.gear.hand = "iron_pick";
+    s.gear.right = { id: "iron_pick", n: 1 };
     const site = s.sites.find((v) => v.ore === "Lm")!;
     s.player = { x: site.x, y: site.y };
     const left = site.left;

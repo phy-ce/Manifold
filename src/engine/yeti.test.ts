@@ -1,7 +1,6 @@
 // The snowfield's yeti: where it comes out, how it hunts, that no early weapon beats it, and that it fades with the age.
 import { describe, expect, it } from "vitest";
-import era from "../../data/steam-era.json";
-import { STAGES, YETI } from "../content";
+import { STAGES, YETI, gearFor } from "../content";
 import { GameState, Mob, attack, canStrike, createGame, loadSave, mobVisible, step, walkTo } from "./game";
 import { BASE, Point, biomeAt } from "./world";
 
@@ -96,11 +95,11 @@ describe("the snowfield's yeti", () => {
   });
 
   it("cannot be killed by any weapon there is, and a player who stands and fights collapses", () => {
-    const weapons = Object.entries(era.gear).filter(([, g]) => "damage" in g).map(([id]) => id);
+    const weapons = gearFor("left");
     expect(weapons.length).toBeGreaterThan(0);
     for (const weapon of weapons) {
       const s = at(CENTRE);
-      s.gear.weapon = weapon;
+      s.gear.left = { id: weapon, n: 1 };
       s.mobs = [yeti({ x: CENTRE.x + 1, y: CENTRE.y }, { cool: YETI.attackMs })];
       let blows = 0;
       for (let i = 0; i < 2000 && !collapsed(s); i += 1) {

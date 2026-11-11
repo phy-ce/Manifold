@@ -8,6 +8,8 @@ export const CONSTRUCTION = "construction_bench";
 export const WORKBENCH = "workbench";
 /** Machines whose forms are other machines. */
 export const BUILDERS = [WORKBENCH, CONSTRUCTION];
+/** The bench where tools are put together from a head and a handle. */
+export const TOOL_BENCH = "tool_bench";
 
 export function expandRecipes(era, materials) {
   const items = { ...era.items };
@@ -60,15 +62,45 @@ export function expandRecipes(era, materials) {
       out: { [type]: 1 },
     }));
 
-  // Hand tools of the first age (picks of wood, stone and bone) are made on the workbench too, picked like a machine.
-  const tools = Object.entries(era.tools ?? {}).map(([id, tool]) => ({
-    id: `build_${id}`,
-    machine: WORKBENCH,
-    form: id,
-    time: tool.work ?? 5,
-    in: { ...tool.cost },
-    out: { [id]: 1 },
-  }));
+  // Tools are a material and a kind, as parts are a metal and a form: a stone axe, an iron pick. All are put
+  // together on the tool bench, its form the kind and what goes in the material: a head and a handle of sticks.
+  // Wood, stone and bone go in as they are; a metal goes in as a head already shaped on the 가공대 or 성형대.
+  const tools = [];
+  for (const [materialId, material] of Object.entries(era.toolMaterials ?? {})) {
+    const metal = materials.metals[materialId];
+    for (const [kindId, kind] of Object.entries(era.toolKinds)) {
+      const form = materials.forms[kindId];
+      const id = `${materialId}_${kindId}`;
+      items[id] = material.name + form.name;
+      variants[id] = { metal: materialId, form: kindId, code: (material.code ?? metal.code) + form.code, color: material.color ?? metal.color };
+      const head = material.head ? { [`${materialId}_${kindId}_head`]: 1 } : { [materialId]: kind.head };
+      tools.push({ id: `tool_${id}`, machine: TOOL_BENCH, form: kindId, time: era.toolWork ?? 4, in: { ...head, stick: kind.handle }, out: { [id]: 1 } });
+    }
+  }
 
-  return { items, variants, recipes: [...generated, ...era.recipes, ...builds, ...tools] };
+  return { items, variants, recipes: inherit(era.machines, [...generated, ...era.recipes, ...builds, ...tools]) };
+}
+
+/**
+ * A machine that `inherits` another does all its work too, in half the time: the construction bench builds the
+ * first age's machines as well as its own, the forming bench shapes what the 가공대 does by hand. A recipe the
+ * heir already has for the same form and product is left as its own.
+ */
+function inherit(machines, recipes) {
+  const out = [...recipes];
+  const done = new Set();
+  const resolve = (type) => {
+    if (done.has(type)) return;
+    done.add(type);
+    const parent = machines[type]?.inherits;
+    if (!parent) return;
+    resolve(parent);
+    const own = (r) => out.some((o) => o.machine === type && o.form === r.form && Object.keys(o.out).join() === Object.keys(r.out).join());
+    for (const r of out.filter((o) => o.machine === parent)) {
+      if (own(r)) continue;
+      out.push({ ...r, id: `${r.id}_${type}`, machine: type, time: Math.max(1, Math.ceil(r.time / 2)) });
+    }
+  };
+  Object.keys(machines).forEach(resolve);
+  return out;
 }

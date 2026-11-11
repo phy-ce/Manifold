@@ -21,6 +21,13 @@
     "pack": { "name": " 틀 배낭", "label": "틀 배낭", "code": "k", "weight": 1, "category": "gear" },
     "pick": { "name": " 곡괭이", "label": "곡괭이", "code": "x", "weight": 0.5, "category": "gear" },
     "blade": { "name": " 칼", "label": "칼", "code": "n", "weight": 1, "category": "gear" },
-    "spear": { "name": " 창", "label": "창", "code": "j", "weight": 1.5, "category": "gear" }
+    "spear": { "name": " 창", "label": "창", "code": "j", "weight": 1.5, "category": "gear" },
+    "axe": { "name": " 도끼", "label": "도끼", "code": "a", "weight": 1, "category": "gear" },
+    "shovel": { "name": " 삽", "label": "삽", "code": "h", "weight": 1, "category": "gear" },
+    "pick_head": { "name": " 곡괭이 머리", "label": "곡괭이 머리", "code": "X", "weight": 0.4, "category": "part" },
+    "axe_head": { "name": " 도끼 머리", "label": "도끼 머리", "code": "A", "weight": 0.4, "category": "part" },
+    "shovel_head": { "name": " 삽 머리", "label": "삽 머리", "code": "H", "weight": 0.4, "category": "part" },
+    "spear_head": { "name": " 창 머리", "label": "창 머리", "code": "J", "weight": 0.2, "category": "part" },
+    "blade_head": { "name": " 칼날", "label": "칼날", "code": "N", "weight": 0.4, "category": "part" }
   }
 }

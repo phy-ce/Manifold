@@ -217,7 +217,7 @@ describe("working a strand", () => {
 
   it("takes one per action from the cell underfoot only, pick or no pick", () => {
     const { s, site } = onVein();
-    s.gear.hand = "iron_pick";
+    s.gear.right = { id: "iron_pick", n: 1 };
     const before = site.cells!.map((c) => c.left);
     const here = site.cells!.findIndex((c) => c.x === site.x && c.y === site.y);
     expect(mine(s)).toBe(true);

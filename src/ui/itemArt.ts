@@ -14,10 +14,10 @@ const SHAPE_OF: Record<string, string> = {
   brick: "brick", steam_module: "steam_module", slag: "slag",
   iron: "ingot", copper: "ingot", steam_drum: "steam_drum", pig_iron: "ingot", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
-  wood_pick: "pick", stone_pick: "pick", bone_pick: "pick",
+  stick: "rod",
 };
 
-const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear"]);
+const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear", "axe", "shovel", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]);
 
 interface Lump {
   /** Gives each lump its own outline. */

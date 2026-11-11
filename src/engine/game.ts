@@ -1,7 +1,7 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
-import { FORAGE, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { FORAGE, HANDS, Job, ToolStats, fitsSlot, isTool, toolStats, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, groundGather, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
 /** Version 19 put the caves into one underground layer under the surface. */
@@ -16,6 +16,8 @@ export const SPRING_LEAK_MS = 2_000;
 /** Steam can't really be stored: a boiler holds about three seconds of full output. */
 export const STEAM_MAX = 30;
 export const STACK = 64;
+/** How many of an item fit in one slot: a tool keeps its own wear, so tools go one to a slot. */
+export const stackSize = (id: string): number => (isTool(id) ? 1 : STACK);
 export const INV_SLOTS = 8;
 /** The most the player can carry and still walk. */
 export const MAX_CARRY = 80;
@@ -108,6 +110,8 @@ export function itemStats(id: string): [string, string][] {
 export interface Stack {
   id: string;
   n: number;
+  /** Uses a tool has had. Tools never stack, so each keeps its own. */
+  wear?: number;
 }
 export type Slots = (Stack | null)[];
 
@@ -229,7 +233,7 @@ export interface GameState {
   /** The stack the player has picked up and is moving with the pointer. */
   cursor: Stack | null;
   /** What is equipped, by slot. */
-  gear: Record<string, string | null>;
+  gear: Record<string, Stack | null>;
   sites: Site[];
   /** Explored cells by chunk. A chunk's veins are generated when it first appears here. */
   revealed: Record<string, number[]>;
@@ -272,6 +276,8 @@ export interface GameState {
   lost: Stack[] | null;
   /** What last took health, so the screen can say why along with how much. */
   hurtBy?: HurtCause;
+  /** A tool that just broke from use, and when, for the screen to show. */
+  broke?: { id: string; at: number };
   /** What the last beast killed left in the bag, and when, for the screen to show. */
   drop?: { got: Record<string, number>; at: number };
   /** A dig, pick or fill under way at a cell: how long it has gone and how long it takes, in ms. */
@@ -631,11 +637,31 @@ export const FISTS = { damage: 1, range: 1, cooldown: 900 };
 /** A creature struck reels and holds still this long before it can move again. */
 const STAGGER_MS = 300;
 
-/** What the player fights with: the worn weapon, or bare hands. */
-export function weaponOf(s: GameState): { damage: number; range: number; cooldown: number } {
-  const id = s.gear.weapon;
-  const gear = id ? gearOf(id) : undefined;
-  return gear?.damage ? { damage: gear.damage, range: gear.range ?? 1, cooldown: gear.cooldown ?? FISTS.cooldown } : FISTS;
+/** The tools in the player's hands, with which hand holds each. */
+export const heldTools = (s: GameState): { hand: string; stack: Stack; stats: ToolStats }[] =>
+  HANDS.flatMap((hand) => {
+    const stack = s.gear[hand];
+    const stats = stack ? toolStats(stack.id) : undefined;
+    return stack && stats ? [{ hand, stack, stats }] : [];
+  });
+
+/** How many more uses a tool has before it breaks. */
+export const usesLeft = (stack: Stack): number => (toolStats(stack.id)?.durability ?? 0) - (stack.wear ?? 0);
+
+/** Wears a held tool by one use; at none left it breaks and the hand is empty. Says the tool's name if it broke. */
+function wearTool(s: GameState, hand: string): void {
+  const stack = s.gear[hand];
+  if (!stack) return;
+  stack.wear = (stack.wear ?? 0) + 1;
+  if (usesLeft(stack) > 0) return;
+  s.gear[hand] = null;
+  s.broke = { id: stack.id, at: s.time };
+}
+
+/** What the player fights with: whichever tool in hand strikes hardest, or bare fists. */
+export function weaponOf(s: GameState): { damage: number; range: number; cooldown: number; hand?: string } {
+  const best = heldTools(s).sort((a, b) => b.stats.damage - a.stats.damage || b.stats.range - a.stats.range)[0];
+  return best ? { damage: best.stats.damage, range: best.stats.range, cooldown: best.stats.cooldown, hand: best.hand } : FISTS;
 }
 
 /** Whether the player's next blow is ready. */
@@ -650,6 +676,7 @@ export function attack(s: GameState, mobId: number): boolean {
   const weapon = weaponOf(s);
   if (!mob || !canStrike(s) || steps8(mob, s.player) > weapon.range || !mobVisible(s, mob)) return false;
   s.strikeReady = s.time + weapon.cooldown;
+  if (weapon.hand) wearTool(s, weapon.hand);
   // No weapon of the early age wounds a yeti: the blow only makes it reel.
   if (mob.kind !== "yeti" || !YETI.immune) mob.hp -= isWeak(s) ? Math.max(1, Math.floor(weapon.damage / 2)) : weapon.damage;
   mob.wait = Math.max(mob.wait, STAGGER_MS);
@@ -1139,8 +1166,8 @@ export function carried(s: GameState): number {
 }
 
 /** The equipment on the player. */
-const worn = (s: GameState) => Object.values(s.gear).flatMap((id) => {
-  const gear = id ? gearOf(id) : undefined;
+const worn = (s: GameState) => Object.values(s.gear).flatMap((stack) => {
+  const gear = stack ? gearOf(stack.id) : undefined;
   return gear ? [gear] : [];
 });
 
@@ -1261,19 +1288,21 @@ export function setSafeWalk(s: GameState, on: boolean): void {
 }
 
 /** Adds up to n of an item and returns how many fit. */
-export function addTo(slots: Slots, id: string, n: number): number {
+export function addTo(slots: Slots, id: string, n: number, wear?: number): number {
+  const size = stackSize(id);
   let left = n;
   for (const slot of slots) {
-    if (slot && slot.id === id && slot.n < STACK) {
-      const moved = Math.min(left, STACK - slot.n);
+    if (slot && slot.id === id && slot.n < size) {
+      const moved = Math.min(left, size - slot.n);
       slot.n += moved;
       left -= moved;
     }
   }
   for (let i = 0; i < slots.length && left > 0; i += 1) {
     if (!slots[i]) {
-      const moved = Math.min(left, STACK);
-      slots[i] = { id, n: moved };
+      const moved = Math.min(left, size);
+      // A worn tool keeps its wear wherever it goes.
+      slots[i] = wear ? { id, n: moved, wear } : { id, n: moved };
       left -= moved;
     }
   }
@@ -1398,18 +1427,24 @@ export function mine(s: GameState): boolean {
   return true;
 }
 
-/** How much faster the pick in hand digs than bare hands: 1 with none. */
-export const digSpeed = (s: GameState): number => (s.gear.hand ? gearOf(s.gear.hand)?.dig : undefined) ?? 1;
-
-/**
- * How long one dig, pick or fill at a site takes. Ore, stone and felling go faster with a better pick; food is
- * picked and water filled by hand, the same whatever is held.
- */
-export function digTime(s: GameState, site: Site): number {
+/** What working a site asks of the hands: ore and stone want a pick, felling and picking food an axe. */
+export function jobOf(site: Site): Job {
   const kind = harvestKind(site);
-  if (kind === "water") return digBaseMs("water");
-  if (kind === "forage") return digBaseMs("forage");
-  return Math.round(digBaseMs(site.ore === "wood" ? "wood" : "ore") / digSpeed(s));
+  return kind === "water" ? "water" : kind === "forage" ? "forage" : site.ore === "wood" ? "wood" : "ore";
+}
+
+/** The held tool made for a job, the quickest if both hands have one. */
+export function toolFor(s: GameState, job: Job): { hand: string; stack: Stack; stats: ToolStats } | undefined {
+  return heldTools(s).filter((t) => t.stats.jobs.includes(job)).sort((a, b) => b.stats.speed - a.stats.speed)[0];
+}
+
+/** How much faster than bare hands the player does a job: the speed of the tool for it in hand, else 1. */
+export const digSpeed = (s: GameState, job: Job = "ore"): number => toolFor(s, job)?.stats.speed ?? 1;
+
+/** How long one dig, pick or fill at a site takes: bare hands' time, divided by the right tool's speed. */
+export function digTime(s: GameState, site: Site): number {
+  const job = jobOf(site);
+  return Math.round(digBaseMs(job) / digSpeed(s, job));
 }
 
 /**
@@ -1440,7 +1475,12 @@ function digOn(s: GameState): void {
   dig.done += STEP_MS;
   if (dig.done < dig.ms) return;
   s.dig = null;
-  if (mine(s)) s.dug = { x: dig.x, y: dig.y, at: s.time };
+  const job = jobOf(spot.site);
+  if (!mine(s)) return;
+  s.dug = { x: dig.x, y: dig.y, at: s.time };
+  // The tool that did the job wears by one use.
+  const tool = toolFor(s, job);
+  if (tool) wearTool(s, tool.hand);
 }
 
 /** Fills a site back toward its total. Only food and water refill, and they are single cells, so there are no shares to fill. */
@@ -1544,16 +1584,17 @@ export function clickGear(s: GameState, slot: string): void {
   if (!s.cursor) {
     if (!current) return;
     s.gear[slot] = null;
-    s.cursor = { id: current, n: 1 };
+    s.cursor = current;
     return;
   }
-  if (gearOf(s.cursor.id)?.slot !== slot) return;
-  s.gear[slot] = s.cursor.id;
+  if (!fitsSlot(s.cursor.id, slot)) return;
+  // One goes on, with its wear; the rest stays in hand.
+  s.gear[slot] = { ...s.cursor, n: 1 };
   s.cursor.n -= 1;
   if (s.cursor.n <= 0) s.cursor = null;
   if (!current) return;
-  if (!s.cursor) s.cursor = { id: current, n: 1 };
-  else if (!addTo(s.inv, current, 1)) bank(s, current, 1);
+  if (!s.cursor) s.cursor = current;
+  else if (!addTo(s.inv, current.id, 1, current.wear)) bank(s, current.id, 1, current.wear);
 }
 
 export const nodeProcess = (node: GameNode) => processOf(node.type, node.form);
@@ -1665,8 +1706,8 @@ export function setForm(s: GameState, nodeId: number, form: string): boolean {
 const stores = (s: GameState): Slots[] => s.nodes.filter((n) => n.type === WAREHOUSE).map((n) => n.store);
 
 /** Puts items in the first warehouse with room and returns how many fit. */
-function bank(s: GameState, id: string, n: number): number {
-  return stores(s).reduce((done, store) => done + addTo(store, id, n - done), 0);
+function bank(s: GameState, id: string, n: number, wear?: number): number {
+  return stores(s).reduce((done, store) => done + addTo(store, id, n - done, wear), 0);
 }
 
 /** How many of an ingredient the player can reach at the base. */
@@ -1681,7 +1722,7 @@ export const canAfford = (s: GameState, type: string): boolean =>
 export const bagCount = (s: GameState, id: string): number => s.inv.reduce((sum, slot) => sum + (slot && lineFits(slot.id, id) ? slot.n : 0), 0);
 
 /** Room left in the bag for an item. */
-const bagRoom = (s: GameState, id: string): number => s.inv.reduce((room, slot) => room + (!slot ? STACK : slot.id === id ? STACK - slot.n : 0), 0);
+const bagRoom = (s: GameState, id: string): number => s.inv.reduce((room, slot) => room + (!slot ? stackSize(id) : slot.id === id ? stackSize(id) - slot.n : 0), 0);
 
 function spend(s: GameState, ingredient: string, amount: number, bagOnly = false): Stack[] {
   const spent: Stack[] = [];
@@ -1834,6 +1875,41 @@ function dropRiverNodes(s: GameState): void {
 }
 
 /**
+ * Equipment from older saves: gear was kept as bare ids, with a pick in "hand" and a weapon in "weapon". Each
+ * becomes a stack of one, the pick in the right hand and the weapon in the left. A tool kept several to a slot
+ * (they used to stack) is split one to a slot where there is room. A forming bench set to make a tool now
+ * makes its head.
+ */
+function fixGear(s: GameState): void {
+  const old = s.gear as Record<string, Stack | string | null>;
+  const stack = (v: Stack | string | null | undefined): Stack | null => (typeof v === "string" ? { id: v, n: 1 } : v ?? null);
+  const gear: Record<string, Stack | null> = {};
+  for (const [slot, value] of Object.entries(old)) {
+    const to = slot === "hand" ? "right" : slot === "weapon" ? "left" : slot;
+    const held = stack(value);
+    // Anything that no longer goes where it was goes back to the bag.
+    if (held && !fitsSlot(held.id, to)) addTo(s.inv, held.id, 1, held.wear) || bank(s, held.id, 1, held.wear);
+    else gear[to] = held;
+  }
+  s.gear = gear;
+  for (const slots of [s.inv, ...stores(s)]) {
+    for (let i = 0; i < slots.length; i += 1) {
+      const slot = slots[i];
+      if (!slot || !isTool(slot.id) || slot.n <= 1) continue;
+      while (slot.n > 1) {
+        const free = slots.indexOf(null);
+        if (free < 0) break;
+        slots[free] = { id: slot.id, n: 1 };
+        slot.n -= 1;
+      }
+    }
+  }
+  for (const node of s.nodes) {
+    if (node.type === "forming_bench" && ["pick", "axe", "shovel", "spear", "blade"].includes(node.form)) node.form = `${node.form}_head`;
+  }
+}
+
+/**
  * Turns saved JSON from any older version into a game of this one, filling in whatever it
  * doesn't have yet. Returns null only for data that isn't a save, or comes from a newer game.
  */
@@ -1983,8 +2059,10 @@ export function upgradeSave(s: GameState): GameState {
   intoOneUnderground(s);
   addRivers(s);
   addLaterVeins(s);
-  // Prospecting under way is not kept across a load.
+  // Prospecting under way is not kept across a load, nor is a dig.
   s.probe = null;
+  s.dig = null;
+  fixGear(s);
   s.mobs ??= [];
   s.shots ??= [];
   // A yeti is not kept across a load: surface creatures come and go.
@@ -2218,7 +2296,7 @@ function roomFor(node: GameNode, item: string, viaLine = false): number {
   }
   if (isStore(node.type)) {
     if (isFluid(item)) return 0;
-    return node.store.reduce((room, slot) => room + (!slot ? STACK : slot.id === item ? STACK - slot.n : 0), 0);
+    return node.store.reduce((room, slot) => room + (!slot ? stackSize(item) : slot.id === item ? stackSize(item) - slot.n : 0), 0);
   }
   const key = slotFor(node, item)?.key;
   if (!key) return fuelRoom(node, item, viaLine);
@@ -2915,9 +2993,10 @@ export type Button = "left" | "right";
 /** Lifts up to n from a stack onto the cursor. Returns how many moved. */
 function lift(s: GameState, stack: Stack, n: number): number {
   if (s.cursor && s.cursor.id !== stack.id) return 0;
-  const moved = Math.min(n, stack.n, STACK - (s.cursor?.n ?? 0));
+  const moved = Math.min(n, stack.n, stackSize(stack.id) - (s.cursor?.n ?? 0));
   if (moved <= 0) return 0;
-  s.cursor = { id: stack.id, n: (s.cursor?.n ?? 0) + moved };
+  // A tool comes up whole, wear and all.
+  s.cursor = { ...stack, n: (s.cursor?.n ?? 0) + moved };
   stack.n -= moved;
   return moved;
 }
@@ -2931,9 +3010,9 @@ function drop(s: GameState, n: number): void {
 /** Puts a held stack back in the inventory, or a warehouse if the bag is full. */
 export function stowCursor(s: GameState): void {
   if (!s.cursor) return;
-  const held = addTo(s.inv, s.cursor.id, s.cursor.n);
+  const held = addTo(s.inv, s.cursor.id, s.cursor.n, s.cursor.wear);
   drop(s, held);
-  if (s.cursor) drop(s, bank(s, s.cursor.id, s.cursor.n));
+  if (s.cursor) drop(s, bank(s, s.cursor.id, s.cursor.n, s.cursor.wear));
 }
 
 /** Pick up, put down, merge or swap on an inventory or warehouse slot. */
@@ -2945,9 +3024,9 @@ export function clickStack(s: GameState, slots: Slots, index: number, button: Bu
     lift(s, slot, button === "left" ? slot.n : Math.ceil(slot.n / 2));
   } else if (!slot) {
     const n = button === "left" ? cursor.n : 1;
-    slots[index] = { id: cursor.id, n };
+    slots[index] = { ...cursor, n };
     drop(s, n);
-  } else if (slot.id === cursor.id) {
+  } else if (slot.id === cursor.id && stackSize(slot.id) > 1) {
     const n = Math.min(button === "left" ? cursor.n : 1, STACK - slot.n);
     slot.n += n;
     drop(s, n);
@@ -2966,9 +3045,9 @@ export function wheelStack(s: GameState, slots: Slots, index: number, way: "in" 
     if (!slot.n) slots[index] = null;
     return true;
   }
-  if (!s.cursor || (slot && (slot.id !== s.cursor.id || slot.n >= STACK))) return false;
+  if (!s.cursor || (slot && (slot.id !== s.cursor.id || slot.n >= stackSize(slot.id)))) return false;
   if (slot) slot.n += 1;
-  else slots[index] = { id: s.cursor.id, n: 1 };
+  else slots[index] = { ...s.cursor, n: 1 };
   drop(s, 1);
   return true;
 }
@@ -3068,11 +3147,18 @@ export function nudgeFromStore(s: GameState, nodeId: number, index: number): boo
 /** Merges matching stacks and lays them out from raw material to finished goods. */
 export function sortSlots(slots: Slots): void {
   const totals = new Map<string, number>();
-  for (const slot of slots) if (slot) totals.set(slot.id, (totals.get(slot.id) ?? 0) + slot.n);
+  // Tools are kept whole, each with its own wear; everything else is counted up and stacked again.
+  const tools: Stack[] = [];
+  for (const slot of slots) {
+    if (slot && isTool(slot.id)) tools.push(slot);
+    else if (slot) totals.set(slot.id, (totals.get(slot.id) ?? 0) + slot.n);
+  }
   slots.fill(null);
   let i = 0;
-  for (const id of [...totals.keys()].sort(compareItems)) {
-    let left = totals.get(id)!;
+  const ids = [...new Set([...totals.keys(), ...tools.map((t) => t.id)])].sort(compareItems);
+  for (const id of ids) {
+    for (const tool of tools.filter((t) => t.id === id).sort((a, b) => (a.wear ?? 0) - (b.wear ?? 0))) slots[i++] = tool;
+    let left = totals.get(id) ?? 0;
     while (left > 0) {
       const n = Math.min(left, STACK);
       slots[i] = { id, n };
@@ -3104,9 +3190,9 @@ export function createTestGame(seed: number): GameState {
   const raw: [string, number][] = [
     ["Kn", 64], ["Lm", 64], ["Py", 64], ["Mt", 32], ["Ml", 64], ["Cc", 64], ["Ls", 64], ["Lg", 64], ["Bt", 64], ["An", 32], ["coke", 64],
   ];
-  // Metals and bricks, from the bloom to steel, and the by-products that come with them.
+  // Metals and bricks, from the bloom to steel, the by-products that come with them, and wood and stone.
   const metals: [string, number][] = [
-    ["iron", 64], ["bloom", 16], ["pig_iron", 32], ["copper", 64], ["steel", 32], ["brick", 64], ["slag", 16], ["sulfur", 16],
+    ["iron", 64], ["bloom", 16], ["pig_iron", 32], ["copper", 64], ["steel", 32], ["brick", 64], ["slag", 16], ["sulfur", 16], ["wood", 64], ["stone", 64],
   ];
   // For going out: spare weapons, drums empty and full, and cooked food.
   const kit: [string, number][] = [
@@ -3141,7 +3227,7 @@ export function createTestGame(seed: number): GameState {
   });
   // Lines are paid from the bag, so these go in the player's inventory. The player wears a full set.
   for (const [id, n] of transport) addTo(s.inv, id, n);
-  s.gear = { feet: "iron_boots", back: "iron_pack", hand: "iron_pick", weapon: "iron_blade" };
+  s.gear = { feet: { id: "iron_boots", n: 1 }, back: { id: "iron_pack", n: 1 }, left: { id: "iron_blade", n: 1 }, right: { id: "iron_pick", n: 1 } };
   s.stage = PLAYABLE_STAGES - 1;
   // Two of every machine open so far, built and ready to install, in machine warehouses of their own.
   const machines = machinesAt(s.stage);

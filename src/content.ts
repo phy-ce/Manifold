@@ -269,14 +269,62 @@ export const stageOpening = (source: string): number => STAGES.findIndex((s) => 
 /** Machines open at a stage, counting every stage before it. */
 export const machinesAt = (stage: number): string[] =>
   STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockMachines);
-/** Hand tools a bench can make by a stage: picks of wood, stone and bone from the first age. */
-export const toolsAt = (stage: number): string[] =>
-  STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1).flatMap((s) => s.unlockTools ?? []);
-/** Everything a bench can make by a stage: machines, and the hand tools. */
-export const buildablesAt = (stage: number): string[] => [...machinesAt(stage), ...toolsAt(stage)];
-/** How long one dig, pick or fill takes by hand, by what is worked (ms). A pick in hand divides it, but not for food or water. */
-const digData: Record<string, number> = era.dig;
-export const digBaseMs = (kind: "ore" | "wood" | "forage" | "water"): number => digData[kind];
+/** Everything a bench can make by a stage: the machines open by then. */
+export const buildablesAt = (stage: number): string[] => machinesAt(stage);
+/** What a place asks of the hands: ore and stone, felling, picking food, filling water. */
+export type Job = "ore" | "wood" | "forage" | "water";
+/** How long one dig, pick or fill takes by bare hands (ms). A tool made for the job divides it. */
+const digData: Record<Job, number> = era.dig;
+export const digBaseMs = (job: Job): number => digData[job];
+
+// ---- Tools: a kind (pick, axe, shovel, spear, blade) of a material (wood, stone, bone, iron)
+
+interface ToolKind { jobs: Job[]; damage: number; range: number; cooldown: number; head: number; handle: number }
+interface ToolMaterial { name: string; stage?: string; speed: number; power: number; durability: number; weight: number }
+const toolKinds: Record<string, ToolKind> = era.toolKinds as Record<string, ToolKind>;
+const toolMaterials: Record<string, ToolMaterial> = era.toolMaterials;
+
+/** A tool's kind and material, or nothing for an item that isn't a tool. */
+export function toolOf(id: string): { kind: string; material: string } | undefined {
+  const variant = variants[id];
+  return variant && toolKinds[variant.form] && toolMaterials[variant.metal] ? { kind: variant.form, material: variant.metal } : undefined;
+}
+export const isTool = (id: string): boolean => !!toolOf(id);
+
+/**
+ * What a tool does, from its kind and material: the jobs its kind is for and how much faster than bare hands its
+ * material does them; the blow its kind strikes, scaled by the material; and how many uses the material lasts.
+ */
+export interface ToolStats { jobs: Job[]; speed: number; damage: number; range: number; cooldown: number; durability: number }
+export function toolStats(id: string): ToolStats | undefined {
+  const tool = toolOf(id);
+  if (!tool) return undefined;
+  const kind = toolKinds[tool.kind];
+  const material = toolMaterials[tool.material];
+  return {
+    jobs: kind.jobs, speed: material.speed, damage: Math.max(1, Math.round(kind.damage * material.power)),
+    range: kind.range, cooldown: kind.cooldown, durability: material.durability,
+  };
+}
+
+/** Tools the workbench can make by a stage: every kind, in each material whose age has come. */
+export function toolsAt(stage: number): string[] {
+  const reached = Math.min(stage, PLAYABLE_STAGES - 1);
+  return Object.keys(variants).filter((id) => {
+    const tool = toolOf(id);
+    const opens = tool && toolMaterials[tool.material].stage;
+    return !!opens && STAGES.findIndex((m) => m.id === opens) <= reached;
+  });
+}
+
+const jobName = (job: Job): string => (job === "ore" ? tr("광물") : job === "wood" ? tr("벌목") : job === "forage" ? tr("채집") : tr("물"));
+/** A tool's line in its tooltip: what it is quicker at and how hard it hits, "광물 ×2 · 공격력 2". */
+function toolNote(id: string): string {
+  const stats = toolStats(id)!;
+  const jobs = stats.jobs.map((job) => `${jobName(job)} ×${stats.speed}`);
+  const blow = `${tr("공격력")} ${stats.damage}${stats.range > 1 ? ` · ${stats.range}${tr("칸")}` : ""}`;
+  return [...jobs, blow].join(" · ");
+}
 
 export interface Gear {
   slot: string;
@@ -285,19 +333,23 @@ export interface Gear {
   walk?: number;
   /** Adds to how much the player can carry. */
   carry?: number;
-  /** A pick: how many times faster it digs ore, fells trees and breaks stone than bare hands. */
-  dig?: number;
   /** A weapon: health taken from a creature per blow, how many cells away it reaches, and ms between blows. */
   damage?: number;
   range?: number;
   cooldown?: number;
 }
 const gear: Record<string, Gear> = era.gear;
-export const gearOf = (id: string): Gear | undefined => gear[id];
+/** Worn gear, or a tool, which goes in either hand. */
+export const gearOf = (id: string): Gear | undefined => gear[id] ?? (isTool(id) ? { slot: "hand", note: toolNote(id) } : undefined);
+/** The two hands, which hold tools; a weapon is a tool like any other. */
+export const HANDS = ["left", "right"];
 /** Equipment slots and what each is called. */
-export const GEAR_SLOTS: [string, string][] = [["feet", tr("발")], ["back", tr("등")], ["hand", tr("손")], ["weapon", tr("무기")]];
+export const GEAR_SLOTS: [string, string][] = [["feet", tr("발")], ["back", tr("등")], ["left", tr("왼손")], ["right", tr("오른손")]];
+/** Whether an item goes in an equipment slot: any tool in either hand, worn gear in its own slot. */
+export const fitsSlot = (id: string, slot: string): boolean => (HANDS.includes(slot) ? isTool(id) : gear[id]?.slot === slot);
 /** The items that fit a slot. */
-export const gearFor = (slot: string): string[] => Object.keys(gear).filter((id) => gear[id].slot === slot);
+export const gearFor = (slot: string): string[] =>
+  HANDS.includes(slot) ? Object.keys(variants).filter(isTool) : Object.keys(gear).filter((id) => gear[id].slot === slot);
 
 /** Machines of the first stage. */
 export const MACHINE_TYPES: string[] = machinesAt(0);
@@ -343,7 +395,7 @@ export function formGroups(type: string, forms: string[], stage: number): [strin
     const groups = new Map<string, string[]>();
     for (const s of STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1)) {
       const era = tr(s.era);
-      groups.set(era, [...(groups.get(era) ?? []), ...[...s.unlockMachines, ...(s.unlockTools ?? [])].filter((m: string) => forms.includes(m))]);
+      groups.set(era, [...(groups.get(era) ?? []), ...s.unlockMachines.filter((m: string) => forms.includes(m))]);
     }
     return [...groups].filter(([, list]) => list.length);
   }
@@ -441,7 +493,7 @@ const MACHINE_WEIGHT = 10;
 /** Weight of one item. A part weighs its metal times how much metal its form uses. */
 export function itemWeight(id: string): number {
   const variant = variants[id];
-  if (variant) return metals[variant.metal].weight * formWeights[variant.form].weight;
+  if (variant) return (metals[variant.metal]?.weight ?? toolMaterials[variant.metal].weight) * formWeights[variant.form].weight;
   if (machines[id]) return MACHINE_WEIGHT;
   return weights[id] ?? metals[id]?.weight ?? 1;
 }
