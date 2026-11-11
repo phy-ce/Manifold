@@ -24,6 +24,8 @@ import { keyHintHtml } from "./ui/keyHint";
 import { applyTheme } from "./ui/theme";
 import { installTooltip } from "./ui/tooltip";
 import { keepFitted } from "./ui/fitColumn";
+import { makeDraggable } from "./ui/dragWindow";
+import { FIGURE_H, FIGURE_SCALE, FIGURE_W, SLOT_AT, drawFigure } from "./ui/gearFigure";
 
 applyTheme();
 installTooltip();
@@ -399,6 +401,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault(); // the G must not land in the search box it focuses
     itemIndex.focus();
   }
+  if (e.code === "KeyK") toggleGear();
   if (e.code === "KeyI") {
     invBox.hidden = !invBox.hidden;
     redraw();
@@ -529,7 +532,13 @@ bagKey.addEventListener("click", () => {
   invBox.hidden = !invBox.hidden;
   redraw();
 });
-hotbar.append(...hotSlots, bagKey);
+// And [K] beside it opens the equipment window.
+const gearButton = document.createElement("button");
+gearButton.type = "button";
+gearButton.className = "key-button";
+gearButton.innerHTML = keyHintHtml("K", tr("장비"), "on");
+gearButton.addEventListener("click", () => toggleGear());
+hotbar.append(...hotSlots, bagKey, gearButton);
 
 const sortButton = document.createElement("button");
 sortButton.type = "button";
@@ -581,21 +590,47 @@ const invKey = document.createElement("span");
 invKey.className = "push";
 invKey.innerHTML = keyHintHtml("I", "", "on");
 invTools.append(invTitle, sortButton, trashButton, invKey);
+invBox.append(invTools, invGrid);
+makeDraggable(invBox, invTools, "bag");
+
+// The equipment window, apart from the bag: the player drawn as a pixel figure, each gear slot on it where that
+// thing is worn or held. [K] opens it, and it drags by its title as the bag does.
+const gearBox = document.createElement("section");
+gearBox.className = "box gear-pop";
+gearBox.hidden = true;
+gearBox.setAttribute("aria-label", tr("장비"));
+const gearTools = document.createElement("div");
+gearTools.className = "bar-row";
+const gearTitle = document.createElement("strong");
+gearTitle.textContent = tr("장비");
+const gearKey = document.createElement("span");
+gearKey.className = "push";
+gearKey.innerHTML = keyHintHtml("K", "", "on");
+gearTools.append(gearTitle, gearKey);
+const figure = document.createElement("div");
+figure.className = "gear-figure";
+figure.style.setProperty("--fig-w", `${FIGURE_W * FIGURE_SCALE}px`);
+figure.style.setProperty("--fig-h", `${FIGURE_H * FIGURE_SCALE}px`);
+const body = drawFigure();
+body.className = "gear-body";
+figure.append(body);
 const gearSlots = GEAR_SLOTS.map(([slot, name]) => {
   const b = makeSlot(() => {
     clickGear(state, slot);
     redraw();
   });
+  const [x, y] = SLOT_AT[slot] ?? [0, 0];
+  b.style.setProperty("--x", `${x * FIGURE_SCALE}px`);
+  b.style.setProperty("--y", `${y * FIGURE_SCALE}px`);
+  figure.append(b);
   return { slot, name, b };
 });
-const gearGrid = document.createElement("div");
-gearGrid.className = "gear-grid";
-gearGrid.setAttribute("aria-label", tr("장비"));
-gearGrid.append(...gearSlots.map((g) => g.b));
-const invRow = document.createElement("div");
-invRow.className = "inv-row";
-invRow.append(invGrid, gearGrid);
-invBox.append(invTools, invRow);
+gearBox.append(gearTools, figure);
+makeDraggable(gearBox, gearTools, "gear");
+const toggleGear = () => {
+  gearBox.hidden = !gearBox.hidden;
+  redraw();
+};
 
 const win = document.createElement("div");
 win.className = "win";
@@ -641,7 +676,7 @@ rightCol.append(itemIndex.root);
 // The tutorial card floats over the foot of the right column, as tall as its text, never cut short; inside #app so
 // windows still cover it.
 app.append(guide, guideMini);
-app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root, tests.root);
+app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, gearBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root, tests.root);
 // The side columns shrink to fit the window rather than scroll.
 keepFitted([map.side, graph.side, rightCol]);
 
@@ -651,6 +686,10 @@ window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.target instanceof HTMLInputElement) return;
   if (tests.isOpen) return tests.close();
   if (menu.isOpen) return menu.close();
+  if (!gearBox.hidden) {
+    gearBox.hidden = true;
+    return;
+  }
   if (!invBox.hidden) {
     invBox.hidden = true;
     return;

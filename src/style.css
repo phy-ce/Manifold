@@ -97,11 +97,21 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 #app.index-beside > .right-col:hover, #app.index-beside > .right-col:focus-within, #app.index-beside.index-lit > .right-col { filter: none; }
 /* The tutorial card floats over that column, so it comes up with it: its steps are often about the window. */
 #app.index-beside > .tutorial, #app.index-beside > .tutorial-mini { z-index: 22; }
-/* I: the bag with the gear, over the middle of the map. */
+/* I: the bag, over the middle of the map; K: the equipment, beside it. Both drag by their title bars, and once
+   moved they float where they were left (dragWindow.ts). */
 .inv-pop { grid-area: centre; align-self: center; justify-self: center; z-index: 10; display: grid; gap: var(--gap); background: var(--panel); border-color: var(--dim); box-shadow: 0 12px 40px rgb(0 0 0 / 60%); }
 .inv-pop .bar-row { margin: 0; flex-wrap: nowrap; }
 .inv-pop .bag-grid { grid-template-columns: repeat(4, var(--slot)); }
-.inv-pop .gear-grid { display: grid; grid-template-columns: repeat(2, var(--slot)); gap: var(--gap-sm); }
+.gear-pop { grid-area: centre; align-self: center; justify-self: end; margin-right: calc(var(--gap) * 4); z-index: 10; display: grid; gap: var(--gap); background: var(--panel); border-color: var(--dim); box-shadow: 0 12px 40px rgb(0 0 0 / 60%); }
+.gear-pop .bar-row { margin: 0; flex-wrap: nowrap; }
+.draggable[style*="left"] { position: fixed; margin: 0; z-index: 12; }
+.drag-handle { cursor: grab; user-select: none; }
+.draggable.dragging .drag-handle { cursor: grabbing; }
+/* The figure, scaled up with crisp pixels; each slot centred where it is worn or held, with room round the edges. */
+.gear-figure { position: relative; width: calc(var(--fig-w) + var(--slot) * 1.2); height: calc(var(--fig-h) + var(--slot) * 0.3); }
+.gear-body { position: absolute; left: calc(var(--slot) * 0.6); top: 0; width: var(--fig-w); height: var(--fig-h); image-rendering: pixelated; }
+/* paintSlot rewrites a slot's classes, so the figure's slots are found by where they sit. */
+.gear-figure > .slot { position: absolute; left: calc(var(--slot) * 0.6 + var(--x) - var(--slot) / 2); top: calc(var(--y) - var(--slot) / 2); background: color-mix(in srgb, var(--bg) 80%, transparent); }
 .box { background: color-mix(in srgb, var(--panel) 86%, transparent); border: 1px solid var(--line); padding: var(--gap-lg); min-width: 0; }
 /* The biome's landscape behind the whole screen (src/ui/scenery.ts): two layers that cross-fade, never touchable.
    Panels let a little of it through; the map keeps a solid back so it reads cleanly. */
@@ -205,6 +215,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .paused-mark { position: absolute; top: var(--gap-lg); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); color: var(--fire); background: rgb(16 21 28 / 80%); border: 1px solid var(--fire); font-size: var(--text-lg); font-weight: 700; pointer-events: none; }
 /* A creature within a blow: "[F] 공격" over the map, under the pause mark's place. */
 .fight-alert { position: absolute; top: calc(var(--gap-lg) * 4); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); background: rgb(16 21 28 / 80%); border: 1px solid var(--alert); font-size: var(--text-lg); pointer-events: none; }
+.work-alert { border-color: var(--go); color: var(--go); }
 .graph-view { grid-template-rows: minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
@@ -317,9 +328,6 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .language-pick button { min-width: 140px; padding: 12px 16px; color: var(--go); background: var(--panel); border: 1px solid var(--line); font: inherit; cursor: pointer; }
 .language-pick button:hover { border-color: var(--go); }
 .language-pick .full-screen { min-width: 0; color: var(--fg); }
-.inv-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap-lg); }
-.inv-row > .slot-grid { flex: 1 1 0; min-width: 0; }
-.gear-grid { display: flex; gap: var(--gap); padding-left: var(--gap-lg); border-left: 1px solid var(--line); }
 .slot.gear .n { display: none; }
 .context-menu { position: fixed; z-index: 40; display: grid; min-width: calc(var(--slot) * 2.5); background: var(--panel); border: 1px solid var(--line); }
 .context-menu button { padding: var(--gap-sm) var(--gap); text-align: left; font-size: var(--text-sm); border-bottom: 1px solid var(--line); }

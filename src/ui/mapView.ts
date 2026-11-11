@@ -289,6 +289,8 @@ export class MapView {
   private readonly paused = document.createElement("div");
   /** Over the map while a creature in sight is within a blow: F strikes. */
   private readonly fightAlert = document.createElement("div");
+  /** Over the map while something is being gathered or eaten. */
+  private readonly workAlert = document.createElement("div");
   private readonly ctx = this.canvas.getContext("2d")!;
   private readonly panel = document.createElement("div");
   private readonly fight: FightPanel;
@@ -467,7 +469,9 @@ export class MapView {
     walkMode.append(this.caveBar);
     this.fightAlert.className = "fight-alert";
     this.fightAlert.hidden = true;
-    this.root.append(this.canvas, this.paused, this.fightAlert);
+    this.workAlert.className = "fight-alert work-alert";
+    this.workAlert.hidden = true;
+    this.root.append(this.canvas, this.paused, this.fightAlert, this.workAlert);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -719,6 +723,10 @@ export class MapView {
     this.fightAlert.hidden = !inReach;
     const alert = inReach ? keyHintHtml("F", tr("공격"), canStrike(s) ? "on" : "off") : "";
     if (this.fightAlert.dataset.shown !== alert) this.fightAlert.innerHTML = this.fightAlert.dataset.shown = alert;
+    // A dig, a cut or a meal under way says so in the same place: "채집 중", "먹는 중 · 날고기".
+    const busy = s.eating ? `${tr("먹는 중")} · ${itemName(s.eating.id)}` : s.dig ? tr("채집 중") : "";
+    this.workAlert.hidden = !busy || inReach;
+    if (this.workAlert.textContent !== busy) this.workAlert.textContent = busy;
     // Where safe mode stopped the walk: the cell blinks, then stays boxed in red until the walk goes on, and the
     // middle of the map says what it saw and what it would cost, with safe mode named small beneath.
     const halt = s.halt;
