@@ -1,5 +1,5 @@
 import { tr } from "../i18n";
-import { GameState, Mob, attack, canStrike, creatureInfo, creaturesInSight, isVisible, visionAt, mobVisible, walkTo, weaponOf } from "../engine/game";
+import { GameState, Mob, attack, canStrike, creatureInfo, creaturesInSight, isVisible, visionAt, mobVisible, walkTo, weaponOf, harvestTarget, jobOf, toolFor } from "../engine/game";
 import { BIOMES, itemColor, toolOf } from "../content";
 import { biomeAt, terrain, underCell, ROCK } from "../engine/world";
 import { SOUND } from "./sound";
@@ -8,6 +8,8 @@ import { keyHint, setKeyHint } from "./keyHint";
 const W = 192, H = 108, SW = 24, SH = 28;
 const FOCAL = W / (2 * Math.tan(33 * Math.PI / 180));
 const HIT_MS = 180;
+/** One stroke of a tool while digging, felling or picking: up and down. */
+const SWING_MS = 520;
 /** How long a blow pressed early waits for the weapon to come ready, in ms. */
 const BUFFER_MS = 450;
 /** The most cells a wall ray crosses underground. */
@@ -38,12 +40,12 @@ function drawHeldTool(rect: HandRect, kind: string, tones: string[]): void {
   const [face, light, dark] = tones;
   const length = kind === "spear" ? 36 : kind === "blade" ? 10 : 23;
   for (let y = -length; y < 10; y++) {
-    const x = Math.floor(-y / 4);
+    const x = 0;
     rect(x, y, 3, 1, "#59432f");
     rect(x, y, 1, 1, "#806345");
     rect(x + 3, y, 1, 1, "#382e26");
   }
-  const x = Math.floor(length / 4), y = -length;
+  const x = 0, y = -length;
   switch (kind) {
     case "pick":
       rect(x - 7, y - 2, 16, 4, face);
@@ -55,10 +57,10 @@ function drawHeldTool(rect: HandRect, kind: string, tones: string[]): void {
       break;
     case "axe":
       rect(x - 2, y - 2, 6, 4, face);
-      rect(x + 4, y - 5, 5, 11, face);
-      rect(x + 9, y - 6, 2, 13, light);
-      rect(x + 4, y - 5, 5, 1, light);
-      rect(x + 4, y + 5, 5, 2, dark);
+      rect(x - 7, y - 5, 5, 11, face);
+      rect(x - 9, y - 6, 2, 13, light);
+      rect(x - 7, y - 5, 5, 1, light);
+      rect(x - 7, y + 5, 5, 2, dark);
       break;
     case "shovel":
       rect(x - 3, y - 8, 10, 8, face);
@@ -86,32 +88,49 @@ function drawHeldTool(rect: HandRect, kind: string, tones: string[]): void {
   }
 }
 
-/** Broad knuckles and a tapered wrist keep the fists foreshortened. */
-function drawHand(ctx: CanvasRenderingContext2D, hand: "left" | "right", id: string | undefined, bob: number): void {
-  const origin = hand === "left" ? 30 : W - 30;
-  const bottom = H - 13 - bob;
+/** Thumb-side grip, mirrored as a whole; the wrist trails down and outward. */
+function drawHand(ctx: CanvasRenderingContext2D, mirror: boolean, id: string | undefined, bob: number): void {
+  const origin = mirror ? W - 30 : 30;
+  const bottom = H - 17 - bob;
   const rect: HandRect = (x, y, w, h, color) => {
     ctx.fillStyle = color;
-    ctx.fillRect(hand === "left" ? origin + x : origin - x - w, bottom + y, w, h);
+    // Shear every scanline together so the head, shaft and fist share the tilt.
+    for (let row = y; row < y + h; row++) {
+      const inward = x - Math.floor(row / 2);
+      ctx.fillRect(mirror ? origin - inward - w : origin + inward, bottom + row, w, 1);
+    }
   };
   const tool = id ? toolOf(id) : undefined;
+  // Cuff and forearm continue beyond the frame even at the top of a blow.
+  rect(-7, 16, 13, 28, "#39352c");
+  rect(-7, 16, 2, 28, "#272923");
+  rect(4, 16, 2, 28, "#504735");
+  rect(-7, 16, 13, 3, "#6b6048");
+  rect(-6, 19, 11, 1, "#292b25");
+  rect(-5, 8, 9, 8, "#71594a");
+  rect(-5, 10, 2, 6, "#493b34");
+  rect(2, 10, 2, 6, "#8a705b");
+  // Narrow back of the fist behind the shaft; negative x is the outer side.
+  rect(-5, -4, 8, 13, "#604b40");
+  rect(-4, -5, 7, 2, "#8a705b");
   if (tool) drawHeldTool(rect, tool.kind, toolTones(id!));
-  // Cuffs extend off the frame even at the top of a blow.
-  rect(-9, 10, 14, 16, "#39352c");
-  rect(-9, 10, 14, 2, "#6b6048");
-  rect(-8, 13, 2, 9, "#504735");
-  rect(2, 13, 2, 2, "#78674c");
-  rect(-8, 1, 15, 8, "#71594a");
-  rect(-6, 8, 11, 3, "#604b40");
-  rect(-9, 3, 3, 5, "#493b34");
-  rect(-6, -1, 11, 3, "#8a705b");
-  for (let x = -6; x < 5; x += 3) {
-    rect(x, 0, 2, 1, "#a0876d");
-    rect(x, 3, 1, 2, "#574439");
+  // Four curled fingers cover the handle, with knuckles down the outer edge.
+  // An empty fist has loosely tucked fingertips instead of a gripping thumb.
+  for (let finger = 0; finger < 4; finger++) {
+    const y = -4 + finger * 3;
+    const tip = tool ? 4 : 2;
+    rect(-6, y, tip + 6, 3, "#71594a");
+    rect(-6, y, 2, 2, "#8a705b");
+    rect(-6, y + 2, 3, 1, "#493b34");
+    rect(-3, y, tip + 2, 1, "#856957");
+    rect(tip - 1, y + 1, 2, 2, "#604b40");
   }
-  rect(tool ? 3 : 2, 4, 5, 4, "#856957");
-  rect(tool ? 4 : 3, 4, 3, 1, "#9b7d65");
-  rect(5, 8, 2, 1, "#493b34");
+  // Thumb starts toward the centre, then folds across the front of the handle.
+  rect(tool ? 4 : 2, 0, 3, 6, "#856957");
+  rect(tool ? 4 : 2, 0, 2, 4, "#a0876d");
+  rect(1, -2, tool ? 5 : 3, 3, "#8a705b");
+  rect(0, -3, 3, 3, "#9b7d65");
+  rect(0, 0, 4, 1, "#493b34");
 }
 
 /** A hash of a wall cell and a spot on its face, in 0..1. */
@@ -519,6 +538,12 @@ export class FightPanel {
     const weapon = weaponOf(s);
     const now = performance.now();
     const bob = this.motion.matches ? 0 : Math.round(Math.sin(Math.min(1, (now - this.hit.at) / 240) * Math.PI) * 5);
+    // While a dig, felling or picking goes on, the hand with the tool for it (the right one when bare) swings over
+    // and over: up slowly, down fast, a stroke every SWING_MS.
+    const site = s.dig ? harvestTarget(s)?.site : undefined;
+    const working = site ? toolFor(s, jobOf(site))?.hand ?? "right" : null;
+    const phase = (now % SWING_MS) / SWING_MS;
+    const swing = working && !this.motion.matches ? Math.round((phase < 0.7 ? phase / 0.7 : (1 - phase) / 0.3) * 7) : 0;
     const inReach = seen.some((m) => steps8(m, s.player) <= weapon.range);
     // The key hints say what F and C would do right now; with nothing in sight both are dim.
     setKeyHint(this.key, "F", tr("공격"), inReach && canStrike(s) ? "on" : "off");
@@ -529,7 +554,7 @@ export class FightPanel {
       this.queued = null;
       // Nothing in sight: the view looks the way the player faces, and is drawn again only when that changes.
       const facing = s.facing ?? { x: 0, y: 1 };
-      const idle = `${s.z},${s.player.x},${s.player.y},${facing.x},${facing.y},${s.gear.left?.id},${s.gear.right?.id},${bob}`;
+      const idle = `${s.z},${s.player.x},${s.player.y},${facing.x},${facing.y},${s.gear.left?.id},${s.gear.right?.id},${bob},${working},${swing}`;
       if (idle === this.idle) return;
       this.idle = idle;
       this.angle = Math.atan2(facing.y, facing.x);
@@ -662,8 +687,9 @@ export class FightPanel {
     this.ctx.putImageData(this.frame, 0, 0);
     // Dim, small overlay; only a successful hit moves the striking hand.
     const striking = weapon.hand ?? "right";
-    drawHand(this.ctx, "left", s.gear.left?.id, striking === "left" ? bob : 0);
-    drawHand(this.ctx, "right", s.gear.right?.id, striking === "right" ? bob : 0);
+    const lift = (hand: string) => (striking === hand ? bob : 0) + (working === hand ? swing : 0);
+    drawHand(this.ctx, false, s.gear.left?.id, lift("left"));
+    drawHand(this.ctx, true, s.gear.right?.id, lift("right"));
     // How long until the next blow: a thin bar under the hand that shrinks to nothing when ready.
     const wait = Math.max(0, (s.strikeReady ?? 0) - s.time);
     if (wait > 0) {
