@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { familyOf, itemMatches, FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, formLabel, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
 import {
   GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, LOAD_SLOW, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
-  REVEAL, NOTE_MAX, MAX_CLIMB, tooSteep, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
+  REVEAL, NOTE_MAX, MAX_CLIMB, tooSteep, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, walk, WALK_TICK, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
 import { BASE, biomeAt, cellsOf, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 import { gameWithVeins, withVeinsNearBase } from "./testWorld";
@@ -1031,6 +1031,23 @@ describe("carrying weight", () => {
     expect(walkTime(s)).toBe(WALK_MS);
     s.inv[0] = { id: "Lm", n: 40 };
     expect(walkTime(s)).toBeCloseTo(WALK_MS * (1 + LOAD_SLOW));
+  });
+
+  it("lands every step after the same time on the game loop's fine clock, not 0.2 s then 0.1 s", () => {
+    const s = createGame(1);
+    // Back and forth between the base and the cell beside it, with an empty bag, so the pace stays the same.
+    s.player = { ...BASE };
+    s.path = Array.from({ length: 6 }, (_, i) => ({ x: BASE.x + (i % 2 ? 0 : 1), y: BASE.y }));
+    s.safeWalk = false;
+    const at: number[] = [];
+    for (let t = WALK_TICK; s.path.length && t < 5000; t += WALK_TICK) {
+      const before = s.path.length;
+      walk(s, WALK_TICK);
+      if (s.path.length < before) at.push(t);
+    }
+    expect(at).toHaveLength(6);
+    const gaps = at.slice(1).map((t, i) => t - at[i]);
+    expect(new Set(gaps)).toEqual(new Set([WALK_MS]));
   });
 
   it("stops mining at the limit", () => {

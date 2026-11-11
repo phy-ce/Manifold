@@ -2637,9 +2637,16 @@ function sendOutput(from: GameNode, to: GameNode, line: Line): boolean {
   return true;
 }
 
-function walk(s: GameState): void {
+/**
+ * Walking runs on a finer clock than the rest of the world. On STEP_MS alone a 150 ms step could only land on
+ * whole tenths of a second, so steps went 0.2 s, 0.1 s, 0.2 s… and the pace stuttered on even ground.
+ */
+export const WALK_TICK = 25;
+
+/** Moves the player on by ms of walking. The game loop calls it every WALK_TICK and steps the world without walking. */
+export function walk(s: GameState, ms: number): void {
   if (!s.path.length) return;
-  s.walkTimer += STEP_MS;
+  s.walkTimer += ms;
   if (s.walkTimer < walkTime(s)) return;
   // What runs over carries into the next step, so a step takes what walkTime says on average, not the next whole
   // STEP_MS above it (0.15 s used to walk at 0.2 s, and 0.21 s at 0.3 s).
@@ -3021,9 +3028,10 @@ export function eat(s: GameState, slot: number): boolean {
 }
 
 /** Advances the world by one fixed step. */
-export function step(s: GameState): void {
+/** One STEP_MS of the world. walkMs 0 leaves walking to the caller's finer clock (see WALK_TICK). */
+export function step(s: GameState, walkMs = STEP_MS): void {
   s.time += STEP_MS;
-  walk(s);
+  if (walkMs) walk(s, walkMs);
   // Walking off cancels prospecting; standing still for long enough finishes it.
   if (s.probe !== null && s.path.length) s.probe = null;
   if (s.probe !== null && s.time - s.probe >= CAVES.probeMs) finishProbe(s);

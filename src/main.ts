@@ -2,7 +2,7 @@ import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTut
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
+import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -818,7 +818,15 @@ let saveClock = 0;
 /** Play time since the last copy into the automatic slot; paused time does not count. */
 let autoClock = 0;
 
-/** The world only changes every STEP_MS, so the screen doesn't need to redraw any faster. */
+/** Game time walked but not yet stepped into the world: the world moves every STEP_MS, walking every WALK_TICK. */
+let worldClock = 0;
+/** Real time since the screen last drew in full. */
+let drawClock = 0;
+
+/**
+ * Runs every WALK_TICK so steps land when they are due. The world only changes every STEP_MS, so the screen
+ * draws in full that often, and in between only when the player has moved.
+ */
 function tick(): void {
   const now = performance.now();
   const dt = now - last;
@@ -826,17 +834,33 @@ function tick(): void {
   // The menu stops the world while it is open, as a pause would; the chosen speed comes back when it closes.
   const pace = menu.isOpen || eraTurn.running ? 0 : speed;
   backlog = Math.min(backlog + dt * pace, MAX_CATCH_UP_MS * Math.max(1, pace));
-  while (backlog >= STEP_MS) {
+  const { x, y } = state.player;
+  const z = state.z;
+  while (backlog >= WALK_TICK) {
     keyWalk();
-    step(state);
-    backlog -= STEP_MS;
+    walk(state, WALK_TICK);
+    worldClock += WALK_TICK;
+    if (worldClock >= STEP_MS) {
+      worldClock -= STEP_MS;
+      step(state, 0);
+    }
+    backlog -= WALK_TICK;
   }
   saveClock += dt;
   if (pace > 0) autoClock += dt;
+  drawClock += dt;
+  const moved = state.player.x !== x || state.player.y !== y || state.z !== z;
+  if (drawClock < STEP_MS) {
+    // Between full draws only a step that just landed is shown.
+    if (moved) redraw();
+    return;
+  }
+  drawClock = 0;
   if (autoClock >= AUTO_SAVE_MS) {
     autoClock = 0;
     autoSave(state);
   }
+  // Window animations count in full draws, a tenth of a second each, as before.
   frame += 1;
   windowView.draw(frame);
   routeView.draw();
@@ -848,7 +872,7 @@ function tick(): void {
 }
 
 redraw();
-setInterval(tick, STEP_MS);
+setInterval(tick, WALK_TICK);
 window.addEventListener("beforeunload", save);
 
 // For tools/speedrun: a dev-server-only handle to drive the game from outside and record it.
