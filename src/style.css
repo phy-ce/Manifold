@@ -361,15 +361,21 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .top-status .vitals { flex-wrap: nowrap; }
 .top .goal { flex: none; flex-wrap: nowrap; padding-block: 0; }
 .top-actions { display: flex; align-items: center; gap: var(--gap); flex: none; margin-left: auto; }
+/* How far home is, just left of the button that goes there. */
+.place-line { color: var(--dim); white-space: nowrap; font-size: var(--text-sm); }
+/* The top bar's buttons take the age's look, as the boxes do: its own text and line colours, its metal when lit;
+   dashed in the mythic age. */
+body:is(.era-s0, .era-s1) .top .tech { color: var(--fg); border-color: var(--line); }
+body:is(.era-s0, .era-s1) .top .tech:hover { border-color: var(--era-metal); }
+body:is(.era-s0, .era-s1) .top .tech.selected { color: var(--bg); background: var(--era-metal); border-color: var(--era-metal); }
+body.era-s0 .top .tech { border-style: dashed; }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
-/* Where safe mode stopped a walk. The line is always there, empty or not, so the map below never moves. */
 .reserve-gauges { display: inline-flex; gap: var(--gap); white-space: nowrap; }
 /* A reserve gauge on the vein panel: a short label, the bar, and left/total, bold. */
 .reserve-gauge { display: inline-flex; gap: var(--gap-sm); align-items: baseline; color: var(--dim); }
 .reserve-gauge .meter-bar { color: var(--fire); }
 .reserve-gauge b { color: var(--fg); font-variant-numeric: tabular-nums; }
 /* The lines above the map stay one line each and never widen the map's box: long text is cut short, the full text in its tip. */
-.map-line { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; width: 0; min-width: 100%; }
 /* One row of controls: every control in it is one --control high, so a key switch and a word button line up. */
 .map-tools { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--gap-sm); height: calc(var(--control) + var(--gap) * 2 + 2px); overflow: hidden; width: 0; min-width: 100%; }
 .map-tools .tech, .map-tools .key-button { flex: none; height: var(--control); min-height: 0; display: inline-flex; align-items: center; white-space: nowrap; }

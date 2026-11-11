@@ -187,7 +187,10 @@ testButton.addEventListener("click", () => {
   tests.open();
 });
 menuButton.addEventListener("click", () => menu.open());
-topActions.append(travel, speedBar, saveButton, helpButton, menuButton);
+// Where the player is from home sits just left of the button that takes them there.
+const placeLine = document.createElement("span");
+placeLine.className = "place-line";
+topActions.append(placeLine, travel, speedBar, saveButton, helpButton, menuButton);
 top.append(topStatus, topActions);
 
 // A small number shows the damage taken, and the screen's edges glow red for a moment, stronger for a
@@ -738,6 +741,8 @@ function redraw(): void {
 
   const place = home ? (screen === "base" ? tr("지도") : tr("기지로")) : underground(state) ? (stairHere(state) ? tr("나가기") : tr("출구로")) : tr("기지로 복귀");
   if (travel.textContent !== place) travel.textContent = place;
+  const where = showBase ? "" : map.where;
+  if (placeLine.textContent !== where) placeLine.textContent = where;
   const stage = STAGES[Math.min(state.stage, PLAYABLE_STAGES - 1)];
   const { item, amount } = stage.goal;
   const made = goalMade(state);

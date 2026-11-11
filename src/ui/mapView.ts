@@ -303,7 +303,8 @@ export class MapView {
   private hideEmpty = true;
   /** A cave entrance or a stair double-clicked: the layer changes once the player gets there. */
   private layerAt: { x: number; y: number; z: number } | null = null;
-  private readonly place = document.createElement("div");
+  /** How far and which way home lies, for the top bar beside the button that goes there: "H 15칸 서". */
+  where = "";
   /** Going in and out of a cave, and prospecting inside one. */
   private readonly caveBar = document.createElement("div");
   private readonly enter = document.createElement("button");
@@ -429,7 +430,6 @@ export class MapView {
     this.panel.append(this.head, this.choices, this.note, this.vein);
 
     // Every line in the column keeps to one line: long text is cut short rather than wrapped, so nothing moves.
-    this.place.className = "box map-line";
     const walkMode = document.createElement("div");
     walkMode.className = "box map-tools";
     // One switch: safe mode stops a walk short of a known hazard and says what it is.
@@ -494,7 +494,7 @@ export class MapView {
       this.drawResults();
     }).observe(this.results);
 
-    this.side.append(this.place, walkMode, this.fight.root, this.panel, finder);
+    this.side.append(walkMode, this.fight.root, this.panel, finder);
   }
 
   /** As many whole cells at the current zoom as fit in the box; redraws if that changed or `force`. */
@@ -839,10 +839,7 @@ export class MapView {
     const steps = home ? Math.max(Math.abs(s.player.x - home.x), Math.abs(s.player.y - home.y)) : 0;
     const mark = cave ? `${tr("지하")} ${CAVES.layer} · <` : "H";
     const where = home && steps ? `${mark} ${steps}${tr("칸")} ${this.direction(s, home)}` : mark;
-    if (this.place.textContent !== where) {
-      this.place.textContent = where;
-      this.place.dataset.tip = where;
-    }
+    this.where = where;
     this.drawResults();
   }
 
