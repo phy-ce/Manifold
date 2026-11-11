@@ -107,6 +107,7 @@
     { "id": "copper", "machine": "bloomery", "time": 8, "in": { "copper_oxide": 2 }, "out": { "copper": 1, "slag": 1 } },
     { "id": "copper_sulfide_smelt", "machine": "bloomery", "time": 12, "in": { "copper_sulfide": 3 }, "out": { "copper": 1, "slag": 1 } },
     { "id": "forge_iron", "machine": "hand_forge", "time": 6, "in": { "bloom": 1 }, "out": { "iron": 1 } },
+    { "id": "bench_forge_iron", "machine": "forming_bench", "form": "ingot", "time": 4, "in": { "bloom": 1 }, "out": { "iron": 1 } },
 
     { "id": "brick", "machine": "brick_kiln", "time": 8, "in": { "clay": 2 }, "out": { "brick": 2 } },
     { "id": "steam_drum", "machine": "boiler_bench", "time": 20, "in": { "iron_plate": 6, "brick": 6, "copper_tube": 6, "iron_rivet": 12 }, "out": { "steam_drum": 1 } },

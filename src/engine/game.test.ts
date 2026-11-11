@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { familyOf, itemMatches, FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
+import { familyOf, itemMatches, FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, formLabel, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
 import {
   GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, LOAD_SLOW, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
   REVEAL, NOTE_MAX, MAX_CLIMB, tooSteep, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, takeOutput, walkStep, walkTo, workMachine,
@@ -439,7 +439,13 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick", "blade", "spear"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick", "blade", "spear", "ingot"]);
+  });
+
+  it("beats blooms into iron ingots on the forming bench as well as the hand forge", () => {
+    const { recipes } = processOf("forming_bench", "ingot");
+    expect(recipes.map((r) => [r.in, r.out])).toEqual([[{ bloom: 1 }, { iron: 1 }]]);
+    expect(formLabel("ingot")).toBe("주괴");
   });
 
   it("makes the chosen form from whichever metal goes in", () => {
@@ -766,9 +772,9 @@ describe("item index", () => {
   });
 
   it("shows how an item is made", () => {
-    // Iron is forged by hand from a bloom, and stays that way through S1-1 and S1-2.
+    // Iron is forged by hand from a bloom; from S1-1 the forming bench beats blooms into ingots too.
     expect(ids(recipesFor("iron"))).toEqual(["forge_iron"]);
-    expect(ids(recipesFor("iron", 2))).toEqual(["forge_iron"]);
+    expect(ids(recipesFor("iron", 2))).toEqual(["forge_iron", "bench_forge_iron"]);
     expect(ids(recipesFor("bloom", 1))).toEqual(["bloomery_bloom", "pyrite_roast"]);
     expect(ids(recipesFor("copper", 1))).toEqual(expect.arrayContaining(["copper", "copper_sulfide_smelt"]));
     expect(ids(recipesFor("copper_tube", 1))).toEqual(["tube_copper"]);

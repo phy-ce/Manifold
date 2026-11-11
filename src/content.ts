@@ -284,8 +284,8 @@ const machineRecipes = (type: string): Recipe[] =>
 export const machineForms = (type: string): string[] =>
   [...new Set(machineRecipes(type).flatMap((r) => (r.form ? [r.form] : [])))];
 
-/** A shape's name, or, on the construction bench, the machine it makes. */
-export const formLabel = (form: string): string => forms[form]?.label.trim() ?? machineName(form);
+/** A shape's name, or, on the construction bench, the machine it makes. The forming bench also beats blooms into ingots. */
+export const formLabel = (form: string): string => forms[form]?.label.trim() ?? (form === "ingot" ? tr("주괴") : machineName(form));
 /** Shapes are grouped for picking: parts that go into other things, gear to wear, finished goods. */
 export const FORM_CATEGORIES: [string, string][] = Object.entries(materials.categories as Record<string, string>);
 export const formCategory = (form: string): string =>
