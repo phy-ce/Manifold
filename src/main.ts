@@ -1,7 +1,7 @@
 import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTutorial, currentStep, elsewhere } from "./engine/tutorial";
 import { tr, restart } from "./i18n";
 import "./style.css";
-import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
+import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, eraName, gearFor, itemCode, itemColor, itemName } from "./content";
 import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, face, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
@@ -720,7 +720,7 @@ function redraw(): void {
     goal.dataset.key = target;
     const shown = Math.min(made, amount);
     const fill = Math.round((shown / amount) * GOAL_BAR);
-    goal.innerHTML = `<span class="goal-tag">${tr("목표")}</span><span class="goal-stage">${stage.id} ${stage.name}</span>` +
+    goal.innerHTML = `<span class="goal-tag">${tr("목표")}</span><span class="goal-stage">${eraName(state.stage)}</span>` +
       `<span class="goal-item"><span style="color:${itemColor(item)}">${itemName(item)}</span> ${shown}/${amount}</span>` +
       `<span class="goal-bar">[${"#".repeat(fill).padEnd(GOAL_BAR, ".")}]</span>`;
   }
@@ -767,9 +767,12 @@ function redraw(): void {
   app.classList.toggle("index-beside", windowView.isOpen || routeView.isOpen);
   if (state.announced && win.dataset.stage !== state.announced) {
     win.dataset.stage = state.announced;
-    win.querySelector("h2")!.textContent = `${state.announced} ${tr("완료")}`;
+    // Stages inside an age go unnamed: the window says the goal is met and what the next one is.
+    win.querySelector("h2")!.textContent = tr("목표 달성");
     const next = STAGES[state.stage];
-    win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES ? `${tr("다음 단계:")} ${next.id} ${next.name}` : `${next.id}${tr("은 아직 준비 중입니다.")}`;
+    win.querySelector("p")!.textContent = state.stage < PLAYABLE_STAGES && next
+      ? `${tr("다음 목표:")} ${itemName(next.goal.item)} ${next.goal.amount}`
+      : tr("다음 목표는 아직 준비 중입니다.");
   }
   // A tip (the first cave, say) takes the card for a moment, ahead of the step; then the step comes back.
   const tip = pendingTip(state);

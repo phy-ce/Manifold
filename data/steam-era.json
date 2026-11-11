@@ -141,37 +141,37 @@
   ],
   "milestones": [
     {
-      "id": "S0", "name": "신화시대",
+      "id": "S0", "era": "신화시대", "name": "신화시대",
       "unlockSources": ["iron_ore", "coal", "clay", "copper_ore", "limestone", "Be", "Mu"],
       "unlockMachines": ["workbench", "open_kiln", "bloomery", "hand_forge", "construction_bench"],
       "goal": { "item": "construction_bench", "amount": 1, "perMinute": 0.2 }
     },
     {
-      "id": "S1-1", "name": "증기기관 + 구리 배관",
+      "id": "S1-1", "era": "증기시대", "name": "증기기관 + 구리 배관",
       "unlockSources": [],
       "unlockMachines": ["brick_kiln", "plate_hammer", "forming_bench", "boiler_bench", "engine_bench", "warehouse", "spring_motor", "belt_drive"],
       "goal": { "item": "steam_engine_unit", "amount": 1, "perMinute": 0.2 }
     },
     {
-      "id": "S1-2", "name": "증기 동력 보급",
+      "id": "S1-2", "era": "증기시대", "name": "증기 동력 보급",
       "unlockSources": ["water"],
       "unlockMachines": ["steam_engine", "steam_boiler", "drainage_pump", "pressure_pump", "steam_hammer", "coke_oven"],
       "goal": { "item": "coke_oven", "amount": 1, "perMinute": 0.2 }
     },
     {
-      "id": "S1-3", "name": "코크스와 고로",
+      "id": "S1-3", "era": "증기시대", "name": "코크스와 고로",
       "unlockSources": [],
       "unlockMachines": ["steam_manifold", "item_splitter", "blast_furnace", "converter", "tar_tank"],
       "goal": { "item": "steel", "amount": 100, "perMinute": 20 }
     },
     {
-      "id": "S1-4", "name": "증기 공작기계",
+      "id": "S1-4", "era": "증기시대", "name": "증기 공작기계",
       "unlockSources": [],
       "unlockMachines": ["rolling_mill", "lathe", "gear_cutter", "wire_drawer"],
       "goal": { "item": "port_flange", "amount": 6, "perMinute": 2 }
     },
     {
-      "id": "S1-5", "name": "증기 발전기",
+      "id": "S1-5", "era": "증기시대", "name": "증기 발전기",
       "unlockSources": [],
       "unlockMachines": ["tar_still", "coil_winder", "core_press", "generator_bench"],
       "goal": { "item": "steam_generator", "amount": 3, "perMinute": 0.5 }

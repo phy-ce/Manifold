@@ -92,11 +92,11 @@
       "id": "fill",
       "section": "가마",
       "title": "재료 넣기",
-      "text": "기지로 돌아와 작업대를 여세요. 창 위쪽의 S0 목록에서 노천 가마를 고르고, 도감으로 이동을 누른 뒤, 도감에 나온 만드는 법의 +를 눌러 점토 12개를 넣으세요",
+      "text": "기지로 돌아와 작업대를 여세요. 창 위쪽의 신화시대 목록에서 노천 가마를 고르고, 도감으로 이동을 누른 뒤, 도감에 나온 만드는 법의 +를 눌러 점토 12개를 넣으세요",
       "en": {
         "section": "Kiln",
         "title": "Put in materials",
-        "text": "Back at the base, open the workbench. Pick the open kiln from the S0 list at the top of its window, press Open in index, then press + on the recipe the index shows to put in 12 clay"
+        "text": "Back at the base, open the workbench. Pick the open kiln from the Mythic Age list at the top of its window, press Open in index, then press + on the recipe the index shows to put in 12 clay"
       }
     },
     {
@@ -202,11 +202,11 @@
       "id": "bench",
       "section": "단조",
       "title": "건설대",
-      "text": "벽돌 8개를 더 굽고, 작업대에서 건설대를 만드세요 (철 4, 벽돌 8). 그러면 S0이 끝납니다",
+      "text": "벽돌 8개를 더 굽고, 작업대에서 건설대를 만드세요 (철 4, 벽돌 8). 그러면 신화시대가 끝납니다",
       "en": {
         "section": "Forging",
         "title": "Construction bench",
-        "text": "Fire 8 more bricks and make a construction bench at the workbench (4 iron, 8 bricks). That finishes S0"
+        "text": "Fire 8 more bricks and make a construction bench at the workbench (4 iron, 8 bricks). That ends the Mythic Age"
       }
     }
   ],

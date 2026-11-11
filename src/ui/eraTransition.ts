@@ -1,7 +1,7 @@
 // The turn of an age, played once when S0 gives way to S1 during play (never on loading a save). From the steam
 // engine, or the middle of the screen, a circle of square blocks spreads until it covers everything; under it the
 // screen takes the new age's tones; then the blocks fall away in a dithered order while the title stands in the
-// middle: "S1" over "증기 시대". A click skips it; nothing else does, and the click goes no further.
+// middle: "증기시대". A click skips it; nothing else does, and the click goes no further.
 import { tr } from "../i18n";
 import { CLICK, keyHintHtml } from "./keyHint";
 
@@ -33,7 +33,7 @@ export class EraTransition {
     this.root.className = "era-turn";
     this.root.hidden = true;
     this.title.className = "era-title";
-    this.title.innerHTML = `<b>S1</b><span>${tr("증기 시대")}</span><small>${keyHintHtml(CLICK(), tr("건너뛰기"), "off")}</small>`;
+    this.title.innerHTML = `<span>${tr("증기시대")}</span><small>${keyHintHtml(CLICK(), tr("건너뛰기"), "off")}</small>`;
     this.root.append(this.canvas, this.title);
     // A click skips; it is taken here so it never reaches the game underneath.
     this.root.addEventListener("pointerdown", (e) => {

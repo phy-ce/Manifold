@@ -230,6 +230,8 @@ export const machineTier = (type: string): string => machines[type]?.tier ?? (ma
 export const outputRole = (index: number): string => (index === 0 ? tr("결과") : tr("부산물"));
 
 export const STAGES = era.milestones;
+/** The age a stage belongs to, which is all the screen calls it: 신화시대 or 증기시대, never S1-2 and its subtitle. */
+export const eraName = (stage: number): string => tr(STAGES[Math.min(stage, STAGES.length - 1)].era);
 /** Stages with their content built so far. */
 export const PLAYABLE_STAGES = 4;
 /** The stage that opens a raw source, such as water and its riverbanks. */
@@ -293,13 +295,17 @@ export const formCategory = (form: string): string =>
 
 /**
  * How a machine's forms are grouped in its picker, as [label, forms]. Shapes go by category;
- * a bench's machines go by the stage that opens them, up to the stage reached.
+ * a bench's machines go by the age that opens them, up to the stage reached.
  */
 export function formGroups(type: string, forms: string[], stage: number): [string, string[]][] {
   if (isBuilder(type)) {
-    return STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1)
-      .map((s): [string, string[]] => [s.id, s.unlockMachines.filter((m: string) => forms.includes(m))])
-      .filter(([, list]) => list.length);
+    // One group per age: the stages inside an age are not named on screen.
+    const groups = new Map<string, string[]>();
+    for (const s of STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1)) {
+      const era = tr(s.era);
+      groups.set(era, [...(groups.get(era) ?? []), ...s.unlockMachines.filter((m: string) => forms.includes(m))]);
+    }
+    return [...groups].filter(([, list]) => list.length);
   }
   return FORM_CATEGORIES.map(([category, label]): [string, string[]] => [label, forms.filter((form) => formCategory(form) === category)])
     .filter(([, list]) => list.length);
