@@ -8,7 +8,7 @@ import {
   GameState, createGame, harvestTarget, knownReserve, loadSave, mine, nextVeinCell, siteHere, standBeside, startProbe, step, walkTo,
 } from "./game";
 import {
-  BASE, CELL_ASPECT, FLOOR, ROCK, Site, VeinCell, biomeAt, cellsOf, chunkSites, generateSites, laterVeins, orderSites, rngFrom, rollVein, terrain, underCell, underSites,
+  BASE, CELL_ASPECT, FLOOR, ROCK, Site, VeinCell, biomeAt, cellsOf, chunkSites, emptiedOn, generateSites, laterVeins, orderSites, rngFrom, rollVein, terrain, underCell, underSites,
 } from "./world";
 
 /** The cells of a vein on the surface, and those below it. */
@@ -23,6 +23,15 @@ describe("search order", () => {
     const sites = [site(CAVE, 0, 3), site("Lm", 0, 1), site("Lm", 40, 2)];
     const shown = orderSites(sites, (v) => v.x, true).map((v) => v.ore);
     expect(shown).toEqual(["Lm", CAVE]);
+  });
+
+  it("judges a vein emptied on one layer by that layer's cells alone", () => {
+    const cell = (z: number, left: number): VeinCell => ({ x: 0, y: 0, z, left, total: 10 } as VeinCell);
+    const site: Site = { id: 1, ore: "Lg", x: 0, y: 0, total: 20, left: 10, seed: 1, cells: [cell(0, 0), cell(-1, 10)] };
+    expect(emptiedOn(site, 0)).toBe(true);
+    expect(emptiedOn(site, -1)).toBe(false);
+    expect(orderSites([site], () => 0, true, 0)).toEqual([]);
+    expect(orderSites([site], () => 0, true, -1)).toEqual([site]);
   });
 });
 

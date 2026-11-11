@@ -3,7 +3,7 @@
 import { tr } from "../i18n";
 import { BIOMES, CAVE, CAVES, WATER, YETI, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
 import { GameState, NOTE_MAX, actionKey, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
-import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, groundColor, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
+import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { CLICK, keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
 import { FightPanel } from "./fightPanel";
@@ -269,7 +269,7 @@ const notedSpots = (s: GameState): Map<string, Site> =>
 const actionWord = (site: Site): string => (site.ore === WATER ? tr("뜨기") : forageSeasons(site.ore) ? tr("줍기") : tr("캐기"));
 
 const siteName = (s: GameState, site: Site): string =>
-  site.ore === CAVE ? tr("자연 동굴") : site.ore === WATER ? `${WATER_SITE[waterKind(site.x, site.y, s.seed)]} ${site.code ?? ""}`.trim() : itemName(site.ore) + (site.left <= 0 ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
+  site.ore === CAVE ? tr("자연 동굴") : site.ore === WATER ? `${WATER_SITE[waterKind(site.x, site.y, s.seed)]} ${site.code ?? ""}`.trim() : itemName(site.ore) + (emptiedOn(site, s.z) ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
 
 export class MapView {
   /** The map itself, in the middle of the screen. */
@@ -927,7 +927,7 @@ export class MapView {
   private drawResults(): void {
     const s = this.game();
     const query = this.search.value.trim().toLowerCase();
-    const emptied = s.sites.filter((v) => v.left <= 0).length;
+    const emptied = s.sites.filter((v) => emptiedOn(v, s.z)).length;
     const prospected = s.sites.filter((v) => v.found).length;
     const key = `${query}|${s.z}|${s.player.x},${s.player.y}|${s.sites.length}|${emptied}|${prospected}|${this.hideEmpty}`;
     // A page holds as many rows as the box has room for.
@@ -948,7 +948,7 @@ export class MapView {
       .filter((v) => here(v) || !!v.note)
       // By name, code or place name, or by category: "점토" finds every clay vein, "연료" every coal.
       .filter((v) => itemMatches(v.ore, query, [siteName(s, v), v.note ?? ""]));
-    const all = orderSites(matching, steps, this.hideEmpty);
+    const all = orderSites(matching, steps, this.hideEmpty, s.z);
     const pages = Math.max(1, Math.ceil(all.length / perPage));
     this.resultPage = Math.min(this.resultPage, pages - 1);
     this.drawnResults = `${key}|${perPage}|${this.resultPage}`;

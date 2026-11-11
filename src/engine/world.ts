@@ -776,10 +776,21 @@ export function riverBanks(seed: number): Point[] {
   });
 }
 
-/** Search order: nearest first, with empty sites last, or left out when hidden. */
-export function orderSites(sites: Site[], steps: (site: Site) => number, hideEmpty: boolean): Site[] {
-  // A cave entrance holds nothing to dig, so it never counts as emptied.
-  const empty = (site: Site) => (site.ore !== CAVE && site.left <= 0 ? 1 : 0);
+/**
+ * Whether a site has nothing left to dig on layer z. A vein that runs through both layers is judged by the
+ * cells on that layer alone: a surface outcrop dug bare is emptied up top even while its strand below is full.
+ * A cave entrance holds nothing to dig, so it is never emptied.
+ */
+export function emptiedOn(site: Site, z: number): boolean {
+  if (site.ore === CAVE) return false;
+  const here = site.cells?.filter((c) => layerOf(c) === z) ?? [];
+  // A site with no cells on this layer (a note seen from the other one) goes by its own layer.
+  return here.length ? here.every((c) => c.left <= 0) : site.left <= 0;
+}
+
+/** Search order: nearest first, with sites emptied on layer z last, or left out when hidden. */
+export function orderSites(sites: Site[], steps: (site: Site) => number, hideEmpty: boolean, z = 0): Site[] {
+  const empty = (site: Site) => (emptiedOn(site, z) ? 1 : 0);
   return sites.filter((site) => !hideEmpty || !empty(site)).sort((a, b) => empty(a) - empty(b) || steps(a) - steps(b));
 }
 
