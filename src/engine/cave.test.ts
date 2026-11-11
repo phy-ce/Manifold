@@ -4,17 +4,21 @@ import { describe, expect, it } from "vitest";
 import { CAVE, CAVES, PUMP, SURFACE_ORES, familyOf, inLayer, layerOres, matches } from "../content";
 import {
   GameState, addTo, atBase, caveDoorHere, countOf, createGame, createTestGame, enterCave, leaveCave, loadSave, mine, nearestStair,
-  FISTS, attack, attackNearest, weaponOf, clearLine, onThisMap, setNote, siteHere, siteSpotHere, stairHere, startProbe, step, underSeenAt, walkStep, walkTo,
+  FISTS, attack, attackNearest, weaponOf, clearLine, onThisMap, setNote, siteHere, siteSpotHere, stairHere, startProbe, step, underSeenAt, walkStep, walkTo, setSafeWalk,
   SAVE_VERSION, actionKey, creaturesInSight,
 } from "./game";
 import {
   BASE, CELL_ASPECT, CHUNK, FLOOR, HABITAT, Point, ROCK, chunkOf, chunkSites, entrancesIn, nearCave, nearEntrance, safePath, terrain, biomeAt, underCell,
 } from "./world";
 
-/** Walks until there, going on past each hazard safe mode stops at. */
+/** Walks until there, turning safe mode off at each hazard it stops at. */
 function arrive(s: GameState): void {
   for (let guard = 0; (s.path.length || s.halt) && guard < 20000; guard += 1) {
-    if (s.halt) walkTo(s, s.halt.target);
+    if (s.halt) {
+      const { target } = s.halt;
+      setSafeWalk(s, false);
+      walkTo(s, target);
+    }
     s.hp = 100;
     s.hunger = 100;
     step(s);

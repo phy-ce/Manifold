@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addTo, createGame, isRevealed, loadSave, placeMachine, step, walkTo } from "./game";
+import { addTo, createGame, isRevealed, loadSave, placeMachine, setSafeWalk, step, walkTo } from "./game";
 import { WORKBENCH, familyOf } from "../content";
 import { TUTORIAL, acknowledgeStep, advanceTutorial, currentStep, elsewhere } from "./tutorial";
 import { BASE, terrain } from "./world";
@@ -67,7 +67,8 @@ describe("S0 tutorial", () => {
     expect(s.halt).toBeTruthy();
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("safe");
-    walkTo(s, { x: rx, y: BASE.y }); // the same cell again: across
+    setSafeWalk(s, false); // [T] off: across
+    walkTo(s, { x: rx, y: BASE.y });
     for (let i = 0; i < 200 && s.player.x !== rx; i += 1) step(s);
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("top");

@@ -4,7 +4,7 @@ import { tr } from "../i18n";
 import { BIOMES, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
 import { GameState, NOTE_MAX, actionKey, digProgress, startDig, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
-import { CLICK, keyHintHtml } from "./keyHint";
+import { keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
 import { FightPanel } from "./fightPanel";
 
@@ -701,9 +701,9 @@ export class MapView {
     const safeLabel = keyHintHtml("T", tr("안전 모드"), s.safeWalk ? "on" : "off");
     if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;
     this.safe.setAttribute("aria-pressed", String(s.safeWalk));
-    // Where safe mode stopped the walk: what lies ahead, what it costs, and how to go on anyway.
+    // Where safe mode stopped the walk: what lies ahead, what it costs, and that only turning it off goes on.
     const halt = s.halt;
-    const warning = halt ? `${keyHintHtml(CLICK(), tr("건너기"))} -${halt.damage}` : "";
+    const warning = halt ? `${keyHintHtml("T", tr("끄기"))} -${halt.damage}` : "";
     if (this.warn.dataset.shown !== warning) {
       this.warn.dataset.shown = warning;
       this.warn.innerHTML = warning;

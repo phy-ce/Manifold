@@ -20,7 +20,7 @@
     "plains": {
       "name": "평원", "ground": "#6a8a4c", "glyphs": "  .,", "water": "river",
       "family": { "clay": 1.3, "iron_ore": 1.1 }, "forage": ["Be", "Mu"],
-      "rules": { "vision": 2 }
+      "rules": { "vision": 4 }
     },
     "forest": {
       "name": "숲", "ground": "#4f7a4a", "glyphs": "  ,,tt", "trees": 0.04, "water": "river", "hills": 0.84,
