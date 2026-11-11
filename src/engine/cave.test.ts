@@ -8,7 +8,7 @@ import {
   SAVE_VERSION, actionKey, creaturesInSight,
 } from "./game";
 import {
-  BASE, CELL_ASPECT, CHUNK, FLOOR, HABITAT, Point, ROCK, chunkOf, chunkSites, entrancesIn, nearCave, nearEntrance, safePath, terrain, biomeAt, underCell,
+  BASE, CELL_ASPECT, CHUNK, FLOOR, HABITAT, Point, ROCK, chunkOf, chunkSites, entrancesIn, nearCave, nearEntrance, safePath, terrain, biomeAt, underCell, rockGrade,
 } from "./world";
 
 /** Walks until there, turning safe mode off at each hazard it stops at. */
@@ -143,6 +143,19 @@ describe("cave entrances", () => {
 });
 
 describe("underground layout", () => {
+  it("grades rock in whole numbers from 1 to 10, alike from one cell to the next, and both ends occur", () => {
+    const seen = new Set<number>();
+    let jumps = 0;
+    for (let x = -200; x < 200; x += 1) {
+      const g = rockGrade(x, 7, 3);
+      expect(Number.isInteger(g) && g >= 1 && g <= 10).toBe(true);
+      seen.add(g);
+      if (Math.abs(g - rockGrade(x + 1, 7, 3)) > 2) jumps += 1;
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(6);
+    expect(jumps).toBeLessThan(20);
+  });
+
   it("is a pure function of the seed and the cell: the same every time, different for another seed", () => {
     const a = Array.from({ length: 400 }, (_, i) => underCell(i % 40 - 20, Math.floor(i / 40) - 5, 77));
     const b = Array.from({ length: 400 }, (_, i) => underCell(i % 40 - 20, Math.floor(i / 40) - 5, 77));

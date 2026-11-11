@@ -203,6 +203,8 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .map-view { place-items: center; overflow: hidden; position: relative; }
 /* While time is stopped: a mark over the top middle of the map or the board, never in the way of a click. */
 .paused-mark { position: absolute; top: var(--gap-lg); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); color: var(--fire); background: rgb(16 21 28 / 80%); border: 1px solid var(--fire); font-size: var(--text-lg); font-weight: 700; pointer-events: none; }
+/* A creature within a blow: "[F] 공격" over the map, under the pause mark's place. */
+.fight-alert { position: absolute; top: calc(var(--gap-lg) * 4); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); background: rgb(16 21 28 / 80%); border: 1px solid var(--alert); font-size: var(--text-lg); pointer-events: none; }
 .graph-view { grid-template-rows: minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
 .map-legend { margin-top: var(--gap-sm); }
@@ -214,6 +216,9 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .map-side > .finder { flex: 1 0 auto; min-height: calc(var(--control) * 7); display: flex; flex-direction: column; }
 .map-side > .box { padding: var(--gap); }
 .map-results { flex: 1 1 auto; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: var(--gap-sm); }
+/* With nothing typed, what there is to find, as words to click. */
+.search-chips { display: flex; flex-wrap: wrap; gap: var(--gap-sm); align-content: start; }
+.search-chip { min-height: 0; padding: 2px var(--gap-sm); font-size: var(--text-sm); }
 .map-results .route-row { height: var(--control); }
 /* With nothing underfoot the place panel keeps its room, empty, so the search below never moves. */
 .vein-panel.vacant { visibility: hidden; }

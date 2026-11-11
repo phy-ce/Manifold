@@ -3155,11 +3155,22 @@ describe("gear", () => {
     expect(s.inv.some((slot) => slot?.id === "iron_boots")).toBe(true);
   });
 
-  it("boots shorten every step", () => {
+  it("boots shorten every step, weight and all", () => {
     const s = createGame(1);
-    const plain = walkTime(s);
     s.gear.feet = { id: "iron_boots", n: 1 };
-    expect(walkTime(s)).toBeCloseTo(plain * 0.91);
+    const shod = walkTime(s);
+    s.gear.feet = null;
+    // The same load, carried in the bag instead: only the boots' pace differs.
+    s.inv[7] = { id: "iron_boots", n: 1 };
+    expect(shod).toBeCloseTo(walkTime(s) * 0.91);
+  });
+
+  it("weighs what the player wears and holds as well as the bag", () => {
+    const s = createGame(1);
+    const bare = carried(s);
+    s.gear.feet = { id: "iron_boots", n: 1 };
+    s.gear.right = { id: "iron_pick", n: 1 };
+    expect(carried(s)).toBeGreaterThan(bare);
   });
 
   it("a pack raises the load limit", () => {

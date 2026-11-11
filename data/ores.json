@@ -21,7 +21,7 @@
     "caveWeights": { "floor": 1, "wall": 2, "buried": 0.5 },
     "below": { "chance": 0.7, "branches": [2, 3], "cells": { "scarce": [3, 5], "normal": [4, 6], "rich": [5, 8] } },
     "underChunk": 0.12 },
-  "cave": { "layer": 1, "probeMs": 1300, "probeRadius": 7, "chunkChance": 0.02, "near": [14, 22],
+  "cave": { "layer": 1, "probeMs": 1300, "probeRadius": 4, "chunkChance": 0.02, "near": [14, 22],
     "under": { "cavernScale": 26, "cavern": 0.64, "tunnelScale": 15, "tunnel": 0.07, "tunnelSpread": 0.3, "dens": 0.3, "chamber": 2, "reach": 24, "joinSize": 80 },
     "creatures": {
       "count": [2, 4], "spawn": { "everyMs": 40000, "chance": 0.35, "perMinute": 0.1, "most": 0.9, "cap": 7, "minAway": 12, "forgetAway": 48, "noiseMs": 20000, "noiseBonus": 0.4 }, "rangedShare": 0.35, "sight": 7, "hunt": 12, "safeRadius": 3,

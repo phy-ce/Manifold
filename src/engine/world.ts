@@ -675,6 +675,18 @@ function underChunk(seed: number, cx: number, cy: number): Uint8Array {
  */
 export const underCell = (x: number, y: number, seed: number): number => underChunk(seed, chunkOf(x), chunkOf(y))[cellInChunk(x, y)];
 
+/** The softest and hardest rock. */
+export const ROCK_GRADES = [1, 10] as const;
+/**
+ * How hard the rock is at a place, a whole number from 1 (soft) to 10 (hardest): broad bands that drift across the
+ * underground, so neighbouring rock is much alike. Every cell has a grade; it matters only where there is rock.
+ */
+export function rockGrade(x: number, y: number, seed: number): number {
+  const [low, high] = ROCK_GRADES;
+  const n = 0.75 * valueNoise(x, y, seed + 913, 18) + 0.25 * valueNoise(x, y, seed + 914, 5);
+  return Math.min(high, Math.max(low, low + Math.floor(n * (high - low + 1))));
+}
+
 /** What an underground cell would be as part of a vein: open floor, rock beside the floor, rock deep in, or none. */
 export function underOreKind(x: number, y: number, seed: number): "floor" | "wall" | "buried" | null {
   const cell = underCell(x, y, seed);

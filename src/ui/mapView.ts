@@ -2,8 +2,8 @@
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
 import { BIOMES, DEER, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
-import { GameState, Gather, Corpse, NOTE_MAX, actionKey, chosenGather, gathersHere, pickGather, butcherChances, eatProgress, digProgress, startDig, knownReserve, cantCarry, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
-import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
+import { GameState, creaturesInSight, weaponOf, Gather, Corpse, NOTE_MAX, actionKey, chosenGather, gathersHere, pickGather, butcherChances, eatProgress, digProgress, startDig, knownReserve, cantCarry, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
+import { BASE, CELL_ASPECT, Point, ROCK, Site, rockGrade, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
 import { FightPanel } from "./fightPanel";
@@ -287,6 +287,8 @@ export class MapView {
   private readonly canvas = document.createElement("canvas");
   /** The paused mark over the map. */
   private readonly paused = document.createElement("div");
+  /** Over the map while a creature in sight is within a blow: F strikes. */
+  private readonly fightAlert = document.createElement("div");
   private readonly ctx = this.canvas.getContext("2d")!;
   private readonly panel = document.createElement("div");
   private readonly fight: FightPanel;
@@ -463,7 +465,9 @@ export class MapView {
     action(this.probe, "", startProbe, tr("멈춰서 주변 바위를 두드려 광맥을 찾습니다 (Q)"));
     this.probe.className = "key-button";
     walkMode.append(this.caveBar);
-    this.root.append(this.canvas, this.paused);
+    this.fightAlert.className = "fight-alert";
+    this.fightAlert.hidden = true;
+    this.root.append(this.canvas, this.paused, this.fightAlert);
 
     const finder = document.createElement("div");
     finder.className = "box finder";
@@ -574,7 +578,7 @@ export class MapView {
       const vein = spot && (spot.cell.left > 0 || !spot.cell.wall) ? spot.site : undefined;
       if (vein) return vein.note ? `${siteName(s, vein)} · ${vein.note}` : siteName(s, vein);
       if (noted) return noted.note!;
-      return underCell(x, y, s.seed) === ROCK ? tr("암반") : "";
+      return underCell(x, y, s.seed) === ROCK ? `${tr("암반")} ${rockGrade(x, y, s.seed)}` : "";
     }
     if (x === BASE.x && y === BASE.y) return tr("기지");
     // A creature in sight is named.
@@ -709,6 +713,12 @@ export class MapView {
     const safeLabel = keyHintHtml("T", tr("안전 모드"), s.safeWalk ? "on" : "off");
     if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;
     this.safe.setAttribute("aria-pressed", String(s.safeWalk));
+    // A creature in sight and within a blow: the map says F strikes, lit when the weapon is ready.
+    const reach = weaponOf(s).range;
+    const inReach = creaturesInSight(s).some((m) => Math.max(Math.abs(m.x - s.player.x), Math.abs(m.y - s.player.y)) <= reach);
+    this.fightAlert.hidden = !inReach;
+    const alert = inReach ? keyHintHtml("F", tr("공격"), canStrike(s) ? "on" : "off") : "";
+    if (this.fightAlert.dataset.shown !== alert) this.fightAlert.innerHTML = this.fightAlert.dataset.shown = alert;
     // Where safe mode stopped the walk: the cell blinks, then stays boxed in red until the walk goes on, and the
     // middle of the map says what it saw and what it would cost, with safe mode named small beneath.
     const halt = s.halt;
@@ -1037,7 +1047,27 @@ export class MapView {
     if (!this.drawnResults.startsWith(`${key}|`)) this.resultPage = 0; // a new search starts on its first page
     this.drawnResults = `${key}|${perPage}|${this.resultPage}`;
     if (!query) {
-      this.results.replaceChildren();
+      // Nothing typed: what there is to find, as words to click, the nearest kinds first.
+      const steps = (v: Site) => Math.max(Math.abs(v.x - s.player.x), Math.abs(v.y - s.player.y));
+      const known = s.sites
+        .filter((v) => v.ore !== CAVE && onThisMap(s, v) && (s.z < 0 || isRevealed(s, v.x, v.y)) && !(this.hideEmpty && emptiedOn(v, s.z)))
+        .sort((a, b) => steps(a) - steps(b));
+      const words = [...new Set(known.map((v) => itemName(v.ore)))];
+      const chips = words.map((word) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tech search-chip";
+        b.textContent = word;
+        b.addEventListener("click", () => {
+          this.search.value = word;
+          this.drawResults();
+        });
+        return b;
+      });
+      const wrap = document.createElement("div");
+      wrap.className = "search-chips";
+      wrap.append(...chips);
+      this.results.replaceChildren(wrap);
       this.pagerBar.replaceChildren();
       return;
     }

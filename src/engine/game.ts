@@ -1268,9 +1268,9 @@ export function siteSpotHere(s: GameState, site: Site): VeinCell | Point | undef
   return cellsOf(site).filter((c) => layerOf(c) === s.z && cellKnown(c)).sort((a, b) => d(a) - d(b))[0];
 }
 
-/** What the player is carrying, including anything in hand. */
+/** What the player is carrying: the bag, anything in hand, and what they wear and hold in their hands. */
 export function carried(s: GameState): number {
-  const load = [...s.inv, s.cursor].reduce((sum, stack) => sum + (stack ? stack.n * itemWeight(stack.id) : 0), 0);
+  const load = [...s.inv, s.cursor, ...Object.values(s.gear)].reduce((sum, stack) => sum + (stack ? stack.n * itemWeight(stack.id) : 0), 0);
   return Math.round(load * 10) / 10;
 }
 
