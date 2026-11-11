@@ -268,8 +268,8 @@ describe("endless map", () => {
 });
 
 describe("rules", () => {
-  it("has a recipe for every S1-1 machine", () => {
-    for (const type of MACHINE_TYPES.filter((t) => t !== WAREHOUSE && t !== MOTOR && t !== BELT_DRIVE)) {
+  it("has a recipe for every S1-1 machine but the 가공대, which waits for its work", () => {
+    for (const type of MACHINE_TYPES.filter((t) => t !== WAREHOUSE && t !== MOTOR && t !== BELT_DRIVE && t !== "craft_bench")) {
       expect(processOf(type, machineForms(type)[0] ?? "").recipes.length).toBeGreaterThan(0);
     }
   });
@@ -439,7 +439,7 @@ describe("materials", () => {
   });
 
   it("offers forms, not metals, on the forming bench", () => {
-    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "ingot", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]);
+    expect(machineForms("forming_bench")).toEqual(["tube", "cylinder", "drum", "rod", "rivet", "gear", "spring", "belt", "fan", "boots", "pack", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head", "ingot"]);
   });
 
   it("beats blooms into iron ingots on the forming bench as well as the hand forge", () => {

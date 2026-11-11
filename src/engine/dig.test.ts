@@ -163,12 +163,12 @@ describe("making tools", () => {
     for (const id of toolsAt(0)) expect(isTool(id)).toBe(true);
   });
 
-  it("shapes metal heads on the 가공대 by hand, and the forming bench inherits it at twice the speed", () => {
-    const hand = processOf("craft_bench", "pick_head").recipes[0];
-    const bench = processOf("forming_bench", "pick_head").recipes[0];
-    expect(hand.in).toEqual({ iron: 2 });
-    expect(bench.in).toEqual(hand.in);
-    expect(bench.time).toBe(Math.ceil(hand.time / 2));
+  it("shapes iron heads on the forming bench only, never by hand on the 가공대", () => {
+    for (const form of ["pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]) {
+      expect(processOf("forming_bench", form).recipes[0].out).toEqual({ [`iron_${form}`]: 1 });
+      expect(machineForms("craft_bench")).not.toContain(form);
+    }
+    expect(recipesOf("craft_bench").some((r) => Object.keys(r.out).some((id) => id.startsWith("iron_")))).toBe(false);
   });
 
   it("lets the construction bench build the first age's machines too, inherited from the workbench", () => {

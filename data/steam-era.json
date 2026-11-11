@@ -111,11 +111,11 @@
     { "form": "fan", "machine": "forming_bench", "time": 10, "in": 3, "out": 1, "metals": ["iron"] },
     { "form": "boots", "machine": "forming_bench", "time": 8, "in": 1, "extra": { "iron_plate": 2, "iron_rivet": 4 }, "out": 1, "metals": ["iron"] },
     { "form": "pack", "machine": "forming_bench", "time": 12, "in": 1, "extra": { "iron_rod": 4, "iron_rivet": 6, "iron_belt": 2 }, "out": 1, "metals": ["iron"] },
-    { "form": "pick_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
-    { "form": "axe_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
-    { "form": "shovel_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] },
-    { "form": "spear_head", "machine": "craft_bench", "time": 6, "in": 1, "out": 1, "metals": ["iron"] },
-    { "form": "blade_head", "machine": "craft_bench", "time": 8, "in": 2, "out": 1, "metals": ["iron"] }
+    { "form": "pick_head", "machine": "forming_bench", "time": 4, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "axe_head", "machine": "forming_bench", "time": 4, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "shovel_head", "machine": "forming_bench", "time": 4, "in": 2, "out": 1, "metals": ["iron"] },
+    { "form": "spear_head", "machine": "forming_bench", "time": 3, "in": 1, "out": 1, "metals": ["iron"] },
+    { "form": "blade_head", "machine": "forming_bench", "time": 4, "in": 2, "out": 1, "metals": ["iron"] }
   ],
   "recipes": [
     { "id": "stick", "machine": "tool_bench", "form": "stick", "time": 2, "in": { "wood": 1 }, "out": { "stick": 2 } },

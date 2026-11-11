@@ -424,9 +424,10 @@ const processes = new Map<string, Process>();
 
 function buildProcess(type: string, form: string): Process {
   const recipes = machineRecipes(type).filter((r) => !form || r.form === form);
-  const first = Object.keys(recipes[0].in);
-  const widest = Math.max(...recipes.map((r) => Object.keys(r.out).length));
-  const count = widest ? Math.max(widest, 1 + (machines[type].byproductSlots ?? 0)) : 0;
+  // A machine can stand with nothing to do yet, as the 가공대 does until its work is given.
+  const first = recipes.length ? Object.keys(recipes[0].in) : [];
+  const widest = Math.max(0, ...recipes.map((r) => Object.keys(r.out).length));
+  const count = widest ?Math.max(widest, 1 + (machines[type].byproductSlots ?? 0)) : 0;
   const outSlots = Array.from({ length: count }, (_, i) =>
     [...new Set(recipes.flatMap((r) => Object.keys(r.out).slice(i, i + 1)))]);
   return {
