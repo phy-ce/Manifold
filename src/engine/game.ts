@@ -1131,16 +1131,21 @@ export function walkTo(s: GameState, target: Point): boolean {
  * One step in a direction, for walking with the keyboard. It replaces any walk in progress
  * but keeps the step already under way, so holding a key moves at the normal pace.
  */
+/** Turns the player to face a direction, and the fan of sight swings round with them. Says whether they turned. */
+export function face(s: GameState, dx: number, dy: number): boolean {
+  const [sx, sy] = [Math.sign(dx), Math.sign(dy)];
+  if ((!sx && !sy) || (s.facing?.x === sx && s.facing?.y === sy)) return false;
+  s.facing = { x: sx, y: sy };
+  if (s.z < 0) revealUnder(s, s.player, ...sightOf(s, s.player), s.facing);
+  else reveal(s, s.player, ...sightOf(s, s.player), s.facing);
+  return true;
+}
+
 export function walkStep(s: GameState, dx: number, dy: number): boolean {
   if (!dx && !dy) return false;
   const [sx, sy] = [Math.sign(dx), Math.sign(dy)];
-  // The player turns the way they pressed even when they can't go: into rock, or too loaded to move. Turning is
-  // free, and the fan of sight swings round with them.
-  if (s.facing?.x !== sx || s.facing?.y !== sy) {
-    s.facing = { x: sx, y: sy };
-    if (s.z < 0) revealUnder(s, s.player, ...sightOf(s, s.player), s.facing);
-    else reveal(s, s.player, ...sightOf(s, s.player), s.facing);
-  }
+  // The player turns the way they pressed even when they can't go: into rock, or too loaded to move. Turning is free.
+  face(s, sx, sy);
   if (overloaded(s)) return false;
   if (s.z < 0) {
     const rock = (x: number, y: number) => rockAt(s, x, y);

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { familyOf, itemMatches, FORAGE, stageOres, BIOMES, DRUM, BELT_DRIVE, categoryNames, machineRhythm, formOf, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, STAGES, DRIVE, machineWork, LAYERS, kindOf, machineCost, MACHINE_TYPES, MAX_PORTS, inputRole, outputRole, MOTOR, POWER, PUMP, SURFACE_ORES, WAREHOUSE, itemWeight, buildUses, familyMembers, indexItems, itemName, itemSource, recipesFor, usesOf, machineForms, formLabel, machineManual, machineName, machinePower, machineTier, fuelValue, matches, processOf, FUEL_GROUP, burners, isGroup, membersOf, machinesAt, RICHNESS, VEINS } from "../content";
 import {
   GameState, GameNode, lineLayer, goalMade, itemStats, bagCount, BLAST, riverPipeCost, beltNetOf, pipeNetOf, BELT_MAX, DRIVE_RATE, clickFuel, lacksFuel, OLDEST_SAVE, carryLimit, clickGear, fitModule, needsModule, nodeProcess, removeModule, NAME_MAX, SAVE_VERSION, STEAM_MAX, TANK_CAP, TAR_TANK_CAP, addTo, setOverflow, loadSave, rename, setSafeWalk, yearAt, createGroup, removeGroup, buildAllGhosts, buildGhost, copyToGhosts, installHeld, installMachine, removeGhost, foundRivers, linkRiver, powerLoad, bagHolds, expectedOutput, fillFromBag, lacksPower, riverOf, runsRecipe, createTestGame, upgradeSave, SPRING_LEAK_MS, SPRING_MAX, WIND, hasDrive, windMotor, SEASON_MS as ONE_SEASON, canAffordRoute, failWork, isRevealed, isVisible, isWeak, routeCost, takeInput, visionAt, INV_SLOTS, MAX_CARRY, MAX_VITAL, OUTPUT_CAP, WALK_MS, LOAD_SLOW, carried, overloaded, walkTime, clickInput, clickOutput, clickStack, nudgeFromStore, nudgeToNode, sortSlots, stowCursor, trashCursor, wheelInput, wheelStack, eat, SEASON_MS, canHarvest, routeMaterials, seasonAt, toggleRoute, nodeLabel, atBase, canAfford, connect, connectOptions, countOf, createGame as newGame, mine, moveToNode, nodeById,
-  REVEAL, NOTE_MAX, MAX_CLIMB, tooSteep, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, walk, WALK_TICK, takeOutput, walkStep, walkTo, workMachine,
+  REVEAL, NOTE_MAX, MAX_CLIMB, tooSteep, setNote, placeMachine, recipeOf, portsUsed, removeNode, setForm, siteHere, status, step, walk, face, WALK_TICK, takeOutput, walkStep, walkTo, workMachine,
 } from "./game";
-import { BASE, biomeAt, cellsOf, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
+import { BASE, ROCK, underCell, biomeAt, cellsOf, chunkSites, generateSites, orderSites, safePath, terrain } from "./world";
 import { gameWithVeins, withVeinsNearBase } from "./testWorld";
 
 /** Most tests aren't about survival, so they keep the player fed. */
@@ -1031,6 +1031,38 @@ describe("carrying weight", () => {
     expect(walkTime(s)).toBe(WALK_MS);
     s.inv[0] = { id: "Lm", n: 40 };
     expect(walkTime(s)).toBeCloseTo(WALK_MS * (1 + LOAD_SLOW));
+  });
+
+  it("turns the player in place, saying whether the way changed", () => {
+    const s = createGame(1);
+    const at = { ...s.player };
+    expect(face(s, 1, 0)).toBe(true);
+    expect(face(s, 1, 0)).toBe(false);
+    expect(face(s, 0, -3)).toBe(true);
+    expect(s.facing).toEqual({ x: 0, y: -1 });
+    expect(face(s, 0, 0)).toBe(false);
+    expect(s.player).toEqual(at);
+    expect(s.path).toEqual([]);
+  });
+
+  it("turns every way when walled in on all eight sides, and never moves", () => {
+    const s = createGame(1);
+    const ways = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
+    const walled = (x: number, y: number) => ways.every(([dx, dy]) => underCell(x + dx, y + dy, s.seed) === ROCK);
+    // A pocket of floor shut in by rock, or failing that a spot whose every neighbour is rock.
+    let pocket: { x: number; y: number } | undefined;
+    for (let x = -300; x < 300 && !pocket; x += 1) for (let y = -300; y < 300 && !pocket; y += 1) if (underCell(x, y, s.seed) !== ROCK && walled(x, y)) pocket = { x, y };
+    for (let x = 0; !pocket; x += 1) if (walled(x, 0)) pocket = { x, y: 0 };
+    s.z = -1;
+    s.player = { ...pocket };
+    s.facing = { x: 0, y: 1 };
+    for (const [dx, dy] of [...ways, ...ways.slice().reverse()]) {
+      expect(walkStep(s, dx, dy)).toBe(false);
+      expect(s.facing).toEqual({ x: dx, y: dy });
+      for (let t = 0; t < 1000; t += WALK_TICK) walk(s, WALK_TICK);
+      expect(s.player).toEqual(pocket);
+      expect(s.path).toEqual([]);
+    }
   });
 
   it("lands every step after the same time on the game loop's fine clock, not 0.2 s then 0.1 s", () => {

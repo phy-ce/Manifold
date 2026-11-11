@@ -2,7 +2,7 @@ import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTut
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
+import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, face, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -398,16 +398,24 @@ window.addEventListener("keydown", (e) => {
 const WALK_KEYS: Record<string, [number, number]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 const heldWalk = new Set<string>();
 const onMap = (): boolean => !map.root.hidden && !document.querySelector(".window-back:not([hidden]), .win:not([hidden])");
-function keyWalk(): void {
-  if (!heldWalk.size || state.path.length > 1 || !onMap()) return;
+/** A key for a new direction only turns the player; held this long, it walks on that way. */
+const TURN_HOLD_MS = 180;
+/** Until when a fresh turn holds the player in place. */
+let turnUntil = 0;
+/** The way the held keys point together. */
+function heldWay(): [number, number] {
   let dx = 0;
   let dy = 0;
   for (const code of heldWalk) {
     dx += WALK_KEYS[code][0];
     dy += WALK_KEYS[code][1];
   }
+  return [Math.sign(dx), Math.sign(dy)];
+}
+function keyWalk(): void {
+  if (!heldWalk.size || state.path.length > 1 || !onMap() || performance.now() < turnUntil) return;
   // Only start a new step once the one under way is done, or straight away from standing still.
-  if (!state.path.length) walkStep(state, dx, dy);
+  if (!state.path.length) walkStep(state, ...heldWay());
 }
 window.addEventListener("keydown", (e) => {
   if (!(e.code in WALK_KEYS) || e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey || !onMap()) return;
@@ -416,6 +424,14 @@ window.addEventListener("keydown", (e) => {
   // A key takes over from a walk set by clicking.
   if (!heldWalk.size && state.path.length > 1) state.path = [];
   heldWalk.add(e.code);
+  // A key that points a new way stops the player and turns them; one that keeps the way they face walks on at once.
+  // Before the first turn there is no way faced yet, so the first key just walks.
+  const [dx, dy] = heldWay();
+  if (state.facing && face(state, dx, dy)) {
+    state.path = [];
+    state.walkTimer = 0;
+    turnUntil = performance.now() + TURN_HOLD_MS;
+  }
   keyWalk();
   redraw();
 });
