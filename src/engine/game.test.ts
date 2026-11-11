@@ -832,21 +832,21 @@ describe("moving items by hand", () => {
   };
 
   it("merges two stacks into one slot", () => {
-    const s = bag(["Lm", 21], ["Lm", 30]);
+    const s = bag(["Lm", 11], ["Lm", 15]);
     clickStack(s, s.inv, 0, "left");
-    expect(s.cursor).toEqual({ id: "Lm", n: 21 });
+    expect(s.cursor).toEqual({ id: "Lm", n: 11 });
     expect(s.inv[0]).toBeNull();
     clickStack(s, s.inv, 1, "left");
-    expect(s.inv[1]).toEqual({ id: "Lm", n: 51 });
+    expect(s.inv[1]).toEqual({ id: "Lm", n: 26 });
     expect(s.cursor).toBeNull();
   });
 
   it("keeps the overflow on the cursor when a merge doesn't fit", () => {
-    const s = bag(["Lm", 40], ["Lm", 30]);
+    const s = bag(["Lm", 20], ["Lm", 15]);
     clickStack(s, s.inv, 0, "left");
     clickStack(s, s.inv, 1, "left");
-    expect(s.inv[1]).toEqual({ id: "Lm", n: 64 });
-    expect(s.cursor).toEqual({ id: "Lm", n: 6 });
+    expect(s.inv[1]).toEqual({ id: "Lm", n: 32 });
+    expect(s.cursor).toEqual({ id: "Lm", n: 3 });
   });
 
   it("swaps different items", () => {
@@ -922,9 +922,9 @@ describe("moving items by hand", () => {
   });
 
   it("sorts and merges stacks", () => {
-    const s = bag(["Lm", 40], ["Kn", 2], ["Lm", 30], ["Kn", 3]);
+    const s = bag(["Lm", 20], ["Kn", 2], ["Lm", 15], ["Kn", 3]);
     sortSlots(s.inv);
-    expect(s.inv.slice(0, 3)).toEqual([{ id: "Lm", n: 64 }, { id: "Lm", n: 6 }, { id: "Kn", n: 5 }]);
+    expect(s.inv.slice(0, 3)).toEqual([{ id: "Lm", n: 32 }, { id: "Lm", n: 3 }, { id: "Kn", n: 5 }]);
     expect(s.inv[3]).toBeNull();
   });
 
@@ -2291,10 +2291,11 @@ describe("filling a machine from the index", () => {
 
   it("fills as far as the slot allows, and keeps the rest in the bag", () => {
     const { s, kiln } = setup();
-    s.inv[0] = { id: "Kn", n: 64 };
+    s.inv[0] = { id: "Kn", n: 32 };
+    s.inv[1] = { id: "Kn", n: 10 };
     fillFromBag(s, kiln.id, kilnRecipe(), Infinity);
-    expect(kiln.ins.clay!.n).toBe(16);
-    expect(s.inv[0]!.n).toBe(48);
+    expect(kiln.ins.clay!.n).toBe(32);
+    expect(s.inv.reduce((n, slot) => n + (slot?.id === "Kn" ? slot.n : 0), 0)).toBe(10);
   });
 
   it("gives what it can when the bag runs short, across stacks", () => {
@@ -3510,11 +3511,12 @@ describe("S0 hand work", () => {
 describe("S1-1 playthrough", () => {
   it("builds a steam engine from nothing but clicks and lines", () => {
     const s = createGame(2026);
-    // Three ore make a bloom and a bloom forges into one iron, so iron takes more ore than it used to.
-    gather(s, "iron_ore", 240);
-    gather(s, "coal", 120);
+    // Three ore make a bloom and a bloom forges into one iron. A slot holds 32, so the main warehouse's twelve
+    // slots take 180 ore (126 is used), the clay, the copper ore and the coal.
+    gather(s, "iron_ore", 180);
     gather(s, "clay", 16);
     gather(s, "copper_ore", 16);
+    gather(s, "coal", 120);
 
     const add = (type: string) => placeMachine(s, type, 0, 0)!.id;
     const store = warehouse(s).id;

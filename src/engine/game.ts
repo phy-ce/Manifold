@@ -15,9 +15,12 @@ export const WIND = 5;
 export const SPRING_LEAK_MS = 2_000;
 /** Steam can't really be stored: a boiler holds about three seconds of full output. */
 export const STEAM_MAX = 30;
-export const STACK = 64;
-/** How many of an item fit in one slot: a tool keeps its own wear, so tools go one to a slot. */
-export const stackSize = (id: string): number => (isTool(id) ? 1 : STACK);
+/** How many of an item go in one slot, in the bag, a warehouse or a machine alike. */
+export const STACK = 32;
+/** Built machines are bulky: a few to a slot. */
+export const MACHINE_STACK = 4;
+/** How many of an item fit in one slot: a tool keeps its own wear, so tools go one to a slot; machines a few. */
+export const stackSize = (id: string): number => (isTool(id) ? 1 : isMachine(id) ? MACHINE_STACK : STACK);
 export const INV_SLOTS = 8;
 /** The most the player can carry and still walk. */
 export const MAX_CARRY = 80;
@@ -25,7 +28,8 @@ export const WARE_SLOTS = 12;
 export const STEP_MS = 100;
 export const WALK_MS = 150;
 export const LINE_MS = 500;
-export const OUTPUT_CAP = 16;
+/** A machine's output slot holds a slot's worth, as the bag does. */
+export const OUTPUT_CAP = STACK;
 /** Longest name that still fits on a node. */
 export const NAME_MAX = 12;
 /** What a machine's tank holds, in litres. */
@@ -1774,7 +1778,8 @@ function batchOf(node: GameNode, key: string): number {
 const slotFor = (node: GameNode, item: string) =>
   nodeProcess(node).slots.find((slot) => slot.accepts.some((a) => matches(item, a)));
 
-export const inputCap = (node: GameNode, key: string): number => Math.max(16, batchOf(node, key) * 4);
+/** An input slot holds a slot's worth, or one batch if a recipe asks for more than that. */
+export const inputCap = (node: GameNode, key: string): number => Math.max(STACK, batchOf(node, key));
 
 export function placeMachine(s: GameState, type: string, x: number, y: number): GameNode | null {
   if (!atBase(s) || !machinesAt(s.stage).includes(type)) return null;
@@ -2478,7 +2483,7 @@ function insert(node: GameNode, item: string, n: number, viaLine = false): numbe
 // ---- Fuel
 
 /** How much fuel a firebox holds when filled by hand, and when topped up along a line. */
-export const FUEL_CAP = 32;
+export const FUEL_CAP = STACK;
 const FUEL_LINE_CAP = 8;
 
 /** Room in a machine's firebox for a fuel. One kind at a time, like any slot. */
@@ -3177,7 +3182,7 @@ export function clickStack(s: GameState, slots: Slots, index: number, button: Bu
     slots[index] = { ...cursor, n };
     drop(s, n);
   } else if (slot.id === cursor.id && stackSize(slot.id) > 1) {
-    const n = Math.min(button === "left" ? cursor.n : 1, STACK - slot.n);
+    const n = Math.min(button === "left" ? cursor.n : 1, stackSize(slot.id) - slot.n);
     slot.n += n;
     drop(s, n);
   } else if (button === "left") {
@@ -3205,7 +3210,7 @@ export function wheelStack(s: GameState, slots: Slots, index: number, way: "in" 
 /** Hands back one drum, to the cursor if it can hold it. */
 function giveDrum(s: GameState, id: string): void {
   if (!s.cursor) s.cursor = { id, n: 1 };
-  else if (s.cursor.id === id && s.cursor.n < STACK) s.cursor.n += 1;
+  else if (s.cursor.id === id && s.cursor.n < stackSize(id)) s.cursor.n += 1;
   else if (!addTo(s.inv, id, 1)) bank(s, id, 1);
 }
 
@@ -3310,7 +3315,7 @@ export function sortSlots(slots: Slots): void {
     for (const tool of tools.filter((t) => t.id === id).sort((a, b) => (a.wear ?? 0) - (b.wear ?? 0))) slots[i++] = tool;
     let left = totals.get(id) ?? 0;
     while (left > 0) {
-      const n = Math.min(left, STACK);
+      const n = Math.min(left, stackSize(id));
       slots[i] = { id, n };
       i += 1;
       left -= n;
@@ -3413,7 +3418,7 @@ function stockShelves(s: GameState, stacks: [string, number][], x: number, y: nu
     const shelf = newWarehouse(s, x + ((i / WARE_SLOTS) % 3) * 260, y + Math.floor(i / WARE_SLOTS / 3) * 160);
     s.nodes.push(shelf);
     stacks.slice(i, i + WARE_SLOTS).forEach(([id, n], j) => {
-      shelf.store[j] = isTool(id) ? { id, n: 1 } : { id, n };
+      shelf.store[j] = { id, n: Math.min(n, stackSize(id)) };
     });
   }
 }
@@ -3434,11 +3439,13 @@ function createFullTest(seed: number): GameState {
   ];
   // Metals and bricks, from the bloom to steel, the by-products that come with them, and wood and stone.
   const metals: [string, number][] = [
-    ["iron", 64], ["bloom", 16], ["pig_iron", 32], ["copper", 64], ["steel", 32], ["brick", 64], ["slag", 16], ["sulfur", 16], ["wood", 64], ["stone", 64],
+    ["iron", 32], ["iron", 32], ["bloom", 16], ["pig_iron", 32], ["copper", 32], ["steel", 32], ["brick", 32], ["brick", 32], ["slag", 16], ["sulfur", 16], ["wood", 32], ["stone", 32],
   ];
   // For going out: spare weapons, drums empty and full, and cooked food.
   const kit: [string, number][] = [
     ["iron_spear", 1], ["iron_blade", 1], ["iron_drum", 8], ["water_drum", 8], ["Bc", 16], ["Mc", 16],
+    // A slot holds 32: the plates a converter takes spill over here.
+    ["iron_plate", 32],
   ];
   // Building parts: enough for a few of each S0 to S1-3 machine, and the steam engine's pieces. One warehouse holds 12.
   const parts: [string, number][] = [
@@ -3449,23 +3456,23 @@ function createFullTest(seed: number): GameState {
   // They weigh 2 each, so the bag stays under its limit and the player can still walk.
   const transport: [string, number][] = [["iron_belt", 16], ["iron_tube", 8], ["iron_rod", 8]];
   raw.forEach(([id, n], i) => {
-    store.store[i] = { id, n };
+    store.store[i] = { id, n: Math.min(n, stackSize(id)) };
   });
   const depot = newWarehouse(s, 40, 360);
   s.nodes.push(depot);
   parts.forEach(([id, n], i) => {
-    depot.store[i] = { id, n };
+    depot.store[i] = { id, n: Math.min(n, stackSize(id)) };
   });
   // Metals sit to the right of the parts.
   const metalStore = newWarehouse(s, 300, 360);
   s.nodes.push(metalStore);
   metals.forEach(([id, n], i) => {
-    metalStore.store[i] = { id, n };
+    metalStore.store[i] = { id, n: Math.min(n, stackSize(id)) };
   });
   const kitStore = newWarehouse(s, 560, 360);
   s.nodes.push(kitStore);
   kit.forEach(([id, n], i) => {
-    kitStore.store[i] = { id, n };
+    kitStore.store[i] = { id, n: Math.min(n, stackSize(id)) };
   });
   // Lines are paid from the bag, so these go in the player's inventory. The player wears a full set.
   for (const [id, n] of transport) addTo(s.inv, id, n);
