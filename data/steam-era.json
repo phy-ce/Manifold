@@ -17,6 +17,7 @@
     "wood": 1, "stone": 2, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
   },
   "stockpiled": ["slag", "coal_tar", "sulfur"],
+  "awaitingUse": ["wood", "stone"],
   "food": {
     "Be": { "hunger": 10, "hp": 0 },
     "Mu": { "hunger": 8, "hp": 0 },
