@@ -2,7 +2,7 @@
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
 import { BIOMES, DEER, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
-import { GameState, NOTE_MAX, actionKey, corpsesHere, lootCorpse, digProgress, startDig, knownReserve, cantCarry, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
+import { GameState, Gather, Corpse, NOTE_MAX, actionKey, chosenGather, gathersHere, pickGather, butcherChances, eatProgress, digProgress, startDig, knownReserve, cantCarry, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
@@ -293,6 +293,8 @@ export class MapView {
   private readonly head = document.createElement("div");
   private readonly vein = document.createElement("button");
   private readonly art = document.createElement("pre");
+  /** The list of things underfoot to pick from, when there are several. */
+  private readonly choices = document.createElement("div");
   private readonly search = document.createElement("input");
   private readonly results = document.createElement("div");
   private readonly note = document.createElement("input");
@@ -314,7 +316,6 @@ export class MapView {
   /** The emptied cell the next cell was last pointed out from, so it blinks once on arrival, not all the time. */
   private pointedFrom = "";
   private readonly safe = document.createElement("button");
-  private readonly warn = document.createElement("div");
   /** What safe mode stopped for, shown for a moment at the top of the screen. */
   private readonly haltFlash = document.createElement("div");
   /** When the last drop shown happened; null until the first draw, so a loaded game shows no old one. */
@@ -417,7 +418,15 @@ export class MapView {
       e.stopPropagation(); // typing a note must not walk, toggle or open anything
       if (e.key === "Enter") this.note.blur();
     });
-    this.panel.append(this.head, this.note, this.vein);
+    this.choices.className = "gather-choices";
+    // The way back from one thing to the list, in whichever head is showing.
+    this.head.addEventListener("click", (e) => {
+      if (!(e.target as HTMLElement).closest("[data-back]")) return;
+      pickGather(this.game(), null);
+      this.drawnVein = "";
+      this.changed();
+    });
+    this.panel.append(this.head, this.choices, this.note, this.vein);
 
     // Every line in the column keeps to one line: long text is cut short rather than wrapped, so nothing moves.
     this.place.className = "box map-line";
@@ -433,8 +442,6 @@ export class MapView {
       this.changed();
     });
     walkMode.append(this.safe);
-    this.warn.className = "walk-warn";
-    this.warn.setAttribute("role", "status");
     this.haltFlash.className = "hurt halt-flash";
     this.haltFlash.setAttribute("aria-hidden", "true");
     document.body.append(this.haltFlash);
@@ -487,7 +494,7 @@ export class MapView {
       this.drawResults();
     }).observe(this.results);
 
-    this.side.append(this.place, walkMode, this.warn, this.fight.root, this.panel, finder);
+    this.side.append(this.place, walkMode, this.fight.root, this.panel, finder);
   }
 
   /** As many whole cells at the current zoom as fit in the box; redraws if that changed or `force`. */
@@ -614,10 +621,6 @@ export class MapView {
     const use = actionKey(s);
     if (use === "fight") {
       if (!repeat || canStrike(s)) this.fight.strikeNearest();
-    } else if (use === "loot") {
-      // One press, one carcass: what didn't fit stays on it, and the screen says why (s.blocked).
-      if (!repeat) lootCorpse(s);
-      this.changed();
     } else if (use === "work") {
       // Held, F starts the next dig as soon as one ends; a dig under way just goes on.
       if (!repeat) this.work();
@@ -706,14 +709,6 @@ export class MapView {
     const safeLabel = keyHintHtml("T", tr("안전 모드"), s.safeWalk ? "on" : "off");
     if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;
     this.safe.setAttribute("aria-pressed", String(s.safeWalk));
-    // Standing on a carcass, the line under the safe switch offers F to take it apart; several on the cell are counted.
-    const corpses = corpsesHere(s);
-    const warning = corpses.length
-      ? `${keyHintHtml("F", `${tr(DEER.name)} ${tr("해체")}`, actionKey(s) === "loot" ? "on" : "off")}${corpses.length > 1 ? ` x${corpses.length}` : ""}`
-      : "";
-    if (this.warn.dataset.shown !== warning) this.warn.innerHTML = this.warn.dataset.shown = warning;
-    // Empty, the line takes no room, so the safe switch and the sight view sit one gap apart.
-    this.warn.hidden = !warning;
     // Where safe mode stopped the walk: the cell blinks, then stays boxed in red until the walk goes on, and the
     // middle of the map says what it saw and what it would cost, with safe mode named small beneath.
     const halt = s.halt;
@@ -804,11 +799,13 @@ export class MapView {
       }
       this.dugShown = dug;
     }
-    const digging = digProgress(s);
+    // A dig, a cut or a meal under way: the same bar, under the cell worked or under the player eating.
+    const digging = digProgress(s) ?? eatProgress(s);
+    const barAt = s.dig ?? (s.eating ? s.player : null);
     // On the surface the map only changes when the player moves, a cell empties or something blinks; underground creatures move every step.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0) + (site.note ? 31 : 0) + 7 * (site.cells?.filter((c) => c.left <= 0).length ?? 0), 0);
     const live = cave || s.mobs.length || this.marking() ? `${s.time},${Math.floor(performance.now() / 150)}` : "";
-    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${digging === null ? "" : Math.round(digging * DIG_BAR)},${s.corpses?.length ?? 0},${corpsesHere(s).reduce((n, c) => n + Object.keys(c.items).length, 0)},${live}`;
+    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${digging === null ? "" : Math.round(digging * DIG_BAR)},${(s.corpses ?? []).reduce((n, c) => n + c.left + 100, 0)},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(this.viewW / 2);
@@ -816,9 +813,9 @@ export class MapView {
     if (cave) this.paintUnder(s, probing);
     else this.paint(s);
     // A dig under way: a bar three cells wide under the cell being worked, filling as it goes.
-    if (s.dig && digging !== null) {
-      const vx = s.dig.x - this.originX;
-      const vy = s.dig.y - this.originY;
+    if (barAt && digging !== null) {
+      const vx = barAt.x - this.originX;
+      const vy = barAt.y - this.originY;
       const g = this.ctx;
       const left = (vx - 1) * CELL_W + 1;
       const top = (vy + 1) * CELL_H - 4;
@@ -1115,7 +1112,27 @@ export class MapView {
     return ns + ew;
   }
 
+  /**
+   * The gathering window. One thing underfoot shows straight away; two or more (a vein and a carcass, two
+   * carcasses) are listed first, and picking one opens it, with a way back to the list.
+   */
   private drawVein(s: GameState): void {
+    const gathers = gathersHere(s);
+    const chosen = chosenGather(s);
+    const several = gathers.length > 1;
+    this.choices.hidden = !several || !!chosen;
+    this.note.hidden = !!chosen?.corpse || (several && !chosen);
+    this.vein.hidden = several && !chosen;
+    if (several && !chosen) {
+      this.panel.classList.remove("vacant");
+      this.drawChoices(s, gathers);
+      return;
+    }
+    if (chosen?.corpse) {
+      this.panel.classList.remove("vacant");
+      this.drawCorpse(s, chosen.corpse, several);
+      return;
+    }
     const site = siteHere(s);
     // The panel keeps its room in the column with nothing underfoot, so the search below never moves.
     this.panel.classList.toggle("vacant", !site);
@@ -1135,7 +1152,7 @@ export class MapView {
     // The cell being worked and the vein as far as the player has seen it.
     const spot = harvestTarget(s) ?? veinCellAt(s, s.player.x, s.player.y);
     const known = knownReserve(s, site);
-    const key = `${site.id}|${site.left}|${known.total}|${spot?.cell.x},${spot?.cell.y}|${this.hit > 0}|${open}|${ready}`;
+    const key = `${site.id}|${site.left}|${known.total}|${spot?.cell.x},${spot?.cell.y}|${this.hit > 0}|${open}|${ready}|${several}`;
     if (key === this.drawnVein) return;
     this.drawnVein = key;
 
@@ -1169,8 +1186,97 @@ export class MapView {
       : gauge("", site.left, site.total, 14);
     // Two fixed lines, whatever the gauges hold: the name with the F hint at its right, then the gauges (or the
     // seasons a patch can be picked in). Nothing wraps, so the hint never jumps from one line to the other.
-    this.head.innerHTML = `<div class="vein-line"><span style="color:${itemColor(site.ore)}">${itemCode(site.ore)}</span><span class="vein-name">${siteName(s, site)}</span>` +
+    this.head.innerHTML = `<div class="vein-line">${several ? BACK_BUTTON : ""}<span style="color:${itemColor(site.ore)}" data-tip="${itemName(site.ore)}">${itemCode(site.ore)}</span><span class="vein-name">${siteName(s, site)}</span>` +
       `<span class="push">${keyHintHtml("F", actionWord(site), ready ? "on" : "off")}</span></div>` +
       `<div class="vein-line">${open ? `<span class="reserve-gauges">${gauges}</span>` : `<span class="short">${(forageSeasons(site.ore) ?? []).map((n) => SEASON_NAMES[n]).join(", ")}${tr("에만 수확")}</span>`}</div>`;
   }
+
+  /** Several things underfoot: the window names it gathering and lists them, each a button that opens it. */
+  private drawChoices(s: GameState, gathers: Gather[]): void {
+    const key = `choices|${gathers.map((g) => `${g.key}:${g.corpse?.left ?? g.site?.left}`).join()}`;
+    if (key === this.drawnVein) return;
+    this.drawnVein = key;
+    this.head.innerHTML = `<div class="vein-line"><span class="vein-name">${tr("채집")}</span></div>`;
+    this.choices.replaceChildren(...gathers.map((g) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tech gather-choice";
+      const [code, color, name, left] = g.corpse
+        ? ["Dc", COLOR.corpse, `${tr(DEER.name)} ${tr("시체")}`, g.corpse.left]
+        : [itemCode(g.site!.ore), itemColor(g.site!.ore), siteName(s, g.site!), g.site!.left];
+      b.innerHTML = `<span style="color:${color}">${code}</span> <span class="vein-name">${name}</span><b class="push">${left}</b>`;
+      b.addEventListener("click", () => {
+        pickGather(this.game(), g.key);
+        this.drawnVein = "";
+        this.changed();
+      });
+      return b;
+    }));
+  }
+
+  /** A carcass picked: its name, F to cut, the cuts left, and the odds of what a cut gives. */
+  private drawCorpse(s: GameState, corpse: Corpse, several: boolean): void {
+    const ready = actionKey(s) === "work" && !s.dig;
+    this.vein.disabled = !ready;
+    this.vein.setAttribute("aria-label", `${tr(DEER.name)} ${tr("해체")}`);
+    const key = `corpse|${corpse.id}|${corpse.left}|${ready}|${several}`;
+    if (key === this.drawnVein) return;
+    this.drawnVein = key;
+    const cells = 14;
+    const fill = Math.round((corpse.left / DEER.butcher.cuts) * cells);
+    const odds = butcherChances().map(([id, share]) => `<span style="color:${itemColor(id)}" data-tip="${itemName(id)}">${itemCode(id)}</span> ${Math.round(share * 100)}%`).join(" ");
+    this.head.innerHTML = `<div class="vein-line">${several ? BACK_BUTTON : ""}<span style="color:${COLOR.corpse}">Dc</span><span class="vein-name">${tr(DEER.name)} ${tr("시체")}</span>` +
+      `<span class="push">${keyHintHtml("F", tr("해체"), ready ? "on" : "off")}</span></div>` +
+      `<div class="vein-line"><span class="reserve-gauge"><span class="meter-bar">[${"#".repeat(fill).padEnd(cells, ".")}]</span><b>${corpse.left}/${DEER.butcher.cuts}</b></span><span class="push short">${odds}</span></div>`;
+    this.art.innerHTML = carcassArt(corpse.left, DEER.butcher.cuts);
+  }
+}
+
+/** The way back from one thing underfoot to the list of them all. */
+const BACK_BUTTON = `<button type="button" class="tech gather-back" data-back aria-label="${tr("채집 목록")}">&lt;</button>`;
+
+/**
+ * A deer lying on its side on the grass, the same size as a vein's picture: body and neck, the head with its
+ * antler, legs folded out below. Cut by cut the hide is opened from the rump forward and the ribs show.
+ */
+function carcassArt(left: number, cuts: number): string {
+  const HIDE = ["#8a5a3c", "#a8704a", "#c08a5c"];
+  const BELLY = "#e0c8a0";
+  const RIB = "#ece4d0";
+  const RAW = "#b03a2e";
+  const grid: { ch: string; color: string }[][] = [];
+  for (let y = 0; y < PANEL_ROWS; y += 1) {
+    grid.push([]);
+    for (let x = 0; x < PANEL_COLS; x += 1) {
+      const r = hash(x, y, 77);
+      if (y >= PANEL_ROWS - 2) grid[y].push({ ch: r < 0.4 ? "~" : r < 0.75 ? "," : r < 0.9 ? "." : "o", color: SOIL[y & 1] });
+      else if (y === PANEL_ROWS - 3) grid[y].push({ ch: r < 0.5 ? "\"" : r < 0.8 ? "'" : " ", color: LEAF[Math.floor(r * 6) % 3] });
+      else grid[y].push({ ch: " ", color: LITTER[1] });
+    }
+  }
+  const put = (x: number, y: number, ch: string, color: string) => {
+    if (y >= 0 && y < PANEL_ROWS && x >= 0 && x < PANEL_COLS) grid[y][x] = { ch, color };
+  };
+  // The body: a long low oval, lit along the back, pale at the belly. Opened from the rump as cuts are taken.
+  const [cx, cy, rx, ry] = [19, 4.2, 13, 2.4];
+  const opened = Math.round((1 - left / cuts) * rx * 2);
+  for (let y = 1; y < PANEL_ROWS - 1; y += 1) {
+    for (let x = cx - rx; x <= cx + rx; x += 1) {
+      const e = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+      if (e > 1) continue;
+      const back = y < cy - 0.8;
+      const belly = y > cy + 1;
+      if (x - (cx - rx) < opened) put(x, y, e > 0.7 ? "(" : x % 2 ? "=" : "-", e > 0.7 ? RAW : RIB);
+      else put(x, y, back ? "%" : belly ? "~" : "#", back ? HIDE[2] : belly ? BELLY : HIDE[e < 0.4 ? 1 : 0]);
+    }
+  }
+  // Neck and head to the right, the eye shut, an antler branching up.
+  for (const [x, y, ch] of [[32, 3, "#"], [33, 3, "#"], [34, 2, "%"], [35, 2, "#"], [36, 2, "#"], [37, 2, "#"], [38, 3, "#"], [39, 3, ">"], [36, 3, "#"], [37, 3, "#"], [33, 4, "#"], [34, 3, "#"]] as const) put(x, y, ch, HIDE[1]);
+  put(37, 2, "-", "#2a1c14");
+  for (const [x, y, ch] of [[35, 1, "\\"], [34, 0, "Y"], [36, 1, "/"], [37, 0, "Y"]] as const) put(x, y, ch, RIB);
+  // Legs folded out under the belly.
+  for (const [x, y, ch] of [[9, 6, "/"], [12, 6, "/"], [24, 6, "\\"], [27, 6, "\\"], [8, 7, "_"], [11, 7, "_"], [25, 7, "_"], [28, 7, "_"]] as const) put(x, y, ch, HIDE[0]);
+  // A short tail at the rump.
+  put(cx - rx - 1, 3, "~", BELLY);
+  return grid.map((row) => row.map((c) => (c.ch === " " ? " " : `<span style="color:${c.color}">${c.ch}</span>`)).join("")).join("\n");
 }

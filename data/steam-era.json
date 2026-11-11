@@ -18,13 +18,14 @@
   },
   "stockpiled": ["slag", "coal_tar", "sulfur"],
   "awaitingUse": ["hide", "antler"],
-  "dig": { "ore": 2400, "wood": 2000, "forage": 600, "water": 800 },
+  "dig": { "ore": 2400, "wood": 2000, "forage": 600, "water": 800, "butcher": 1500 },
+  "eatMs": 1500,
   "toolKinds": {
     "pick": { "jobs": ["ore"], "damage": 2, "range": 1, "cooldown": 900, "head": 3, "handle": 2 },
     "axe": { "jobs": ["wood", "forage"], "damage": 3, "range": 1, "cooldown": 900, "head": 3, "handle": 2 },
     "shovel": { "jobs": [], "damage": 1, "range": 1, "cooldown": 900, "head": 2, "handle": 2 },
     "spear": { "jobs": [], "damage": 3, "range": 2, "cooldown": 1000, "head": 1, "handle": 3 },
-    "blade": { "jobs": [], "damage": 4, "range": 1, "cooldown": 700, "head": 2, "handle": 1 }
+    "blade": { "jobs": ["butcher"], "damage": 4, "range": 1, "cooldown": 700, "head": 2, "handle": 1 }
   },
   "toolMaterials": {
     "wood": { "name": "나무", "code": "Wo", "color": "#c8925a", "stage": "S0", "speed": 1.5, "power": 0.5, "durability": 40, "weight": 1 },

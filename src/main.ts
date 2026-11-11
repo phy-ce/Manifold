@@ -2,7 +2,7 @@ import { SECTIONS, TUTORIAL, acknowledgeStep, dismissTip, pendingTip, advanceTut
 import { tr, restart } from "./i18n";
 import "./style.css";
 import { WORKBENCH, GEAR_SLOTS, PLAYABLE_STAGES, STAGES, eraName, gearFor, itemCode, itemColor, itemName } from "./content";
-import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, TEST_SETS, TestSet, eat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, face, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
+import { GameState, HurtCause, creatureInfo, stairHere, leaveCave, MAX_VITAL, goalMade, carryLimit, clickGear, SEASON_MS, SEASON_NAMES, STEP_MS, atBase, isWeak, carried, clickStack, createGame, createTestGame, TEST_SETS, TestSet, startEat, overloaded, loadSave, setSafeWalk, sortSlots, step, walk, WALK_TICK, trashCursor, yearAt, walkStep, face, walkTo, wheelStack, nearestStair, underground, startProbe } from "./engine/game";
 import { BASE } from "./engine/world";
 import * as engine from "./engine/game";
 import * as content from "./content";
@@ -99,12 +99,14 @@ const speedButtons = SPEEDS.map(([label, value]) => {
   return b;
 });
 speedBar.append(...speedButtons);
-// One button per test set, each asking once more before it wipes the game.
+// The menu's one test button opens a window of test sets, one button each, each asking once more before it
+// wipes the game.
 const TEST_LABELS: Record<TestSet, [string, string]> = {
-  full: [tr("테스트: 전체"), tr("모든 단계, 광석과 금속, 부품, 기계 2대씩, 장비 한 벌")],
-  mythic: [tr("테스트: 신화시대"), tr("신화시대 재료와 기계 2대씩, 나무·돌·뼈 도구 전부")],
-  hunt: [tr("테스트: 사냥"), tr("사슴이 있는 평원이나 숲에서 창과 칼을 들고 시작")],
-  tools: [tr("테스트: 도구"), tr("모든 도구, 철 머리, 막대기와 재료")],
+  full: [tr("전체"), tr("모든 단계, 광석과 금속, 부품, 기계 2대씩, 장비 한 벌")],
+  mythic: [tr("신화시대"), tr("신화시대 재료와 기계 2대씩, 나무·돌·뼈 도구 전부")],
+  hunt: [tr("사냥"), tr("사슴이 있는 평원이나 숲에서 창과 칼을 들고 시작")],
+  tools: [tr("도구"), tr("모든 도구, 철 머리, 막대기와 재료")],
+  gather: [tr("채집물 여러 개"), tr("광맥 위에 사슴 시체 둘, 옆 칸에 시체 둘")],
 };
 const testStarts = TEST_SETS.map((set) => {
   const [label, tip] = TEST_LABELS[set];
@@ -174,7 +176,16 @@ guideAgain.addEventListener("click", () => {
   menu.close();
   redraw();
 });
-const menu = new MenuWindow([soundButton, guideAgain, ...testStarts, reset]);
+const tests = new MenuWindow(testStarts, tr("테스트"));
+const testButton = document.createElement("button");
+testButton.type = "button";
+testButton.className = "tech";
+testButton.textContent = tr("테스트");
+const menu = new MenuWindow([soundButton, guideAgain, testButton, reset]);
+testButton.addEventListener("click", () => {
+  menu.close();
+  tests.open();
+});
 menuButton.addEventListener("click", () => menu.open());
 topActions.append(travel, speedBar, saveButton, helpButton, menuButton);
 top.append(topStatus, topActions);
@@ -554,7 +565,7 @@ window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.key.toLowerCase() !== "e") return;
   const slot = document.querySelector<HTMLElement>("[data-inv]:hover")?.dataset.inv;
   if (slot !== undefined) {
-    eat(state, Number(slot));
+    startEat(state, Number(slot));
     redraw();
   }
 });
@@ -627,7 +638,7 @@ rightCol.append(itemIndex.root);
 // The tutorial card floats over the foot of the right column, as tall as its text, never cut short; inside #app so
 // windows still cover it.
 app.append(guide, guideMini);
-app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
+app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root, tests.root);
 // The side columns shrink to fit the window rather than scroll.
 keepFitted([map.side, graph.side, rightCol]);
 
@@ -635,6 +646,7 @@ keepFitted([map.side, graph.side, rightCol]);
 // This runs in the capture phase, before the windows' own Escape handlers close them.
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.target instanceof HTMLInputElement) return;
+  if (tests.isOpen) return tests.close();
   if (menu.isOpen) return menu.close();
   if (!invBox.hidden) {
     invBox.hidden = true;
@@ -864,7 +876,7 @@ function tick(): void {
   const dt = now - last;
   last = now;
   // The menu stops the world while it is open, as a pause would; the chosen speed comes back when it closes.
-  const pace = menu.isOpen || eraTurn.running ? 0 : speed;
+  const pace = menu.isOpen || tests.isOpen || eraTurn.running ? 0 : speed;
   backlog = Math.min(backlog + dt * pace, MAX_CATCH_UP_MS * Math.max(1, pace));
   const { x, y } = state.player;
   const z = state.z;

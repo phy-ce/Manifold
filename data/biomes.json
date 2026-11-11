@@ -14,7 +14,7 @@
     "name": "사슴", "biomes": ["plains", "forest"],
     "everyMs": 10000, "chance": 0.5, "cap": 2, "away": [9, 15], "sight": 9, "forgetAway": 30,
     "flee": 5, "moveMs": 500, "fleeMs": 200, "hp": 4,
-    "drops": { "meat": 2, "hide": 1, "bone": 2, "antler": 1 }
+    "butcher": { "cuts": 5, "chance": { "meat": 6, "bone": 3, "hide": 2, "antler": 1 } }
   },
   "biomes": {
     "plains": {

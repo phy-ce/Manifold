@@ -217,6 +217,10 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .map-results .route-row { height: var(--control); }
 /* With nothing underfoot the place panel keeps its room, empty, so the search below never moves. */
 .vein-panel.vacant { visibility: hidden; }
+/* Several things underfoot: one button a line, its code, name and what is left. */
+.gather-choices { display: grid; gap: var(--gap-sm); }
+.gather-choice { display: flex; align-items: center; gap: var(--gap-sm); width: 100%; text-align: left; white-space: nowrap; overflow: hidden; }
+.gather-back { flex: none; padding: 0 var(--gap-sm); height: calc(var(--text-sm) * 1.6); line-height: 1; }
 /* A switch that reads as a key hint: [T] 안전, [Q] 탐사. */
 .map-results .route-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .site-note { width: 100%; min-height: var(--control); margin-bottom: var(--gap-sm); padding: var(--gap-sm) var(--gap); color: var(--fg); background: var(--bg); border: 1px solid var(--line); font: inherit; font-size: var(--text-sm); }
@@ -364,7 +368,6 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .reserve-gauge { display: inline-flex; gap: var(--gap-sm); align-items: baseline; color: var(--dim); }
 .reserve-gauge .meter-bar { color: var(--fire); }
 .reserve-gauge b { color: var(--fg); font-variant-numeric: tabular-nums; }
-.walk-warn { min-height: calc(var(--text-sm) * 1.5); color: var(--alert); font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 0; min-width: 100%; }
 /* The lines above the map stay one line each and never widen the map's box: long text is cut short, the full text in its tip. */
 .map-line { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; width: 0; min-width: 100%; }
 /* One row of controls: every control in it is one --control high, so a key switch and a word button line up. */

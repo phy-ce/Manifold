@@ -23,14 +23,18 @@ export function expandRecipes(era, materials) {
     const kin = ["gear", "product"].includes(form.category) ? [] : Object.keys(materials.metals).filter((id) => template.metals.includes(materials.metals[id].extends) && !template.metals.includes(id));
     for (const metalId of [...template.metals, ...kin]) {
       const metal = materials.metals[metalId];
-      const id = `${metalId}_${template.form}`;
-      items[id] = metal.name + form.name;
-      variants[id] = {
-        metal: metalId,
-        form: template.form,
-        code: metal.code + form.code,
-        color: metal.color,
-      };
+      // Some forms have no kin parts of their own: pig iron shaped into a tool head makes an iron head.
+      const own = !(form.kinMakesParent && kin.includes(metalId));
+      const id = own ? `${metalId}_${template.form}` : `${metal.extends}_${template.form}`;
+      if (own) {
+        items[id] = metal.name + form.name;
+        variants[id] = {
+          metal: metalId,
+          form: template.form,
+          code: metal.code + form.code,
+          color: metal.color,
+        };
+      }
       // Several machines can share a form, each with its own template; later ones name their machine.
       const base = `${template.form}_${metalId}`;
       generated.push({

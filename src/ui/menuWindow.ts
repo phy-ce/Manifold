@@ -4,17 +4,17 @@ import { tr } from "../i18n";
 export class MenuWindow {
   readonly root = document.createElement("div");
 
-  constructor(actions: HTMLElement[]) {
+  constructor(actions: HTMLElement[], name = tr("메뉴")) {
     this.root.className = "window-back";
     this.root.hidden = true;
     const panel = document.createElement("div");
     panel.className = "window menu-window";
     panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", tr("메뉴"));
+    panel.setAttribute("aria-label", name);
     const head = document.createElement("div");
     head.className = "bar-row";
     const title = document.createElement("h2");
-    title.textContent = tr("메뉴");
+    title.textContent = name;
     const close = document.createElement("button");
     close.type = "button";
     close.className = "tech push";

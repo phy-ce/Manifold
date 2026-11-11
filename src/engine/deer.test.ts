@@ -2,7 +2,7 @@
 // that a deer grazing nearby doesn't take F away from the ground.
 import { describe, expect, it } from "vitest";
 import { DEER } from "../content";
-import { GameState, Mob, actionKey, attack, corpsesHere, createGame, lootCorpse, mobVisible, step } from "./game";
+import { GameState, Mob, actionKey, attack, butcherChances, chosenGather, corpsesHere, createGame, gathersHere, pickGather, startDig, step } from "./game";
 import { BASE, Point, biomeAt, terrain } from "./world";
 
 const SEED = 1;
@@ -70,60 +70,96 @@ describe("deer", () => {
 
   const bag = (s: GameState, id: string) => s.inv.filter((slot) => slot?.id === id).reduce((sum, slot) => sum + slot!.n, 0);
 
-  it("fall where they die, and give meat, hide and antler only when the player stands on them and presses F", () => {
+  const cuts = Object.keys(DEER.butcher.chance);
+  const cutCount = (s: GameState) => cuts.reduce((n, id) => n + bag(s, id), 0);
+  /** Cuts once at the carcass picked, to the end of the bar. */
+  const cutOnce = (s: GameState) => {
+    expect(startDig(s)).toBe(true);
+    for (let i = 0; i < 100 && s.dig; i += 1) step(s);
+  };
+  /** Kills deer on a cell beside the meadow's middle, one after another. */
+  const killAt = (s: GameState, spot: { x: number; y: number }, n: number) => {
+    for (let id = 1; id <= n; id += 1) {
+      s.mobs = [deer(spot, { id, hp: 1, wait: 99999 })];
+      expect(attack(s, id)).toBe(true);
+      s.strikeReady = 0;
+    }
+  };
+
+  it("fall where they die, and are cut up one piece at a time, by chance, standing on them with F", () => {
     const s = at(MEADOW);
     const spot = { x: MEADOW.x + 1, y: MEADOW.y };
-    s.mobs = [deer(spot, { hp: 1, wait: 99999 })];
-    expect(mobVisible(s, s.mobs[0])).toBe(true);
-    expect(attack(s, 1)).toBe(true);
+    killAt(s, spot, 1);
     expect(s.mobs).toEqual([]);
-    expect(s.corpses).toEqual([expect.objectContaining({ kind: "deer", ...spot, z: 0, items: DEER.drops })]);
-    for (const id of Object.keys(DEER.drops)) expect(bag(s, id)).toBe(0);
-    expect(actionKey(s)).not.toBe("loot");
-    expect(lootCorpse(s)).toBe(false);
+    expect(s.corpses).toEqual([expect.objectContaining({ kind: "deer", ...spot, z: 0, left: DEER.butcher.cuts })]);
+    expect(cutCount(s)).toBe(0);
+    expect(gathersHere(s)).toHaveLength(0);
     s.player = { ...spot };
-    expect(corpsesHere(s)).toHaveLength(1);
-    expect(actionKey(s)).toBe("loot");
-    expect(lootCorpse(s)).toBe(true);
-    for (const [id, n] of Object.entries(DEER.drops)) expect(bag(s, id)).toBe(n);
-    expect(s.drop?.got).toEqual(DEER.drops);
+    expect(chosenGather(s)?.corpse).toBeTruthy();
+    expect(actionKey(s)).toBe("work");
+    cutOnce(s);
+    expect(cutCount(s)).toBe(1);
+    expect(Object.keys(s.drop!.got)).toHaveLength(1);
+    expect(corpsesHere(s)[0].left).toBe(DEER.butcher.cuts - 1);
+    for (let i = 1; i < DEER.butcher.cuts; i += 1) cutOnce(s);
+    expect(cutCount(s)).toBe(DEER.butcher.cuts);
     expect(s.corpses).toEqual([]);
   });
 
-  it("can lie two or more on one cell, each taken by its own press", () => {
-    const s = at(MEADOW);
-    const spot = { x: MEADOW.x + 1, y: MEADOW.y };
-    for (const id of [1, 2, 3]) {
-      s.mobs = [deer(spot, { id, hp: 1, wait: 99999 })];
-      attack(s, id);
-      s.strikeReady = 0;
-    }
-    s.player = { ...spot };
-    expect(corpsesHere(s)).toHaveLength(3);
-    expect(new Set(s.corpses!.map((c) => c.id)).size).toBe(3);
-    for (let left = 2; left >= 0; left -= 1) {
-      expect(lootCorpse(s)).toBe(true);
-      expect(corpsesHere(s)).toHaveLength(left);
-    }
-    expect(bag(s, "meat")).toBe(DEER.drops.meat * 3);
-    expect(actionKey(s)).not.toBe("loot");
+  it("give meat most, then bone, and antler seldom", () => {
+    const odds = Object.fromEntries(butcherChances());
+    expect(odds.meat).toBeGreaterThan(odds.bone);
+    expect(odds.bone).toBeGreaterThan(odds.antler * 2);
   });
 
-  it("keep what the bag can't hold for later", () => {
+  it("cut quicker with a blade in hand", () => {
     const s = at(MEADOW);
     const spot = { x: MEADOW.x + 1, y: MEADOW.y };
-    s.mobs = [deer(spot, { hp: 1, wait: 99999 })];
-    attack(s, 1);
+    killAt(s, spot, 1);
     s.player = { ...spot };
-    s.inv = s.inv.map(() => ({ id: "stone", n: 1 }));
-    s.inv[0] = null;
-    expect(lootCorpse(s)).toBe(true);
-    const left = corpsesHere(s)[0];
-    expect(left).toBeTruthy();
-    expect(Object.values(left.items).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
-    s.inv = s.inv.map(() => null);
-    expect(lootCorpse(s)).toBe(true);
-    expect(corpsesHere(s)).toHaveLength(0);
+    startDig(s);
+    const bare = s.dig!.ms;
+    s.dig = null;
+    s.gear.right = { id: "stone_blade", n: 1 };
+    startDig(s);
+    expect(s.dig!.ms).toBeLessThan(bare);
+  });
+
+  it("can lie two or more on one cell: the window lists them, and only the one picked is cut", () => {
+    const s = at(MEADOW);
+    const spot = { x: MEADOW.x + 1, y: MEADOW.y };
+    killAt(s, spot, 3);
+    s.player = { ...spot };
+    expect(gathersHere(s)).toHaveLength(3);
+    expect(new Set(gathersHere(s).map((g) => g.key)).size).toBe(3);
+    expect(chosenGather(s)).toBeUndefined();
+    expect(actionKey(s)).toBe("none");
+    expect(startDig(s)).toBe(false);
+    const second = gathersHere(s)[1];
+    pickGather(s, second.key);
+    cutOnce(s);
+    expect(second.corpse!.left).toBe(DEER.butcher.cuts - 1);
+    expect(gathersHere(s).filter((g) => g.key !== second.key).every((g) => g.corpse!.left === DEER.butcher.cuts)).toBe(true);
+    // Back to the list, and walking off forgets the pick.
+    pickGather(s, null);
+    expect(chosenGather(s)).toBeUndefined();
+    pickGather(s, second.key);
+    s.path = [{ x: spot.x + 1, y: spot.y }];
+    run(s, 3);
+    s.path = [{ ...spot }];
+    run(s, 3);
+    expect(s.picked ?? null).toBeNull();
+  });
+
+  it("keep their cuts when the bag can't take what comes off, and say so", () => {
+    const s = at(MEADOW);
+    const spot = { x: MEADOW.x + 1, y: MEADOW.y };
+    killAt(s, spot, 1);
+    s.player = { ...spot };
+    s.inv = s.inv.map(() => ({ id: "stick", n: 1 }));
+    expect(startDig(s)).toBe(false);
+    expect(s.blocked?.why).toBe("full");
+    expect(corpsesHere(s)[0].left).toBe(DEER.butcher.cuts);
   });
 
   it("leave F to the ground while grazing out of reach, and give it to the fight within a blow", () => {

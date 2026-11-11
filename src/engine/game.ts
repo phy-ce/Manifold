@@ -1,7 +1,7 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
-import { FORAGE, HANDS, allTools, toolsAt, Job, ToolStats, fitsSlot, isTool, toolStats, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { FORAGE, HANDS, allTools, toolsAt, Job, ToolStats, fitsSlot, isTool, toolStats, buildablesAt, digBaseMs, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, EAT_MS, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, groundGather, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
 /** Version 19 put the caves into one underground layer under the surface. */
@@ -283,7 +283,11 @@ export interface GameState {
   /** Beasts killed lie where they fell until the player stands on them and takes what they have. */
   corpses?: Corpse[];
   /** A dig, pick or fill under way at a cell: how long it has gone and how long it takes, in ms. */
-  dig?: { x: number; y: number; z: number; done: number; ms: number } | null;
+  dig?: { x: number; y: number; z: number; done: number; ms: number; corpse?: number } | null;
+  /** Which of several things underfoot the player picked to gather (see gathersHere), until they move. */
+  picked?: string | null;
+  /** Food being eaten: which, how long it has gone and how long it takes, in ms. */
+  eating?: { id: string; done: number; ms: number } | null;
   /** Where and when the last dig came up, for the screen to flash the cell. */
   dug?: { x: number; y: number; at: number };
   /** Index into STAGES of the stage being played. */
@@ -904,15 +908,15 @@ function surfaceLife(s: GameState): void {
   deer(s);
 }
 
-/** What a beast leaves when killed goes straight into the bag, as much as can be carried. Says what was taken. */
-/** A beast lying where it fell, with what it still has to give. */
+/** A beast lying where it fell, with how many cuts are left in it. */
 export interface Corpse {
   id: number;
   kind: Mob["kind"];
   x: number;
   y: number;
   z: number;
-  items: Record<string, number>;
+  /** Cuts left: each F on it, done, takes one item drawn by chance. */
+  left: number;
 }
 
 /** A killed beast that has anything to give stays where it fell. Several can lie on one cell. */
@@ -920,36 +924,95 @@ function leaveCorpse(s: GameState, mob: Mob): void {
   if (!isDeer(mob)) return;
   const corpses = (s.corpses ??= []);
   const id = corpses.reduce((top, c) => Math.max(top, c.id), 0) + 1;
-  corpses.push({ id, kind: mob.kind, x: mob.x, y: mob.y, z: s.z, items: { ...DEER.drops } });
+  corpses.push({ id, kind: mob.kind, x: mob.x, y: mob.y, z: s.z, left: DEER.butcher.cuts });
 }
 
 /** The corpses lying under the player, oldest first. */
 export const corpsesHere = (s: GameState): Corpse[] =>
   (s.corpses ?? []).filter((c) => c.x === s.player.x && c.y === s.player.y && c.z === s.z);
 
-/**
- * Takes what the oldest corpse underfoot has, as much as the bag holds and the player can carry. An emptied
- * corpse is gone; one with things left stays for later. The next corpse on the cell waits for the next press.
- */
-export function lootCorpse(s: GameState): boolean {
-  const corpse = corpsesHere(s)[0];
-  if (!corpse || s.path.length) return false;
-  const got: Record<string, number> = {};
-  for (const [id, n] of Object.entries(corpse.items)) {
-    let taken = 0;
-    while (taken < n && carried(s) + itemWeight(id) <= carryLimit(s) && addTo(s.inv, id, 1) === 1) taken += 1;
-    if (taken) got[id] = taken;
-    if (taken === n) delete corpse.items[id];
-    else corpse.items[id] = n - taken;
+/** What a carcass can be cut into, with the odds of each: meat most, then bone and hide, antler seldom. */
+export const butcherChances = (): [string, number][] => {
+  const total = Object.values(DEER.butcher.chance).reduce((a, b) => a + b, 0);
+  return Object.entries(DEER.butcher.chance).map(([id, w]) => [id, w / total]);
+};
+
+/** One cut's item, drawn by the weights from a roll in 0..1. */
+function cutOf(roll: number): string {
+  let left = roll;
+  for (const [id, share] of butcherChances()) {
+    if (left < share) return id;
+    left -= share;
   }
-  if (!Object.keys(corpse.items).length) s.corpses = (s.corpses ?? []).filter((c) => c !== corpse);
-  if (!Object.keys(got).length) {
-    // Nothing came off: either nothing on it would fit in the bag, or everything would be too heavy.
-    noteBlocked(s, Object.keys(corpse.items).some((id) => bagRoom(s, id) > 0) ? "heavy" : "full");
+  return Object.keys(DEER.butcher.chance)[0];
+}
+
+// ---- What can be gathered underfoot: a vein, tree, patch or bank, and any carcasses. One shows at once; two or
+// more are listed first, and the player picks which to work.
+
+/** One thing on the ground to gather: a site, or a carcass. `key` names it for picking. */
+export interface Gather {
+  key: string;
+  site?: Site;
+  corpse?: Corpse;
+}
+
+/** Everything underfoot that can be gathered, the site first, then carcasses oldest first. Nothing while walking. */
+export function gathersHere(s: GameState): Gather[] {
+  if (s.path.length) return [];
+  const site = (veinTarget(s) ?? veinCellAt(s, s.player.x, s.player.y))?.site;
+  const list: Gather[] = site ? [{ key: `site:${site.id}`, site }] : [];
+  for (const corpse of corpsesHere(s)) list.push({ key: `corpse:${corpse.id}`, corpse });
+  return list;
+}
+
+/** The one being gathered: the only thing here, or the one picked from several. Nothing if none is picked yet. */
+export function chosenGather(s: GameState): Gather | undefined {
+  const list = gathersHere(s);
+  return list.length === 1 ? list[0] : list.find((g) => g.key === s.picked);
+}
+
+/** Picks one of several things underfoot to gather, or goes back to the list with null. */
+export function pickGather(s: GameState, key: string | null): void {
+  s.picked = key;
+  s.dig = null;
+}
+
+/** Whether a carcass here is in the way of working the site: there is one, and the site isn't the one picked. */
+const siteNotChosen = (s: GameState): boolean => !!corpsesHere(s).length && !chosenGather(s)?.site;
+
+/** Starts cutting the carcass picked: one cut a dig, with a blade quicker. */
+function startButcher(s: GameState, corpse: Corpse): boolean {
+  const ids = Object.keys(DEER.butcher.chance);
+  // Any cut might come up, so the heaviest has to be carryable and something has to fit.
+  if (carried(s) + Math.max(...ids.map(itemWeight)) > carryLimit(s)) {
+    noteBlocked(s, "heavy");
     return false;
   }
-  s.drop = { got, at: s.time };
+  if (!ids.some((id) => bagRoom(s, id) > 0)) {
+    noteBlocked(s, "full");
+    return false;
+  }
+  s.dig = { x: corpse.x, y: corpse.y, z: corpse.z, done: 0, ms: Math.round(digBaseMs("butcher") / digSpeed(s, "butcher")), corpse: corpse.id };
+  s.probe = null;
   return true;
+}
+
+/** A cut done: one item by chance into the bag, the carcass one cut less, gone at none. */
+function finishCut(s: GameState, corpse: Corpse): void {
+  const rng = rngFrom(Math.imul(s.seed + 31, 2654435761) ^ Math.imul(corpse.id, 97) ^ Math.floor(s.time / 100));
+  const id = cutOf(rng());
+  if (bagRoom(s, id) < 1 || carried(s) + itemWeight(id) > carryLimit(s)) {
+    noteBlocked(s, bagRoom(s, id) < 1 ? "full" : "heavy");
+    return;
+  }
+  addTo(s.inv, id, 1);
+  corpse.left -= 1;
+  if (corpse.left <= 0) s.corpses = (s.corpses ?? []).filter((c) => c !== corpse);
+  s.drop = { got: { [id]: 1 }, at: s.time };
+  s.dug = { x: corpse.x, y: corpse.y, at: s.time };
+  const tool = toolFor(s, "butcher");
+  if (tool) wearTool(s, tool.hand);
 }
 
 /**
@@ -1078,13 +1141,12 @@ export function creaturesInSight(s: GameState): Mob[] {
  * What F is for right now, the one place this is decided: with a creature in sight F only fights, and working
  * the ground waits; otherwise it works the place underfoot. C closes in on a creature, so F never walks.
  */
-export function actionKey(s: GameState): "fight" | "loot" | "work" | "none" {
+export function actionKey(s: GameState): "fight" | "work" | "none" {
   // A deer is no danger: grazing nearby, it leaves F to the ground underfoot until it is within a blow.
   const reach = weaponOf(s).range;
   if (creaturesInSight(s).some((m) => !isPrey(m) || steps8(m, s.player) <= reach)) return "fight";
-  // A carcass underfoot comes before the ground it lies on.
-  if (corpsesHere(s).length) return "loot";
-  return siteHere(s) ? "work" : "none";
+  // Several things underfoot and none picked yet: F waits for the pick.
+  return chosenGather(s) ? "work" : "none";
 }
 
 /** A vein cell and the site it belongs to. For a site without cells, the cell is a stand-in. */
@@ -1117,6 +1179,12 @@ export function veinCellAt(s: GameState, x: number, y: number): VeinSpot | undef
  * wall cell beside the player that does, straight neighbours before diagonal ones. Nothing while walking.
  */
 export function harvestTarget(s: GameState): VeinSpot | undefined {
+  // With a carcass here too, the vein waits until it is the one picked.
+  return siteNotChosen(s) ? undefined : veinTarget(s);
+}
+
+/** The vein cell an action would work, whatever else lies here. */
+function veinTarget(s: GameState): VeinSpot | undefined {
   if (s.path.length) return undefined;
   const ready = (spot: VeinSpot | undefined) => !!spot && spot.cell.left > 0 && workable(s, spot.cell);
   const here = veinCellAt(s, s.player.x, s.player.y);
@@ -1131,7 +1199,7 @@ export function harvestTarget(s: GameState): VeinSpot | undefined {
 
 /** The vein the player is at: the one an action would work, or else the one whose cell is underfoot, even emptied. */
 export function siteHere(s: GameState): Site | undefined {
-  if (s.path.length) return undefined;
+  if (s.path.length || siteNotChosen(s)) return undefined;
   return (harvestTarget(s) ?? veinCellAt(s, s.player.x, s.player.y))?.site;
 }
 
@@ -1504,6 +1572,8 @@ export function digTime(s: GameState, site: Site): number {
  */
 export function startDig(s: GameState): boolean {
   if (s.dig) return false;
+  const corpse = chosenGather(s)?.corpse;
+  if (corpse) return startButcher(s, corpse);
   const spot = harvestTarget(s);
   if (!spot || !canWork(s, spot)) return false;
   const why = cantCarry(s);
@@ -1523,6 +1593,19 @@ export const digProgress = (s: GameState): number | null => (s.dig ? Math.min(1,
 function digOn(s: GameState): void {
   const dig = s.dig;
   if (!dig) return;
+  if (dig.corpse !== undefined) {
+    // A cut goes on while the player stays on the carcass and it is still the one picked.
+    const corpse = chosenGather(s)?.corpse;
+    if (s.path.length || !corpse || corpse.id !== dig.corpse) {
+      s.dig = null;
+      return;
+    }
+    dig.done += STEP_MS;
+    if (dig.done < dig.ms) return;
+    s.dig = null;
+    finishCut(s, corpse);
+    return;
+  }
   const spot = harvestTarget(s);
   if (s.path.length || !spot || spot.cell.x !== dig.x || spot.cell.y !== dig.y || s.z !== dig.z) {
     s.dig = null;
@@ -2022,8 +2105,11 @@ export function loadSave(raw: unknown): GameState | null {
   return s;
 }
 
-/** Items that changed: hematite gave way to pyrite. */
-const RENAMED_ITEMS: Record<string, string> = { Hm: "Py" };
+/** Items that changed: hematite gave way to pyrite, and pig iron tool heads became iron heads. */
+const RENAMED_ITEMS: Record<string, string> = {
+  Hm: "Py",
+  ...Object.fromEntries(["pick", "axe", "shovel", "spear", "blade"].map((kind) => [`pig_iron_${kind}_head`, `iron_${kind}_head`])),
+};
 
 /** Renames items everywhere a save keeps them: veins, the bag, the hand, stores, machine slots and counts. */
 function renameItems(s: GameState, renamed: Record<string, string>): void {
@@ -2126,6 +2212,9 @@ export function upgradeSave(s: GameState): GameState {
   fixGear(s);
   s.mobs ??= [];
   s.corpses ??= [];
+  // Carcasses once held a fixed list of items; now they hold cuts, one item each.
+  for (const corpse of s.corpses as (Corpse & { items?: Record<string, number> })[]) if (corpse.left === undefined) corpse.left = Object.values(corpse.items ?? {}).reduce((a, b) => a + b, 0) || DEER.butcher.cuts;
+  s.eating = null;
   s.shots ??= [];
   // A yeti is not kept across a load: surface creatures come and go.
   if (s.z === 0) s.mobs = [];
@@ -2963,6 +3052,8 @@ export function walk(s: GameState, ms: number): void {
   // The way the player walks is the way they look: the fan of sight opens ahead.
   s.facing = { x: Math.sign(next.x - from.x), y: Math.sign(next.y - from.y) };
   s.player = next;
+  // A new cell: what was picked to gather there is forgotten.
+  s.picked = null;
   if (s.z < 0) {
     revealUnder(s, s.player, ...sightOf(s, s.player), s.facing);
     return;
@@ -3236,7 +3327,7 @@ export function trashCursor(s: GameState): void {
 const TEST_REVEAL = 160;
 
 /** The test starts there are: everything, the first age, hunting, and every tool. */
-export const TEST_SETS = ["full", "mythic", "hunt", "tools"] as const;
+export const TEST_SETS = ["full", "mythic", "hunt", "tools", "gather"] as const;
 export type TestSet = (typeof TEST_SETS)[number];
 
 /** Starts a test game of one set, on a world of its own, with no tutorial and the map shown far out. */
@@ -3265,6 +3356,26 @@ export function createTestGame(seed: number, set: TestSet = "full"): GameState {
   ], 40, 360);
   if (set === "mythic") {
     s.gear = { ...s.gear, left: { id: "stone_axe", n: 1 }, right: { id: "stone_pick", n: 1 } };
+    return s;
+  }
+  if (set === "gather") {
+    // Standing on a vein with two carcasses on it, and one step east two more on bare ground: the gathering
+    // window lists them both times. A blade and a pick in hand for either.
+    s.gear = { ...s.gear, left: { id: "stone_blade", n: 1 }, right: { id: "stone_pick", n: 1 } };
+    const site = s.sites.find((v) => v.cells && (v.z ?? 0) === 0 && v.left > 0 && v.ore !== CAVE);
+    if (site) {
+      const cell = cellsOf(site).find((c) => layerOf(c) === 0 && c.left > 0)!;
+      s.player = { x: cell.x, y: cell.y };
+      reveal(s, s.player, 24);
+    }
+    const lay = (x: number, y: number) => {
+      const corpses = (s.corpses ??= []);
+      corpses.push({ id: corpses.length + 1, kind: "deer", x, y, z: 0, left: DEER.butcher.cuts });
+    };
+    lay(s.player.x, s.player.y);
+    lay(s.player.x, s.player.y);
+    lay(s.player.x + 1, s.player.y);
+    lay(s.player.x + 1, s.player.y);
     return s;
   }
   // Hunting: out on deer ground with every spear and blade of the age, and deer grazing close by.
@@ -3404,6 +3515,37 @@ export function eat(s: GameState, slot: number): boolean {
   return true;
 }
 
+/**
+ * Starts eating one of a bag stack: it takes EAT_MS, and only then is the food used up and does it help. Walking
+ * off stops it with the food uneaten. False if it isn't food, the player is full, or something is being eaten.
+ */
+export function startEat(s: GameState, slot: number): boolean {
+  const stack = s.inv[slot];
+  const effect = stack && foodEffect(stack.id);
+  if (s.eating || !stack || !effect) return false;
+  if (s.hunger >= MAX_VITAL && (s.hp >= MAX_VITAL || !effect.hp)) return false;
+  s.eating = { id: stack.id, done: 0, ms: EAT_MS };
+  return true;
+}
+
+/** How far the eating under way has got, 0 to 1, or null with none. */
+export const eatProgress = (s: GameState): number | null => (s.eating ? Math.min(1, s.eating.done / s.eating.ms) : null);
+
+/** Eating goes on while the player stands still; done, one of that food from the bag is eaten. */
+function eatOn(s: GameState): void {
+  const eating = s.eating;
+  if (!eating) return;
+  if (s.path.length) {
+    s.eating = null;
+    return;
+  }
+  eating.done += STEP_MS;
+  if (eating.done < eating.ms) return;
+  s.eating = null;
+  const slot = s.inv.findIndex((stack) => stack?.id === eating.id);
+  if (slot >= 0) eat(s, slot);
+}
+
 /** Advances the world by one fixed step. */
 /** One STEP_MS of the world. walkMs 0 leaves walking to the caller's finer clock (see WALK_TICK). */
 export function step(s: GameState, walkMs = STEP_MS): void {
@@ -3412,6 +3554,7 @@ export function step(s: GameState, walkMs = STEP_MS): void {
   // Walking off cancels prospecting; standing still for long enough finishes it.
   if (s.probe !== null && s.path.length) s.probe = null;
   digOn(s);
+  eatOn(s);
   if (s.probe !== null && s.time - s.probe >= CAVES.probeMs) finishProbe(s);
   if (s.z < 0) creatures(s);
   else surfaceLife(s);

@@ -147,7 +147,7 @@ function solve(goal, activeMachines, drained) {
 // Wood and stone are gathered from the ground, and a deer leaves what it drops: all there from the start.
 const oreFile = JSON.parse(readFileSync(resolve(root, "data/ores.json"), "utf8"));
 const biomeFile = JSON.parse(readFileSync(resolve(root, "data/biomes.json"), "utf8"));
-const seenSources = new Set([...Object.keys(oreFile.gather?.size ?? {}), ...Object.keys(biomeFile.deer?.drops ?? {})]);
+const seenSources = new Set([...Object.keys(oreFile.gather?.size ?? {}), ...Object.keys(biomeFile.deer?.butcher?.chance ?? {})]);
 const seenMachines = new Set();
 let available = new Set();
 const extension = rules.portExtension;

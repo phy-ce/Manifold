@@ -55,6 +55,9 @@ export class ItemIndex {
   private readonly detail = document.createElement("div");
   private gridPage = 0;
   private cardPage = 0;
+  /** How many pages the grid and the item page have, for the wheel to turn through. */
+  private gridPages = 1;
+  private cardPages = 1;
   private readonly history: string[] = [];
   private item: string | null = null;
   /** The item whose page is showing, if any. */
@@ -85,6 +88,21 @@ export class ItemIndex {
     this.grid.className = "dock-grid";
     this.detail.className = "dock-detail";
     this.root.append(this.search, this.grid, this.gridBar, this.detail);
+    // The wheel turns pages: over the grid its pages, over an item's page that page's.
+    const turn = (e: WheelEvent, page: number, pages: number, go: (page: number) => void) => {
+      if (pages < 2 || !e.deltaY) return;
+      e.preventDefault();
+      const next = Math.max(0, Math.min(pages - 1, page + Math.sign(e.deltaY)));
+      if (next !== page) go(next);
+    };
+    this.grid.addEventListener("wheel", (e) => turn(e, this.gridPage, this.gridPages, (page) => {
+      this.gridPage = page;
+      this.drawGrid();
+    }), { passive: false });
+    this.detail.addEventListener("wheel", (e) => turn(e, this.cardPage, this.cardPages, (page) => {
+      this.cardPage = page;
+      this.drawDetail();
+    }), { passive: false });
     // The page size depends on how many slots fit across, which is only known once the dock is laid out.
     let across = -1;
     new ResizeObserver(() => {
@@ -137,6 +155,7 @@ export class ItemIndex {
     const perPage = columns ? columns * GRID_ROWS : GRID_PAGE;
     const pages = Math.max(1, Math.ceil(found.length / perPage));
     this.gridPage = Math.min(this.gridPage, pages - 1);
+    this.gridPages = pages;
     const start = this.gridPage * perPage;
     this.grid.replaceChildren(...found.slice(start, start + perPage).map((id) => this.itemSlot(id, undefined)));
     this.gridBar.replaceChildren(pager(this.gridPage, pages, (page) => {
@@ -208,9 +227,9 @@ export class ItemIndex {
     const form = recipe.form && recipe.machine === "forming_bench" ? `${formLabel(recipe.form)} · ` : "";
     // Full speed: a rhythm machine with every beat struck exactly, anything else at its recipe time.
     const time = machineManual(recipe.machine) === "rhythm" ? recipe.time / maxWorkRate(machineRhythm(recipe.machine)) : recipe.time;
-    // The rate of the item this page is about, else the main output, else what it uses up.
+    // How long one of the item this page is about takes, else the main output, else what it uses up.
     const counted = recipe.out[focus] !== undefined ? recipe.out[focus] : Object.values(recipe.out)[0] ?? Object.values(recipe.in)[0] ?? 0;
-    note.textContent = `${form}${rate(counted / time)}${tr("개/초")}`;
+    note.textContent = counted ? `${form}${rate(time / counted)}${tr("초/개")}` : form;
     box.append(row, note);
     return box;
   }
@@ -396,6 +415,7 @@ export class ItemIndex {
       used += height;
     }
     this.cardPage = Math.min(this.cardPage, pages.length - 1);
+    this.cardPages = pages.length;
     const bar = pager(this.cardPage, pages.length, (page) => {
       this.cardPage = page;
       this.drawDetail();

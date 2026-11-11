@@ -3,7 +3,7 @@
 // hits and how long it lasts. Two hands hold tools; weapons are tools. Tools wear out and break.
 import { describe, expect, it } from "vitest";
 import { CONSTRUCTION, WORKBENCH, digBaseMs, fitsSlot, formGroups, gearOf, isGeneral, isTool, machineForms, processOf, toolStats, toolsAt } from "../content";
-import { GameState, STEP_MS, Stack, addTo, attack, clickGear, clickStack, createGame, digProgress, digTime, harvestTarget, sortSlots, startDig, step, usesLeft, weaponOf } from "./game";
+import { GameState, STEP_MS, startEat, Stack, addTo, attack, clickGear, clickStack, createGame, digProgress, digTime, harvestTarget, sortSlots, startDig, step, usesLeft, weaponOf } from "./game";
 import { gameWithVeins } from "./testWorld";
 
 const TOOL_BENCH = "tool_bench";
@@ -56,6 +56,25 @@ describe("digging", () => {
     t.inv[0] = { id: "iron", n: 999 };
     expect(startDig(t)).toBe(false);
     expect(t.blocked?.why).toBe("heavy");
+  });
+
+  it("eats over time: the food is used up and helps only when the bar is full, and walking off stops it", () => {
+    const s = createGame(1);
+    s.inv = s.inv.map(() => null);
+    s.inv[0] = { id: "Be", n: 2 };
+    s.hunger = 50;
+    expect(startEat(s, 0)).toBe(true);
+    expect(startEat(s, 0)).toBe(false); // one at a time
+    step(s);
+    expect([s.inv[0]?.n, s.hunger <= 50]).toEqual([2, true]);
+    for (let i = 0; i < 100 && s.eating; i += 1) step(s);
+    expect(s.inv[0]?.n).toBe(1);
+    expect(s.hunger).toBeGreaterThan(49);
+    startEat(s, 0);
+    s.path = [{ x: s.player.x + 1, y: s.player.y }];
+    step(s);
+    expect(s.eating).toBeNull();
+    expect(s.inv[0]?.n).toBe(1);
   });
 
   it("stops when the player walks off, and gives nothing", () => {
@@ -181,6 +200,12 @@ describe("making tools", () => {
       expect(machineForms("craft_bench")).not.toContain(form);
     }
     expect(recipesOf("craft_bench").some((r) => Object.keys(r.out).some((id) => id.startsWith("iron_")))).toBe(false);
+  });
+
+  it("makes an iron head from pig iron too, and has no pig iron heads", () => {
+    const heads = processOf("forming_bench", "pick_head").recipes;
+    expect(heads.map((r) => [Object.keys(r.in)[0], Object.keys(r.out)[0]])).toEqual(expect.arrayContaining([["iron", "iron_pick_head"], ["pig_iron", "iron_pick_head"]]));
+    expect(heads.some((r) => "pig_iron_pick_head" in r.out)).toBe(false);
   });
 
   it("lets the construction bench build the first age's machines too, inherited from the workbench", () => {

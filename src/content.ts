@@ -78,6 +78,8 @@ export const forageSeasons = (id: string): number[] | undefined => forageSeasonL
 
 /** What eating an item restores, if it is food. */
 export const foodEffect = (id: string): { hunger: number; hp: number } | undefined => food[id];
+/** How long eating one piece of food takes (ms). */
+export const EAT_MS: number = era.eatMs ?? 1500;
 
 export const MAX_PORTS = era.rules.basePorts;
 export const MILESTONE = era.milestones[0];
@@ -172,17 +174,18 @@ export const YETI: Yeti = biomeData.yeti;
  * A deer of the plains and forests, the beast offered up for an oracle. It never fights: it wanders, and runs
  * from a player within `flee`, slower than the player walks, so it can be run down. One may come out every
  * `everyMs` with `chance` while the player is in its biomes, up to `cap` at once, `away` cells off and out of
- * sight; past `forgetAway` it is gone. Killed, it leaves `drops` in the player's bag.
+ * sight; past `forgetAway` it is gone. Killed, it lies as a carcass to butcher: `butcher.cuts` cuts, each one item
+ * drawn by `butcher.chance` weights.
  */
 export interface Deer {
   name: string; biomes: string[];
   everyMs: number; chance: number; cap: number; away: number[]; sight: number; forgetAway: number;
   flee: number; moveMs: number; fleeMs: number; hp: number;
-  drops: Record<string, number>;
+  butcher: { cuts: number; chance: Record<string, number> };
 }
 export const DEER: Deer = biomeData.deer;
-/** What hunting gives: every item a beast drops. */
-export const HUNTED: string[] = Object.keys(DEER.drops);
+/** What hunting gives: every item a carcass can be cut into. */
+export const HUNTED: string[] = Object.keys(DEER.butcher.chance);
 export const BIOMES: Record<string, Biome> = Object.fromEntries(Object.entries(biomeData.biomes).map(([id, b]) => [id, { id, ...b } as Biome]));
 export const BIOME_WORLD = {
   climateScale: biomeData.climateScale, regionSize: biomeData.regionSize, regionWarp: biomeData.regionWarp, lakeScale: biomeData.lakeScale,
@@ -272,7 +275,7 @@ export const machinesAt = (stage: number): string[] =>
 /** Everything a bench can make by a stage: the machines open by then. */
 export const buildablesAt = (stage: number): string[] => machinesAt(stage);
 /** What a place asks of the hands: ore and stone, felling, picking food, filling water. */
-export type Job = "ore" | "wood" | "forage" | "water";
+export type Job = "ore" | "wood" | "forage" | "water" | "butcher";
 /** How long one dig, pick or fill takes by bare hands (ms). A tool made for the job divides it. */
 const digData: Record<Job, number> = era.dig;
 export const digBaseMs = (job: Job): number => digData[job];
@@ -320,7 +323,7 @@ export function toolsAt(stage: number): string[] {
 /** Every tool there is, every kind in every material, metal ones too. */
 export const allTools = (): string[] => Object.keys(variants).filter((id) => !!toolOf(id));
 
-const jobName = (job: Job): string => (job === "ore" ? tr("광물") : job === "wood" ? tr("벌목") : job === "forage" ? tr("채집") : tr("물"));
+const jobName = (job: Job): string => (job === "ore" ? tr("광물") : job === "wood" ? tr("벌목") : job === "forage" ? tr("채집") : job === "butcher" ? tr("해체") : tr("물"));
 /** A tool's line in its tooltip: what it is quicker at and how hard it hits, "광물 ×2 · 공격력 2". */
 function toolNote(id: string): string {
   const stats = toolStats(id)!;
