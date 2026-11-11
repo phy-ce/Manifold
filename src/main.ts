@@ -23,6 +23,7 @@ import { makeSlot, paintSlot, setSlotStage } from "./ui/slots";
 import { keyHintHtml } from "./ui/keyHint";
 import { applyTheme } from "./ui/theme";
 import { installTooltip } from "./ui/tooltip";
+import { keepFitted } from "./ui/fitColumn";
 
 applyTheme();
 installTooltip();
@@ -627,6 +628,8 @@ rightCol.append(itemIndex.root);
 // windows still cover it.
 app.append(guide, guideMini);
 app.append(top, map.side, graph.side, map.root, graph.root, notice, rightCol, hotbar, invBox, windowView.root, routeView.root, saveView.root, help.root, win, menu.root);
+// The side columns shrink to fit the window rather than scroll.
+keepFitted([map.side, graph.side, rightCol]);
 
 // Escape first closes whatever is open; only with nothing to cancel does it open the menu.
 // This runs in the capture phase, before the windows' own Escape handlers close them.

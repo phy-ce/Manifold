@@ -712,6 +712,8 @@ export class MapView {
       ? `${keyHintHtml("F", `${tr(DEER.name)} ${tr("해체")}`, actionKey(s) === "loot" ? "on" : "off")}${corpses.length > 1 ? ` x${corpses.length}` : ""}`
       : "";
     if (this.warn.dataset.shown !== warning) this.warn.innerHTML = this.warn.dataset.shown = warning;
+    // Empty, the line takes no room, so the safe switch and the sight view sit one gap apart.
+    this.warn.hidden = !warning;
     // Where safe mode stopped the walk: the cell blinks, then stays boxed in red until the walk goes on, and the
     // middle of the map says what it saw and what it would cost, with safe mode named small beneath.
     const halt = s.halt;
