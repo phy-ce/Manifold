@@ -575,13 +575,14 @@ export class MapView {
     if (beast) return tr(creatureInfo(beast.kind).name);
     const noted = notedSpots(s).get(`${x},${y}`);
     if (!isRevealed(s, x, y)) return noted?.note ?? "";
+    // The ground first, its biome and height, then what lies on it: a vein, a tree, a cave mouth, a note.
     const site = knownCells(s).get(`${x},${y}`)?.site ?? s.sites.find((v) => v.ore === CAVE && v.x === x && v.y === y && onThisMap(s, v));
-    if (site) return site.note ? `${siteName(s, site)} · ${site.note}` : siteName(s, site);
-    if (noted) return noted.note!;
     const [, cls, height] = terrain(x, y, s.seed);
     const biome = BIOMES[biomeAt(x, y, s.seed)].name;
-    const what = cls === "t-hill" ? `${tr("산 고도")} ${height}` : cls === "t-water" ? WATER_CELL[waterKind(x, y, s.seed)] : cls === "t-ice" ? tr("얼음") : "";
-    return what ? `${biome} · ${what}` : biome;
+    const ground = cls === "t-hill" ? `${tr("산 고도")} ${height}` : cls === "t-water" ? WATER_CELL[waterKind(x, y, s.seed)] : cls === "t-ice" ? tr("얼음") : "";
+    const on = site ? siteName(s, site) : "";
+    const note = site?.note ?? noted?.note ?? "";
+    return [biome, ground, on, note].filter(Boolean).join(" · ");
   }
 
   /** Goes down or up once the player stands on the entrance or stair they double-clicked; gives up if they walk elsewhere. */

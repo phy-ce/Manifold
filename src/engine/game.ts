@@ -1172,9 +1172,6 @@ export function standBeside(s: GameState, x: number, y: number): Point | undefin
     .sort((a, b) => d(a) - d(b))[0];
 }
 
-/** Whether any vein cell lies at a place on the surface: the ore covers the ground there, so it is safe to step on. */
-const surfaceVeinAt = (s: GameState, x: number, y: number): boolean =>
-  s.sites.some((site) => cellsOf(site).some((c) => c.x === x && c.y === y && layerOf(c) === 0));
 
 /**
  * Whether the player knows a site on the layer they are on: on the surface every site is (search still asks
@@ -1227,8 +1224,13 @@ export const walkTime = (s: GameState): number =>
  * What one step on the surface costs: going into water hurts; on land, climbing or coming down hurts by how much
  * the height changes, so walking along a ridge costs nothing. Ore covering the ground, and the base, are safe footing.
  */
+/**
+ * What a step on the surface costs. Every cell is ground of a height, and a vein, tree, outcrop or patch on it
+ * is something lying on that ground: it doesn't flatten it, so climbing onto a vein high on a hill costs the same
+ * as climbing onto the bare hill.
+ */
 function stepDamage(s: GameState, from: Point, to: Point): number {
-  if ((to.x === BASE.x && to.y === BASE.y) || surfaceVeinAt(s, to.x, to.y)) return 0;
+  if (to.x === BASE.x && to.y === BASE.y) return 0;
   const [, kind, height] = terrain(to.x, to.y, s.seed);
   if (kind === "t-water") return WATER_DAMAGE;
   return Math.abs(height - terrain(from.x, from.y, s.seed)[2]);

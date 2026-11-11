@@ -65,6 +65,8 @@ describe("S0 tutorial", () => {
     walkTo(s, { x: rx + 2, y: BASE.y });
     for (let i = 0; i < 200 && !s.halt; i += 1) step(s);
     expect(s.halt).toBeTruthy();
+    // The way down to the bank may step off a hill, which hurts too; only the river counts here.
+    s.hurtBy = undefined;
     advanceTutorial(s);
     expect(currentStep(s)?.id).toBe("safe");
     setSafeWalk(s, false); // [T] off: across
