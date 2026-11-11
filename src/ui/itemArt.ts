@@ -7,6 +7,8 @@ import { METAL_CHARS, SHAPES, SOLID_CHARS, printShape, rampOf } from "./iconSpri
 import { GLYPH, SIZE, charGrid } from "./theme";
 
 const SHAPE_OF: Record<string, string> = {
+  steel_shaft: "shaft", copper_wire: "wire", port_flange: "flange",
+  insulated_coil: "coil", iron_core: "core", steam_generator: "generator", steam: "steam",
   water: "water",
   water_drum: "water_drum",
   steel: "ingot",
@@ -15,9 +17,10 @@ const SHAPE_OF: Record<string, string> = {
   iron: "ingot", copper: "ingot", steam_drum: "steam_drum", pig_iron: "ingot", steam_engine_unit: "engine",
   Be: "berries", Bc: "berries", Mu: "mushroom", Mc: "mushroom",
   stick: "rod",
+  wood: "log",
 };
 
-const METAL_SHAPES = new Set(["ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear", "axe", "shovel", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]);
+const METAL_SHAPES = new Set(["shaft", "wire", "flange", "coil", "core", "generator", "ingot", "plate", "tube", "cylinder", "rod", "rivet", "gear", "spring", "belt", "drum", "fan", "boots", "pack", "pick", "blade", "spear", "axe", "shovel", "pick_head", "axe_head", "shovel_head", "spear_head", "blade_head"]);
 
 interface Lump {
   /** Gives each lump its own outline. */
@@ -31,9 +34,10 @@ interface Lump {
 }
 
 const LUMPS: Record<string, Lump> = {
+  scrap: { seed: 47, grain: 0.85, holes: 9 },
+  pitch: { seed: 48, grain: 0.12, mineral: "anthracite" },
   Ls: { seed: 15, grain: 0.35 },
   stone: { seed: 31, grain: 0.45 },
-  wood: { seed: 32, grain: 0.25 },
   meat: { seed: 33, grain: 0.2 }, roast_meat: { seed: 34, grain: 0.35 },
   hide: { seed: 35, grain: 0.15 }, antler: { seed: 36, grain: 0.3 }, bone: { seed: 37, grain: 0.2 },
   coke: { seed: 42, grain: 0.8, holes: 14 },

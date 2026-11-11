@@ -638,47 +638,115 @@ function beltDrive(mode: Status, f: number) {
 }
 
 function constructionBench(mode: Status, f: number) {
-  // A staked building plot: string lines, a brick footing, an unfinished frame and gable,
-  // scaffolding, and heaps of bricks and beams. Only the hammer strokes.
-  const headY = [10, 14, 18, 22][pose(mode, f)];
-  polygon("#40382f", [[4, 52], [17, 43], [65, 43], [72, 61], [69, 72], [4, 72]]);
-  polygon("#87765a", [[4, 52], [17, 43], [65, 43], [72, 66], [4, 66]]);
-  line("#b6a383", 2, 5, 52, 17, 44);
-  line("#d8b276", 2, 10, 46, 63, 40);
-  line("#d8b276", 2, 63, 40, 69, 64);
-  line("#d8b276", 2, 10, 46, 6, 64);
-  bricks(21, 49, 35, 8, [174, 113, 80]);
-  bricks(18, 54, 7, 10, [190, 127, 88]);
-  bricks(49, 54, 10, 10, [145, 94, 69]);
-  rect("#cba482", 21, 49, 35, 2);
-  rect("#443c34", 25, 57, 24, 7);
-  for (const [x, y] of [[23, 29], [48, 29], [36, 17]]) {
-    rect("#435563", x, y, 6, 51 - y);
-    rect("#a9bdc8", x, y, 2, 51 - y);
+  const lift = [0, 3, 6, 3][pose(mode, f)];
+  // The workbench's trestles and plank top, enlarged under an iron-bound gantry.
+  for (const x of [16, 55]) {
+    polygon("#68482f", [[x, 53], [x + 5, 53], [x + 10, 72], [x + 4, 72], [x + 2, 61], [x - 3, 72], [x - 8, 72]]);
+    line("#bc9160", 2, x, 57, x - 5, 70);
   }
-  line("#718996", 5, 25, 29, 39, 17);
-  line("#c4d4da", 2, 24, 27, 38, 15);
-  rect("#718996", 23, 29, 31, 5);
-  rect("#c4d4da", 23, 29, 31, 2);
-  for (const x of [25, 49]) rect("#e0bd75", x, 31, 3, 3);
-  for (const x of [59, 68]) line("#8598a2", 3, x, 30, x, 60);
-  line("#526570", 3, 59, 57, 68, 37);
-  rect("#795337", 56, 39, 16, 5);
-  rect("#d0a575", 56, 39, 16, 2);
-  bricks(10, 57, 12, 8, [194, 126, 87]);
-  for (const y of [59, 64]) {
-    rect("#694830", 30, y, 17, 4);
-    rect("#bf9563", 30, y, 17, 2);
+  rect("#8b623d", 13, 63, 48, 4);
+  for (const x of [10, 60]) {
+    rect("#68482f", x, 10, 6, 44);
+    rect("#bc9160", x, 10, 2, 44);
+    rect("#4b5964", x - 1, 42, 8, 7);
+    rect("#c1cdd2", x + 1, 44, 2, 2);
   }
-  line("#d8b276", 2, 6, 66, 69, 66);
-  for (const [x, y] of [[8, 43], [61, 37], [4, 61], [67, 61]]) {
-    rect("#775236", x, y, 4, 11);
-    rect("#e0bd75", x, y, 4, 3);
+  line("#886544", 4, 16, 24, 27, 12);
+  line("#886544", 4, 49, 12, 60, 24);
+  rect("#93683f", 6, 6, 64, 7);
+  rect("#c9a06b", 6, 6, 64, 2);
+  for (const x of [10, 60]) {
+    rect("#536373", x, 6, 5, 7);
+    rect("#bccad2", x + 1, 8, 2, 2);
   }
-  line("#bd925f", 3, 29, headY + 3, 40, headY - 4);
-  rect("#536978", 22, headY, 11, 7);
-  rect("#d3dfe3", 22, headY, 11, 2);
-  if (mode === "run" && headY === 22) line("#ffd58c", 2, 20, 28, 16, 24);
+  // Paired tackle ropes lift a flanged cylinder clear of the platform.
+  oval("#a5b2bd", 37, 17, 5, 5);
+  oval("#39424c", 37, 17, 2, 2);
+  for (const x of [34, 40]) line("#d8b276", 2, x, 18, x, 29 - lift);
+  oval("#73818b", 37, 29 - lift, 5, 4);
+  line("#c1cdd2", 2, 37, 32 - lift, 37, 35 - lift);
+  for (const x of [26, 48]) line("#a89b7b", 2, 37, 35 - lift, x, 40 - lift);
+  rect("#718593", 24, 39 - lift, 26, 12);
+  rect("#c1cdd2", 24, 39 - lift, 26, 3);
+  rect("#3e505c", 24, 48 - lift, 26, 3);
+  for (const x of [23, 47]) rect("#a5b2bd", x, 38 - lift, 4, 14);
+  polygon("#c9a06b", [[6, 53], [65, 52], [70, 56], [7, 57]]);
+  rect("#93683f", 7, 57, 63, 5);
+  rect("#493325", 7, 60, 63, 2);
+  for (const y of [65, 69]) {
+    rect("#536373", 28, y, 25, 3);
+    rect("#a5b2bd", 28, y, 25, 1);
+  }
+  blocked(mode);
+}
+
+function toolBench(mode: Status, f: number) {
+  const headY = [19, 24, 30, 24][pose(mode, f)];
+  // Finished stone axe, pick and spear behind a rough, lashed plank bench.
+  line("#a77b4d", 3, 12, 13, 9, 43);
+  polygon("#827b68", [[8, 12], [17, 9], [20, 19], [12, 21], [8, 18]]);
+  line("#b9ad90", 2, 9, 12, 16, 11);
+  line("#a77b4d", 3, 25, 16, 22, 42);
+  polygon("#827b68", [[16, 18], [20, 12], [28, 12], [34, 18], [26, 16], [22, 16]]);
+  line("#b9ad90", 2, 20, 13, 28, 13);
+  line("#a77b4d", 3, 61, 16, 65, 43);
+  polygon("#827b68", [[60, 5], [56, 16], [62, 21], [65, 15]]);
+  line("#b9ad90", 2, 60, 8, 58, 15);
+  for (const x of [14, 55]) {
+    line("#68482f", 7, x + 3, 49, x - 2, 71);
+    line("#bc9160", 2, x + 1, 51, x - 4, 70);
+  }
+  rect("#8b623d", 14, 61, 43, 4);
+  polygon("#93683f", [[7, 43], [62, 41], [68, 46], [67, 53], [7, 53]]);
+  polygon("#c9a06b", [[7, 43], [62, 41], [68, 46], [7, 47]]);
+  rect("#493325", 7, 50, 60, 3);
+  for (const x of [14, 55]) for (const dx of [0, 3]) line("#d8b276", 1, x + dx, 46, x + dx + 2, 55);
+  // A wooden mallet taps the binding around a stone head and stick handle.
+  line("#a77b4d", 4, 25, 43, 53, 40);
+  polygon("#827b68", [[32, 35], [42, 34], [45, 42], [35, 46], [31, 42]]);
+  line("#b9ad90", 2, 33, 36, 41, 35);
+  for (const x of [35, 38, 41]) line("#e0bd75", 1, x, 37, x + 1, 44);
+  line("#b98c56", 3, 40, headY + 3, 54, headY + 12);
+  rect("#805533", 32, headY, 14, 6);
+  rect("#d5ac76", 32, headY, 14, 2);
+  for (const y of [66, 70]) line("#a77b4d", 3, 23, y, 40, y - 3);
+  for (const [x, y] of [[43, 68], [51, 68], [47, 63]]) {
+    polygon("#827b68", [[x, y], [x + 5, y - 2], [x + 9, y + 3], [x + 1, y + 4]]);
+    line("#b9ad90", 1, x + 1, y, x + 5, y - 1);
+  }
+  blocked(mode);
+}
+
+function craftBench(mode: Status, f: number) {
+  const stroke = [0, 3, 6, 3][pose(mode, f)];
+  // The forming bench's timber base, before its press and paired rollers.
+  rect("#705039", 9, 48, 57, 7);
+  rect("#b28a5d", 9, 48, 57, 2);
+  rect("#493325", 9, 53, 57, 2);
+  for (const x of [13, 57]) {
+    rect("#634632", x, 55, 6, 17);
+    rect("#a77b4d", x, 55, 2, 17);
+  }
+  rect("#886544", 17, 64, 41, 4);
+  rect("#b28a5d", 17, 64, 41, 1);
+  for (const x of [49, 63]) rect("#634632", x, 23, 3, 25);
+  rect("#b28a5d", 47, 25, 20, 3);
+  for (const x of [51, 59]) {
+    rect("#a77b4d", x, 18, 4, 10);
+    rect("#a4b6c4", x + 1, 28, 2, 12);
+  }
+  polygon("#827b68", [[17, 35], [37, 33], [43, 38], [42, 48], [17, 48]]);
+  polygon("#b9ad90", [[17, 35], [37, 33], [43, 38], [20, 39]]);
+  polygon("#514b40", [[37, 39], [43, 38], [42, 48], [37, 48]]);
+  rect("#a4b6c4", 22, 33, 16, 3);
+  rect("#dbe8ea", 22, 33, 16, 1);
+  // A broad hand file slides across the blank on the stone anvil block.
+  line("#748b9b", 4, 18 + stroke, 29, 37 + stroke, 32);
+  line("#dbe8ea", 1, 18 + stroke, 27, 37 + stroke, 30);
+  line("#a77b4d", 5, 37 + stroke, 32, 45 + stroke, 33);
+  for (const x of [22, 27, 32]) line("#536373", 1, x + stroke, 29, x + stroke - 1, 31);
+  line("#a4b6c4", 2, 48, 44, 60, 44);
+  rect("#a77b4d", 59, 42, 6, 4);
   blocked(mode);
 }
 
@@ -1037,6 +1105,8 @@ function crate(mode: Status) {
 
 const SCENES: Record<string, (mode: Status, f: number) => void> = {
   workbench,
+  tool_bench: toolBench,
+  craft_bench: craftBench,
   open_kiln: openKiln,
   bloomery,
   hand_forge: handForge,
