@@ -188,6 +188,18 @@ function surfaceVein(rng: () => number, seed: number, start: Point, vein: { tota
 const cellKey = (p: Point): string => `${p.x},${p.y}`;
 
 const RIVER_SPACING = 70;
+
+/**
+ * Whether a river runs through a cell. Rivers run roughly north to south about RIVER_SPACING apart, each one
+ * wandering: wide slow swings, smaller bends on them, and a width of two to four cells that swells and narrows
+ * along its course. Where a swing doubles back the river may split round an island or leave an oxbow.
+ */
+function riverAt(x: number, y: number, seed: number): boolean {
+  const swing = (valueNoise(x, y, seed + 601, 46) - 0.5) * 30 + (valueNoise(x, y, seed + 602, 13) - 0.5) * 8 + Math.sin(y * 0.35 + seed) * 1.2;
+  const width = 2 + Math.round(valueNoise(x, y, seed + 603, 24) * 2);
+  const lane = (((x + swing + seed) % RIVER_SPACING) + RIVER_SPACING) % RIVER_SPACING;
+  return lane < width;
+}
 /** Where hills start, on a 0..1 lie of the land, when a biome doesn't say. Only the odd low hill rises past it. */
 const PLAIN_HILLS = 0.8;
 /** How much higher the land must rise for each step of height above the first. */
@@ -292,11 +304,9 @@ function oasisAt(x: number, y: number, seed: number): boolean {
 /** The glyph, style and height of open ground. Shared by the map and terrain hazards. */
 export function terrain(x: number, y: number, seed: number): [string, string, number] {
   const biome = BIOMES[biomeAt(x, y, seed)];
-  if (biome.water === "river") {
-    const bend = Math.round(Math.sin(y * 0.6 + seed) * 3);
-    const river = (((x + bend + seed) % RIVER_SPACING) + RIVER_SPACING) % RIVER_SPACING;
-    if (river < 2) return ["~", "t-water", 0];
-  } else if (biome.water === "pond" || biome.water === "ice") {
+  // Rivers run on through every biome but the desert, frozen over where the snow lies, so none stops at a border.
+  if (biome.water !== "oasis" && riverAt(x, y, seed)) return biome.water === "ice" ? ["=", "t-ice", 0] : ["~", "t-water", 0];
+  if (biome.water === "pond" || biome.water === "ice") {
     // Still water in blobs: open ponds in a marsh, frozen lakes on the snow that can be walked on.
     if (valueNoise(x, y, seed + 505, BIOME_WORLD.lakeScale) > 0.72) return biome.water === "ice" ? ["=", "t-ice", 0] : ["~", "t-water", 0];
   } else if (biome.water === "oasis" && oasisAt(x, y, seed)) {
@@ -332,8 +342,11 @@ export function groundGather(x: number, y: number, seed: number): string | null 
 export const groundColor = (cls: string): string | undefined => (cls === "t-plain" ? BIOMES.plains.ground : BIOMES[cls.slice(2)]?.ground);
 
 /** What kind of water lies here: a river's bank, a marsh pond, an oasis, or a hole in the ice. */
-export const waterKind = (x: number, y: number, seed: number): "river" | "pond" | "oasis" | "ice" =>
-  BIOMES[biomeAt(x, y, seed)].water ?? "river";
+export const waterKind = (x: number, y: number, seed: number): "river" | "pond" | "oasis" | "ice" => {
+  const water = BIOMES[biomeAt(x, y, seed)].water ?? "river";
+  // A river through a marsh is still a river; through the snow it is ice either way.
+  return water === "pond" && riverAt(x, y, seed) ? "river" : water;
+};
 
 /** Guaranteed veins around the base, so every seed can finish the first goal. */
 export function generateSites(seed: number): Site[] {

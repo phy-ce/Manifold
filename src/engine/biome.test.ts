@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BIOMES } from "../content";
-import { biomeAt, chunkSites, riverBanks, terrain } from "./world";
+import { biomeAt, chunkSites, riverBanks, terrain, waterKind } from "./world";
 
 /** Biomes over a wide square of the map, sampled every few cells. */
 function survey(seed: number, half = 1500, stepBy = 9): Record<string, number> {
@@ -73,15 +73,19 @@ describe("biomes", () => {
     }
   });
 
-  it("runs rivers only through plain and forest, and finds a river near the base", () => {
+  it("runs rivers through every biome but the desert, frozen in the snow, and finds a river near the base", () => {
     const seed = 3;
+    const through = new Set<string>();
     for (let x = -1200; x < 1200; x += 3) {
       for (let y = -600; y < 600; y += 17) {
-        if (terrain(x, y, seed)[1] !== "t-water") continue;
-        const water = BIOMES[biomeAt(x, y, seed)].water;
-        expect(["river", "pond", "oasis"]).toContain(water);
+        const kind = terrain(x, y, seed)[1];
+        const biome = BIOMES[biomeAt(x, y, seed)];
+        if (kind === "t-water") expect(biome.water).not.toBe("ice");
+        if (kind === "t-water" && waterKind(x, y, seed) === "river") through.add(biome.id);
       }
     }
+    expect(through.has("desert")).toBe(false);
+    expect(through.size).toBeGreaterThanOrEqual(3);
     for (const bank of riverBanks(seed)) expect(Math.abs(bank.x)).toBeLessThan(80);
   });
 

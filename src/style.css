@@ -105,6 +105,8 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .gear-pop { grid-area: centre; align-self: center; justify-self: end; margin-right: calc(var(--gap) * 4); z-index: 10; display: grid; gap: var(--gap); background: var(--panel); border-color: var(--dim); box-shadow: 0 12px 40px rgb(0 0 0 / 60%); }
 .gear-pop .bar-row { margin: 0; flex-wrap: nowrap; }
 .draggable[style*="left"] { position: fixed; margin: 0; z-index: 12; }
+/* The window last pressed or opened is drawn over the other. */
+.draggable.front { z-index: 13; }
 .drag-handle { cursor: grab; user-select: none; }
 .draggable.dragging .drag-handle { cursor: grabbing; }
 /* The figure, an ASCII-style picture at its own high resolution shown smaller; each slot centred where it is worn

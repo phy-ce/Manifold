@@ -3,10 +3,21 @@
 
 /** How much of a window must stay on screen, so it can always be grabbed back. */
 const KEEP = 40;
+/** Every draggable window: the one last pressed is drawn over the rest. */
+const windows: HTMLElement[] = [];
+const raise = (box: HTMLElement) => {
+  for (const other of windows) other.classList.toggle("front", other === box);
+};
 
 /** Makes `box` draggable by `handle`, remembered under `key`. Buttons in the handle still click. */
 export function makeDraggable(box: HTMLElement, handle: HTMLElement, key: string): void {
   box.classList.add("draggable");
+  windows.push(box);
+  box.addEventListener("pointerdown", () => raise(box), true);
+  // Opened, a window comes to the front too.
+  new MutationObserver(() => {
+    if (!box.hidden) raise(box);
+  }).observe(box, { attributes: true, attributeFilter: ["hidden"] });
   handle.classList.add("drag-handle");
   const storeKey = `manifold-window-${key}`;
   const place = (x: number, y: number) => {
