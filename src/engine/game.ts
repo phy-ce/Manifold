@@ -294,6 +294,8 @@ export interface GameState {
   eating?: { id: string; done: number; ms: number } | null;
   /** Where and when the last dig came up, for the screen to flash the cell. */
   dug?: { x: number; y: number; at: number };
+  /** The last vein dug out, and when, for the screen to say it is spent. */
+  depleted?: { ore: string; at: number };
   /** Index into STAGES of the stage being played. */
   stage: number;
   /** How many of each item have ever been made. Goals check this, so nothing is handed in. */
@@ -1625,7 +1627,9 @@ function digOn(s: GameState): void {
     if (why) noteBlocked(s, why);
     return;
   }
-  s.dug ={ x: dig.x, y: dig.y, at: s.time };
+  s.dug = { x: dig.x, y: dig.y, at: s.time };
+  // The last of a vein dug out: the screen says it is spent. Food and water grow back, so only ore, wood and stone.
+  if (spot.site.left <= 0 && (job === "ore" || job === "wood")) s.depleted = { ore: spot.site.ore, at: s.time };
   // The tool that did the job wears by one use.
   const tool = toolFor(s, job);
   if (tool) wearTool(s, tool.hand);

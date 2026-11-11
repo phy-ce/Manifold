@@ -77,6 +77,16 @@ describe("digging", () => {
     expect(s.inv[0]?.n).toBe(1);
   });
 
+  it("says when the last of a vein is dug out", () => {
+    const s = onVein();
+    const { site, cell } = harvestTarget(s)!;
+    for (const other of site.cells ?? []) if (other !== cell) other.left = 0;
+    cell.left = 1;
+    site.left = 1;
+    digOnce(s);
+    expect(s.depleted?.ore).toBe(site.ore);
+  });
+
   it("stops when the player walks off, and gives nothing", () => {
     const s = onVein();
     const ore = harvestTarget(s)!.site.ore;

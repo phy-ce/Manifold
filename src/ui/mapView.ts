@@ -325,6 +325,7 @@ export class MapView {
   private readonly haltFlash = document.createElement("div");
   /** When the last drop shown happened; null until the first draw, so a loaded game shows no old one. */
   private dropShown: number | null = null;
+  private spentShown: number | null = null;
   /** When the last dig shown came up; null until the first draw. */
   private dugShown: number | null = null;
   /** When the last broken tool shown broke; null until the first draw. */
@@ -780,6 +781,18 @@ export class MapView {
       }
     }
     // A beast's carcass taken apart: what went into the bag, in the same place, in green: "날고기 +2 가죽 +1".
+    // A vein dug to the end: "철광석 고갈됨!", in the same place, amber.
+    const spent = s.depleted?.at ?? -1;
+    if (spent !== this.spentShown) {
+      const first = this.spentShown === null;
+      this.spentShown = spent;
+      if (s.depleted && !first) {
+        this.haltFlash.textContent = `${itemName(s.depleted.ore)} ${tr("고갈됨!")}`;
+        this.haltFlash.classList.remove("hit", "gain");
+        void this.haltFlash.offsetWidth;
+        this.haltFlash.classList.add("hit");
+      }
+    }
     const drop = s.drop?.at ?? -1;
     if (drop !== this.dropShown) {
       const first = this.dropShown === null;
