@@ -1,6 +1,7 @@
 import { tr } from "../i18n";
 import { GameState, Mob, attack, canStrike, creatureInfo, creaturesInSight, isVisible, visionAt, mobVisible, walkTo, weaponOf, harvestTarget, jobOf, toolFor } from "../engine/game";
-import { BIOMES, itemColor, toolOf } from "../content";
+import { BIOMES } from "../content";
+import { drawHands } from "./handSprites";
 import { biomeAt, terrain, underCell, ROCK } from "../engine/world";
 import { SOUND } from "./sound";
 import { keyHint, setKeyHint } from "./keyHint";
@@ -19,119 +20,6 @@ const VIEW_EXTRA = 3;
 /** Over how many cells past the map's sight the land fades into fog. */
 const FOG_DEPTH = 2.5;
 const steps8 = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-
-type HandRect = (x: number, y: number, w: number, h: number, color: string) => void;
-const headTones = new Map<string, string[]>();
-
-/** Cache dim material tones; the view only needs three shades. */
-function toolTones(id: string): string[] {
-  let tones = headTones.get(id);
-  if (!tones) {
-    const rgb = parseInt(itemColor(id).slice(1), 16);
-    tones = [.48, .65, .34].map((light) =>
-      `rgb(${Math.round((rgb >> 16) * light)},${Math.round(((rgb >> 8) & 255) * light)},${Math.round((rgb & 255) * light)})`);
-    headTones.set(id, tones);
-  }
-  return tones;
-}
-
-/** Stepped shafts lean inward, with the fingers painted over the grip. */
-function drawHeldTool(rect: HandRect, kind: string, tones: string[]): void {
-  const [face, light, dark] = tones;
-  const length = kind === "spear" ? 36 : kind === "blade" ? 10 : 23;
-  for (let y = -length; y < 10; y++) {
-    const x = 0;
-    rect(x, y, 3, 1, "#59432f");
-    rect(x, y, 1, 1, "#806345");
-    rect(x + 3, y, 1, 1, "#382e26");
-  }
-  const x = 0, y = -length;
-  switch (kind) {
-    case "pick":
-      rect(x - 7, y - 2, 16, 4, face);
-      rect(x - 5, y - 3, 12, 1, light);
-      rect(x - 7, y + 1, 16, 1, dark);
-      rect(x + 9, y - 1, 3, 2, face);
-      rect(x + 12, y, 2, 1, light);
-      rect(x - 9, y, 2, 3, dark);
-      break;
-    case "axe":
-      rect(x - 2, y - 2, 6, 4, face);
-      rect(x - 7, y - 5, 5, 11, face);
-      rect(x - 9, y - 6, 2, 13, light);
-      rect(x - 7, y - 5, 5, 1, light);
-      rect(x - 7, y + 5, 5, 2, dark);
-      break;
-    case "shovel":
-      rect(x - 3, y - 8, 10, 8, face);
-      rect(x - 2, y, 8, 2, dark);
-      rect(x, y + 2, 4, 1, dark);
-      rect(x - 3, y - 8, 10, 1, light);
-      rect(x - 3, y - 7, 1, 6, light);
-      rect(x + 2, y - 6, 1, 6, dark);
-      break;
-    case "spear":
-      rect(x, y - 5, 5, 6, face);
-      rect(x + 2, y - 9, 2, 4, light);
-      rect(x + 1, y - 5, 1, 5, light);
-      rect(x + 4, y - 4, 1, 5, dark);
-      rect(x, y + 1, 4, 2, "#958064");
-      break;
-    case "blade":
-      rect(x, y - 15, 4, 16, face);
-      rect(x + 1, y - 18, 2, 3, light);
-      rect(x, y - 15, 1, 15, light);
-      rect(x + 3, y - 14, 1, 15, dark);
-      rect(x - 3, y + 1, 10, 2, dark);
-      rect(x - 3, y, 10, 1, light);
-      break;
-  }
-}
-
-/** Thumb-side grip, mirrored as a whole; the wrist trails down and outward. */
-function drawHand(ctx: CanvasRenderingContext2D, mirror: boolean, id: string | undefined, bob: number): void {
-  const origin = mirror ? W - 30 : 30;
-  const bottom = H - 17 - bob;
-  const rect: HandRect = (x, y, w, h, color) => {
-    ctx.fillStyle = color;
-    // Shear every scanline together so the head, shaft and fist share the tilt.
-    for (let row = y; row < y + h; row++) {
-      const inward = x - Math.floor(row / 2);
-      ctx.fillRect(mirror ? origin - inward - w : origin + inward, bottom + row, w, 1);
-    }
-  };
-  const tool = id ? toolOf(id) : undefined;
-  // Cuff and forearm continue beyond the frame even at the top of a blow.
-  rect(-7, 16, 13, 28, "#39352c");
-  rect(-7, 16, 2, 28, "#272923");
-  rect(4, 16, 2, 28, "#504735");
-  rect(-7, 16, 13, 3, "#6b6048");
-  rect(-6, 19, 11, 1, "#292b25");
-  rect(-5, 8, 9, 8, "#71594a");
-  rect(-5, 10, 2, 6, "#493b34");
-  rect(2, 10, 2, 6, "#8a705b");
-  // Narrow back of the fist behind the shaft; negative x is the outer side.
-  rect(-5, -4, 8, 13, "#604b40");
-  rect(-4, -5, 7, 2, "#8a705b");
-  if (tool) drawHeldTool(rect, tool.kind, toolTones(id!));
-  // Four curled fingers cover the handle, with knuckles down the outer edge.
-  // An empty fist has loosely tucked fingertips instead of a gripping thumb.
-  for (let finger = 0; finger < 4; finger++) {
-    const y = -4 + finger * 3;
-    const tip = tool ? 4 : 2;
-    rect(-6, y, tip + 6, 3, "#71594a");
-    rect(-6, y, 2, 2, "#8a705b");
-    rect(-6, y + 2, 3, 1, "#493b34");
-    rect(-3, y, tip + 2, 1, "#856957");
-    rect(tip - 1, y + 1, 2, 2, "#604b40");
-  }
-  // Thumb starts toward the centre, then folds across the front of the handle.
-  rect(tool ? 4 : 2, 0, 3, 6, "#856957");
-  rect(tool ? 4 : 2, 0, 2, 4, "#a0876d");
-  rect(1, -2, tool ? 5 : 3, 3, "#8a705b");
-  rect(0, -3, 3, 3, "#9b7d65");
-  rect(0, 0, 4, 1, "#493b34");
-}
 
 /** A hash of a wall cell and a spot on its face, in 0..1. */
 const grain = (cell: number, a: number, b: number): number =>
@@ -688,8 +576,7 @@ export class FightPanel {
     // Dim, small overlay; only a successful hit moves the striking hand.
     const striking = weapon.hand ?? "right";
     const lift = (hand: string) => (striking === hand ? bob : 0) + (working === hand ? swing : 0);
-    drawHand(this.ctx, false, s.gear.left?.id, lift("left"));
-    drawHand(this.ctx, true, s.gear.right?.id, lift("right"));
+    drawHands(this.ctx, W, H, s.gear.left?.id, s.gear.right?.id, { left: lift("left"), right: lift("right") });
     // How long until the next blow: a thin bar under the hand that shrinks to nothing when ready.
     const wait = Math.max(0, (s.strikeReady ?? 0) - s.time);
     if (wait > 0) {
