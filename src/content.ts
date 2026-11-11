@@ -55,7 +55,7 @@ const variants = expanded.variants;
 const forms: Record<string, { label: string }> = materials.forms;
 const ores: Record<string, Ore> = oreData.ores;
 const display: Record<string, { code: string; color: string }> = displayData;
-const machines: Record<string, { name: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; rhythm?: number[]; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean; burn?: number; tier?: string }> = era.machines;
+const machines: Record<string, { name: string; line?: string; inherits?: string; cost?: Record<string, number>; work?: number; byproductSlots?: number; manual?: string; rhythm?: number[]; difficulty?: number; power?: number; powerOut?: number; steamReady?: boolean; burn?: number; tier?: string }> = era.machines;
 
 const food: Record<string, { hunger: number; hp: number }> = era.food;
 
@@ -386,18 +386,15 @@ export const formCategory = (form: string): string =>
   (materials.forms as Record<string, { category?: string }>)[form]?.category ?? FORM_CATEGORIES[0][0];
 
 /**
- * How a machine's forms are grouped in its picker, as [label, forms]. Shapes go by category;
- * a bench's machines go by the age that opens them, up to the stage reached.
+ * How a machine's forms are grouped in its picker, as [label, forms]. Shapes go by category; a bench's machines
+ * are general buildings (one of the lines: build, shape, fire, smelt, forge) or special ones, in the order they open.
  */
 export function formGroups(type: string, forms: string[], stage: number): [string, string[]][] {
   if (isBuilder(type)) {
-    // One group per age: the stages inside an age are not named on screen.
-    const groups = new Map<string, string[]>();
-    for (const s of STAGES.slice(0, Math.min(stage, PLAYABLE_STAGES - 1) + 1)) {
-      const era = tr(s.era);
-      groups.set(era, [...(groups.get(era) ?? []), ...s.unlockMachines.filter((m: string) => forms.includes(m))]);
-    }
-    return [...groups].filter(([, list]) => list.length);
+    const open = machinesAt(stage).filter((m) => forms.includes(m));
+    const general = open.filter(isGeneral);
+    return ([[tr("범용 건물"), general], [tr("특수 건물"), open.filter((m) => !isGeneral(m))]] as [string, string[]][])
+      .filter(([, list]) => list.length);
   }
   return FORM_CATEGORIES.map(([category, label]): [string, string[]] => [label, forms.filter((form) => formCategory(form) === category)])
     .filter(([, list]) => list.length);
@@ -473,6 +470,9 @@ export const machineManual = (type: string): string | undefined => machines[type
 export const machineRhythm = (type: string): number[] => machines[type]?.rhythm ?? [700];
 export const machineWork = (type: string): number => machines[type].work ?? 1;
 export const machineName = (type: string): string => machines[type].name;
+/** General buildings: the lines that run through every age (build, shape, fire, smelt, forge), each age's machine
+ * inheriting the one before. Every other machine is a special building, made for one job. */
+export const isGeneral = (type: string): boolean => !!machines[type]?.line;
 /** How harshly a machine punishes mistakes, from 1 upward. */
 export const machineDifficulty = (type: string): number => machines[type]?.difficulty ?? 1;
 export const itemName = (id: string): string =>

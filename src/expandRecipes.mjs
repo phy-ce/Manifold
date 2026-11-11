@@ -84,21 +84,26 @@ export function expandRecipes(era, materials) {
 /**
  * A machine that `inherits` another does all its work too, in half the time: the construction bench builds the
  * first age's machines as well as its own, the forming bench shapes what the 가공대 does by hand. A recipe the
- * heir already has for the same form and product is left as its own.
+ * heir already has, from the same things to the same things in the same form, is left as its own. On an heir
+ * set by form, a parent's recipe without one gets its product as its form, so it can be picked there too.
  */
 function inherit(machines, recipes) {
   const out = [...recipes];
   const done = new Set();
+  const same = (a, b) => a.form === b.form && Object.keys(a.in).join() === Object.keys(b.in).join() && Object.keys(a.out).join() === Object.keys(b.out).join();
   const resolve = (type) => {
     if (done.has(type)) return;
     done.add(type);
     const parent = machines[type]?.inherits;
     if (!parent) return;
     resolve(parent);
-    const own = (r) => out.some((o) => o.machine === type && o.form === r.form && Object.keys(o.out).join() === Object.keys(r.out).join());
+    const mine = out.filter((o) => o.machine === type);
+    const byForm = mine.some((o) => o.form);
     for (const r of out.filter((o) => o.machine === parent)) {
-      if (own(r)) continue;
-      out.push({ ...r, id: `${r.id}_${type}`, machine: type, time: Math.max(1, Math.ceil(r.time / 2)) });
+      const form = r.form ?? (byForm ? Object.keys(r.out)[0] : undefined);
+      const heir = { ...r, id: `${r.id}_${type}`, machine: type, time: Math.max(1, Math.ceil(r.time / 2)), ...(form ? { form } : {}) };
+      if (mine.some((o) => same(o, heir))) continue;
+      out.push(heir);
     }
   };
   Object.keys(machines).forEach(resolve);

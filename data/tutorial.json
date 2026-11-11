@@ -92,11 +92,11 @@
       "id": "fill",
       "section": "가마",
       "title": "재료 넣기",
-      "text": "기지로 돌아와 작업대를 여세요. 창 위쪽의 신화시대 목록에서 노천 가마를 고르고, 도감으로 이동을 누른 뒤, 도감에 나온 만드는 법의 +를 눌러 점토 12개를 넣으세요",
+      "text": "기지로 돌아와 작업대를 여세요. 창 위쪽의 범용 건물 목록에서 노천 가마를 고르고, 도감으로 이동을 누른 뒤, 도감에 나온 만드는 법의 +를 눌러 점토 12개를 넣으세요",
       "en": {
         "section": "Kiln",
         "title": "Put in materials",
-        "text": "Back at the base, open the workbench. Pick the open kiln from the Mythic Age list at the top of its window, press Open in index, then press + on the recipe the index shows to put in 12 clay"
+        "text": "Back at the base, open the workbench. Pick the open kiln from the General buildings list at the top of its window, press Open in index, then press + on the recipe the index shows to put in 12 clay"
       }
     },
     {

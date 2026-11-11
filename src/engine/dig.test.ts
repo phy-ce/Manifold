@@ -2,11 +2,13 @@
 // (pick: ore and stone; axe: felling and picking food; shovel: nothing yet), the material how fast, how hard it
 // hits and how long it lasts. Two hands hold tools; weapons are tools. Tools wear out and break.
 import { describe, expect, it } from "vitest";
-import { CONSTRUCTION, WORKBENCH, digBaseMs, fitsSlot, gearOf, isTool, machineForms, processOf, toolStats, toolsAt } from "../content";
+import { CONSTRUCTION, WORKBENCH, digBaseMs, fitsSlot, formGroups, gearOf, isGeneral, isTool, machineForms, processOf, toolStats, toolsAt } from "../content";
 import { GameState, STEP_MS, Stack, addTo, attack, clickGear, clickStack, createGame, digProgress, digTime, harvestTarget, sortSlots, startDig, step, usesLeft, weaponOf } from "./game";
 import { gameWithVeins } from "./testWorld";
 
 const TOOL_BENCH = "tool_bench";
+/** Every recipe a machine has, whatever form it is set to. */
+const recipesOf = (type: string) => processOf(type, "").recipes;
 
 /** A game standing on a vein with something to dig. */
 function onVein(): GameState {
@@ -171,5 +173,34 @@ describe("making tools", () => {
 
   it("lets the construction bench build the first age's machines too, inherited from the workbench", () => {
     for (const type of machineForms(WORKBENCH)) expect(machineForms(CONSTRUCTION)).toContain(type);
+  });
+});
+
+describe("general and special buildings", () => {
+  // Each general line, oldest first: every later machine does all its forebear does.
+  const LINES = [["workbench", "construction_bench"], ["craft_bench", "forming_bench"], ["open_kiln", "brick_kiln"], ["bloomery", "blast_furnace"], ["hand_forge", "plate_hammer", "steam_hammer"]];
+
+  it("are five lines, each machine of a later age doing everything the one before it does", () => {
+    for (const line of LINES) {
+      for (const type of line) expect([type, isGeneral(type)]).toEqual([type, true]);
+      for (let i = 1; i < line.length; i += 1) {
+        const made = (type: string) => new Set(recipesOf(type).flatMap((r) => Object.keys(r.out)));
+        const heir = made(line[i]);
+        for (const id of made(line[i - 1])) expect([line[i], id, heir.has(id)]).toEqual([line[i], id, true]);
+      }
+    }
+  });
+
+  it("keeps two recipes with the same products apart when they take different things: both copper smelts", () => {
+    const furnace = recipesOf("blast_furnace").filter((r) => "copper" in r.out).map((r) => Object.keys(r.in)[0]);
+    expect(furnace).toEqual(expect.arrayContaining(["copper_oxide", "copper_sulfide"]));
+  });
+
+  it("are listed on the benches as general buildings, then special ones", () => {
+    const groups = formGroups(CONSTRUCTION, machineForms(CONSTRUCTION), 3);
+    expect(groups.map(([label]) => label)).toEqual(["범용 건물", "특수 건물"]);
+    expect(groups[0][1].every(isGeneral)).toBe(true);
+    expect(groups[1][1].some(isGeneral)).toBe(false);
+    expect(groups[1][1]).toContain("tool_bench");
   });
 });

@@ -400,10 +400,10 @@ describe("materials", () => {
     expect(machineForms("bloomery")).toEqual([]);
   });
 
-  it("lets the metal decide the plate, with no form choice on the hammer", () => {
+  it("lets the metal decide the plate; the hammer also forges blooms, inherited from the hand forge", () => {
     const s = createGame(1);
     const hammer = placeMachine(s, "plate_hammer", 0, 0)!;
-    expect(machineForms("plate_hammer")).toEqual(["plate"]);
+    expect(machineForms("plate_hammer")).toEqual(["plate", "iron"]);
     hammer.ins.iron = { id: "copper", n: 2 };
     press(s, hammer.id, 3);
     expect(hammer.outs.copper_plate).toBe(1);
@@ -774,7 +774,7 @@ describe("item index", () => {
   it("shows how an item is made", () => {
     // Iron is forged by hand from a bloom; from S1-1 the forming bench beats blooms into ingots too.
     expect(ids(recipesFor("iron"))).toEqual(["forge_iron"]);
-    expect(ids(recipesFor("iron", 2))).toEqual(["forge_iron", "bench_forge_iron"]);
+    expect(ids(recipesFor("iron", 2))).toEqual(expect.arrayContaining(["forge_iron", "bench_forge_iron", "forge_iron_plate_hammer"]));
     expect(ids(recipesFor("bloom", 1))).toEqual(["bloomery_bloom", "pyrite_roast"]);
     expect(ids(recipesFor("copper", 1))).toEqual(expect.arrayContaining(["copper", "copper_sulfide_smelt"]));
     expect(ids(recipesFor("copper_tube", 1))).toEqual(["tube_copper"]);
