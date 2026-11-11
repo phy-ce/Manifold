@@ -508,6 +508,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .hurt.hit { animation: hurt-flash 1.6s ease-out; }
 /* Safe mode's stop reads the same way in amber: what it saw and what crossing would cost. */
 .halt-flash { color: var(--fire); border-color: var(--fire); }
+.halt-flash.gain { color: var(--go); border-color: var(--go); }
 /* Only the colour changes on a hit: moving or bolding the text would shift the bar. */
 .vitals.hit .meter.hp { color: var(--alert); }
 @keyframes hurt-flash { 0%, 60% { opacity: 1; } to { opacity: 0; } }

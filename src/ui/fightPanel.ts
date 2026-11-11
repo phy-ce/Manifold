@@ -43,9 +43,32 @@ const PALETTES = {
   melee: [[0, 0, 0], [55, 27, 25], [106, 47, 35], [150, 65, 43], [191, 140, 77], [207, 171, 119]],
   ranged: [[0, 0, 0], [37, 25, 49], [77, 43, 94], [116, 64, 131], [179, 124, 177], [209, 167, 110]],
   yeti: [[0, 0, 0], [38, 40, 52], [132, 152, 178], [196, 212, 228], [236, 242, 250], [126, 206, 255]],
+  deer: [[0, 0, 0], [40, 28, 20], [112, 72, 42], [156, 104, 60], [214, 184, 140], [232, 222, 196]],
 };
-/** A yeti stands taller and broader than anything in the caves. */
-const SIZE = { melee: [.72, .84], ranged: [.72, .84], yeti: [.95, 1.25] };
+/** A yeti stands taller and broader than anything in the caves; a deer is about a wolf's size, antlers above. */
+const SIZE = { melee: [.72, .84], ranged: [.72, .84], yeti: [.95, 1.25], deer: [.8, .95] };
+
+/** A deer side-on: brown back, pale belly and tail, a raised head with branching antlers; legs step by frame. */
+function deerPixel(x: number, y: number, frame: number): number {
+  const yy = y - (frame === 1 ? 1 : 0);
+  let c = 0;
+  // Legs: two pairs, front and back, stepping in turn.
+  const step = frame === 0 ? 0 : frame === 1 ? 1 : -1;
+  for (const [lx, way] of [[6, 1], [8, -1], [15, -1], [17, 1]]) if (Math.abs(x - (lx + (yy > 23 ? step * way : 0))) < 1 && yy >= 19 && yy <= 26) c = 2;
+  // Body, a long oval, darker on the back and pale beneath.
+  if ((((x - 11.5) / 7.5) ** 2 + ((yy - 16) / 3.6) ** 2) < 1) c = yy < 15 ? 2 : yy > 17 ? 4 : 3;
+  // Tail, a pale flash at the rump.
+  if (x >= 3 && x <= 4 && yy >= 13 && yy <= 15) c = 4;
+  // Neck up and forward, then the head with a dark eye and nose.
+  if (x >= 16 && x <= 18 && yy >= 9 && yy <= 14 && x - 16 >= (14 - yy) / 3) c = 3;
+  if ((((x - 19.5) / 2.6) ** 2 + ((yy - 8.5) / 1.8) ** 2) < 1) c = 3;
+  if (x === 20 && yy === 8) c = 1;
+  if (x === 22 && yy === 9) c = 1;
+  // Antlers: a beam up and back from the head with tines off it.
+  if (yy >= 2 && yy <= 6 && x === 18 - Math.floor((6 - yy) / 2)) c = 5;
+  if ((yy === 3 && (x === 18 || x === 19)) || (yy === 5 && x === 19) || (yy === 1 && x === 16)) c = 5;
+  return c;
+}
 
 /** White shaggy fur over pale blue shade, a dark face with pale eyes; arms and legs swing by frame. */
 function yetiPixel(x: number, y: number, frame: number): number {
@@ -74,8 +97,9 @@ function yetiPixel(x: number, y: number, frame: number): number {
 /** Tiny indexed sprites, generated once; transparent pixels stay zero. */
 function sprite(kind: Mob["kind"], frame: number): Uint8Array {
   const pixels = new Uint8Array(SW * SH);
-  if (kind === "yeti") {
-    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) pixels[y * SW + x] = yetiPixel(x, y, frame);
+  if (kind === "yeti" || kind === "deer") {
+    const pixel = kind === "yeti" ? yetiPixel : deerPixel;
+    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) pixels[y * SW + x] = pixel(x, y, frame);
     return pixels;
   }
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
@@ -109,6 +133,7 @@ const SPRITES = {
   melee: [sprite("melee", 0), sprite("melee", 1), sprite("melee", 2)],
   ranged: [sprite("ranged", 0), sprite("ranged", 1), sprite("ranged", 2)],
   yeti: [sprite("yeti", 0), sprite("yeti", 1), sprite("yeti", 2)],
+  deer: [sprite("deer", 0), sprite("deer", 1), sprite("deer", 2)],
 };
 
 /** Visible map samples are cached so rays and pixels never regenerate terrain. */

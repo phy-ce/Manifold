@@ -1,7 +1,7 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
-import { BIOMES, CAVE, CAVES, GATHER, WATER, YETI, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
+import { BIOMES, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
 import { GameState, NOTE_MAX, actionKey, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { CLICK, keyHintHtml } from "./keyHint";
@@ -52,7 +52,7 @@ const BLINK_MS = 150;
 const COLOR: Record<string, string> = {
   "t-plain": "#3c4955", "t-hill1": "#7c8b9b", "t-hill2": "#a9b6c2", "t-hill3": "#e6ebef", "t-water": "#4d8fc4", "t-ice": "#a9d4ec",
   player: "#8fd16f", base: "#dfe5ea", path: "#ffb238", remembered: "#3a4552", memoryBg: "#141a22", seenBg: "#1d2631",
-  cave: "#c9a27a", rock: "#2b3541", probe: "#ffb238", wolf: "#ff5f56", spitter: "#c678dd", yeti: "#8fe3ff", shot: "#ff8c5a",
+  cave: "#c9a27a", rock: "#2b3541", probe: "#ffb238", wolf: "#ff5f56", spitter: "#c678dd", yeti: "#8fe3ff", deer: "#e0a868", shot: "#ff8c5a",
   stone: "#5b6670",
 };
 /**
@@ -315,6 +315,8 @@ export class MapView {
   private readonly warn = document.createElement("div");
   /** What safe mode stopped for, shown for a moment at the top of the screen. */
   private readonly haltFlash = document.createElement("div");
+  /** When the last drop shown happened; null until the first draw, so a loaded game shows no old one. */
+  private dropShown: number | null = null;
   /** The too-steep cell last noted, so the note shows once per stop. */
   private steepShown = "";
   private veins = new Map<number, Vein>();
@@ -560,8 +562,9 @@ export class MapView {
       return underCell(x, y, s.seed) === ROCK ? tr("암반") : "";
     }
     if (x === BASE.x && y === BASE.y) return tr("기지");
-    // A yeti takes no wounds, so it is only named.
-    if (s.mobs.some((m) => m.x === x && m.y === y && mobVisible(s, m))) return tr(YETI.name);
+    // A creature in sight is named.
+    const beast = s.mobs.find((m) => m.x === x && m.y === y && mobVisible(s, m));
+    if (beast) return tr(creatureInfo(beast.kind).name);
     const noted = notedSpots(s).get(`${x},${y}`);
     if (!isRevealed(s, x, y)) return noted?.note ?? "";
     const site = knownCells(s).get(`${x},${y}`)?.site ?? s.sites.find((v) => v.ore === CAVE && v.x === x && v.y === y && onThisMap(s, v));
@@ -700,7 +703,7 @@ export class MapView {
         this.emphasize([halt], "strong");
         // And says what it saw, over the top of the map like a hit does: "물 감지 -3".
         this.haltFlash.textContent = `${halt.kind === "water" ? tr("물") : tr("고도 변화")} ${tr("감지")} -${halt.damage}`;
-        this.haltFlash.classList.remove("hit");
+        this.haltFlash.classList.remove("hit", "gain");
         void this.haltFlash.offsetWidth;
         this.haltFlash.classList.add("hit");
       }
@@ -712,9 +715,21 @@ export class MapView {
       if (s.steep) {
         this.emphasize([s.steep], "strong");
         this.haltFlash.textContent = tr("너무 가파름");
-        this.haltFlash.classList.remove("hit");
+        this.haltFlash.classList.remove("hit", "gain");
         void this.haltFlash.offsetWidth;
         this.haltFlash.classList.add("hit");
+      }
+    }
+    // A beast brought down: what went into the bag, in the same place, in green: "날고기 +2 가죽 +1".
+    const drop = s.drop?.at ?? -1;
+    if (drop !== this.dropShown) {
+      const first = this.dropShown === null;
+      this.dropShown = drop;
+      if (s.drop && !first) {
+        this.haltFlash.textContent = Object.entries(s.drop.got).map(([id, n]) => `${itemName(id)} +${n}`).join(" ");
+        this.haltFlash.classList.remove("hit");
+        void this.haltFlash.offsetWidth;
+        this.haltFlash.classList.add("hit", "gain");
       }
     }
     this.fight.draw();
@@ -819,15 +834,15 @@ export class MapView {
     }
     // Notes on veins that lie only underground still mark their spot up here.
     for (const site of s.sites) if (site.note && (site.z ?? 0) !== 0) this.noteMark(site.x, site.y, isRevealed(s, site.x, site.y));
-    // A yeti shows only where the player can see, like everything else on the map.
+    // Surface creatures (a yeti, deer) show only where the player can see, like everything else on the map.
     for (const mob of s.mobs) {
       const vx = mob.x - this.originX;
       const vy = mob.y - this.originY;
       if (!mobVisible(s, mob) || !isVisible(s, mob.x, mob.y) || vx < 0 || vy < 0 || vx >= this.viewW || vy >= this.viewH) continue;
       g.fillStyle = COLOR.seenBg;
       g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
-      g.fillStyle = COLOR.yeti;
-      this.glyph("Y", vx, vy);
+      g.fillStyle = mob.kind === "deer" ? COLOR.deer : COLOR.yeti;
+      this.glyph(mob.kind === "deer" ? "d" : "Y", vx, vy);
     }
   }
 

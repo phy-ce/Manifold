@@ -152,6 +152,7 @@ const biomeData = localize(biomeJson) as unknown as {
   climateScale: number; regionSize: number; regionWarp: number; lakeScale: number; temperateRadius: number; starterRadius: number;
   biomes: Record<string, Omit<Biome, "id">>;
   yeti: Yeti;
+  deer: Deer;
 };
 /**
  * The yeti of the snowfield: a belief of the early age, so it comes out only up to `lastStage`. While the
@@ -166,6 +167,22 @@ export interface Yeti {
   moveMs: number; attackMs: number; damage: number; hp: number; immune?: boolean;
 }
 export const YETI: Yeti = biomeData.yeti;
+
+/**
+ * A deer of the plains and forests, the beast offered up for an oracle. It never fights: it wanders, and runs
+ * from a player within `flee`, slower than the player walks, so it can be run down. One may come out every
+ * `everyMs` with `chance` while the player is in its biomes, up to `cap` at once, `away` cells off and out of
+ * sight; past `forgetAway` it is gone. Killed, it leaves `drops` in the player's bag.
+ */
+export interface Deer {
+  name: string; biomes: string[];
+  everyMs: number; chance: number; cap: number; away: number[]; sight: number; forgetAway: number;
+  flee: number; moveMs: number; fleeMs: number; hp: number;
+  drops: Record<string, number>;
+}
+export const DEER: Deer = biomeData.deer;
+/** What hunting gives: every item a beast drops. */
+export const HUNTED: string[] = Object.keys(DEER.drops);
 export const BIOMES: Record<string, Biome> = Object.fromEntries(Object.entries(biomeData.biomes).map(([id, b]) => [id, { id, ...b } as Biome]));
 export const BIOME_WORLD = {
   climateScale: biomeData.climateScale, regionSize: biomeData.regionSize, regionWarp: biomeData.regionWarp, lakeScale: biomeData.lakeScale,
@@ -485,7 +502,7 @@ export const burners = (stage = 0): string[] => machinesAt(stage).filter((type) 
 
 // ---- Item order
 
-const rawItems = [...Object.keys(ores), WATER, ...FORAGE, ...GATHER];
+const rawItems = [...Object.keys(ores), WATER, ...FORAGE, ...GATHER, ...HUNTED];
 const metalOrder = Object.keys(materials.metals);
 const formOrder = ["ingot", ...Object.keys(materials.forms)];
 
@@ -537,7 +554,7 @@ function knownRecipes(stage: number): Recipe[] {
   const opened = machinesAt(stage);
   const open = opened.flatMap(machineRecipes).filter((r) => !r.disposal && (!isBuilder(r.machine) || opened.includes(r.form!)));
   // Caves are open from the start, so their layer counts too.
-  const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER]);
+  const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER, ...HUNTED]);
   const obtainable = (key: string) => [...have].some((id) => matches(id, key));
   const known: Recipe[] = [];
   for (let grew = true; grew;) {
@@ -560,7 +577,7 @@ export const familyMembers = (id: string): string[] => allSurfaceOres.filter((or
 
 /** Every item the player can meet right now, so later tiers stay a surprise. */
 export function indexItems(stage = 0): string[] {
-  const seen = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER]);
+  const seen = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER, ...HUNTED]);
   for (const recipe of knownRecipes(stage)) {
     for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
       if (!groupMembers(id).length) seen.add(id);
@@ -583,6 +600,7 @@ export const buildUses = (id: string, stage = 0): [string, Record<string, number
 export function itemSource(id: string): string | null {
   if (allSurfaceOres.includes(id)) return tr("지도의 광맥에서 캡니다");
   if (FORAGE.includes(id) || GATHER.includes(id)) return tr("지도에서 채집합니다");
+  if (HUNTED.includes(id)) return tr("사냥해서 얻습니다");
   if (id === WATER) return tr("강가에서 펌프로 끌어옵니다");
   if (Object.values(DRUM.fills).includes(id)) return tr("빈 드럼통을 들고 펌프의 출력을 눌러 채웁니다");
   return null;

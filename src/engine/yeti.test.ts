@@ -56,9 +56,9 @@ describe("the snowfield's yeti", () => {
 
   it("never comes out with the player outside the snow", () => {
     const s = createGame(SEED);
-    run(s, 6000, true, () => expect(s.mobs).toEqual([]));
+    run(s, 6000, true, () => expect(s.mobs.filter((m) => m.kind === "yeti")).toEqual([]));
     const edge = at(EDGE.out);
-    run(edge, 6000, true, () => expect(edge.mobs).toEqual([]));
+    run(edge, 6000, true, () => expect(edge.mobs.filter((m) => m.kind === "yeti")).toEqual([]));
   });
 
   it("comes out in the snow while the player is in it: on snow, out of sight, a fair way off, one at a time", () => {

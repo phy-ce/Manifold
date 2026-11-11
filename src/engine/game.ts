@@ -1,7 +1,7 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
-import { FORAGE, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { FORAGE, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, DEER, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
 import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, groundGather, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
 /** Version 19 put the caves into one underground layer under the surface. */
@@ -272,6 +272,8 @@ export interface GameState {
   lost: Stack[] | null;
   /** What last took health, so the screen can say why along with how much. */
   hurtBy?: HurtCause;
+  /** What the last beast killed left in the bag, and when, for the screen to show. */
+  drop?: { got: Record<string, number>; at: number };
   /** Index into STAGES of the stage being played. */
   stage: number;
   /** How many of each item have ever been made. Goals check this, so nothing is handed in. */
@@ -471,7 +473,7 @@ export interface Hazard {
 export interface Mob {
   id: number;
   /** Cave creatures bite or shoot; a yeti lives on the surface, in its own biome. */
-  kind: "melee" | "ranged" | "yeti";
+  kind: "melee" | "ranged" | "yeti" | "deer";
   x: number;
   y: number;
   /** Time until it may move again, and until it may bite or shoot again. */
@@ -536,8 +538,11 @@ function openDens(s: GameState): Point[] {
 
 /** A creature's name and full health, by kind. */
 export function creatureInfo(kind: Mob["kind"]): { name: string; hp: number } {
-  return kind === "yeti" ? YETI : MOBS[kind];
+  return kind === "yeti" ? YETI : kind === "deer" ? DEER : MOBS[kind];
 }
+
+/** Whether a creature is a beast to hunt, never a danger: it doesn't stop F working the ground until it is in reach. */
+export const isPrey = (mob: Mob): boolean => mob.kind === "deer";
 
 /**
  * Whether the player can see or hear a creature: near enough, with open cave between. The surface is open
@@ -545,6 +550,7 @@ export function creatureInfo(kind: Mob["kind"]): { name: string; hp: number } {
  */
 export function mobVisible(s: GameState, mob: Mob): boolean {
   if (mob.kind === "yeti") return s.z === 0 && steps8(mob, s.player) <= YETI.sight;
+  if (mob.kind === "deer") return s.z === 0 && steps8(mob, s.player) <= DEER.sight;
   return s.z < 0 && steps8(mob, s.player) <= MOBS.sight && clearLine(s.seed, mob, s.player);
 }
 
@@ -643,7 +649,11 @@ export function attack(s: GameState, mobId: number): boolean {
   // No weapon of the early age wounds a yeti: the blow only makes it reel.
   if (mob.kind !== "yeti" || !YETI.immune) mob.hp -= isWeak(s) ? Math.max(1, Math.floor(weapon.damage / 2)) : weapon.damage;
   mob.wait = Math.max(mob.wait, STAGGER_MS);
-  if (mob.hp <= 0) s.mobs = s.mobs.filter((m) => m !== mob);
+  if (mob.hp <= 0) {
+    s.mobs = s.mobs.filter((m) => m !== mob);
+    const got = takeDrops(s, mob);
+    if (Object.keys(got).length) s.drop = { got, at: s.time };
+  }
   return true;
 }
 
@@ -726,7 +736,7 @@ function yetiCanStand(s: GameState, mob: Mob, x: number, y: number): boolean {
 
 /** Now and then, while the player is in the snow, one comes out somewhere a fair way off and out of sight. */
 function yetiComesOut(s: GameState): void {
-  if (s.time % YETI.everyMs !== 0 || s.mobs.length || !inYetiLand(s, s.player)) return;
+  if (s.time % YETI.everyMs !== 0 || s.mobs.some(isYeti) || !inYetiLand(s, s.player)) return;
   const rng = rngFrom(Math.imul(s.seed + 13, 2654435761) ^ Math.floor(s.time / 100));
   if (rng() >= YETI.chance) return;
   const [near, far] = YETI.away;
@@ -737,7 +747,7 @@ function yetiComesOut(s: GameState): void {
     const at = { x: Math.round(s.player.x + Math.cos(angle) * reach), y: Math.round(s.player.y + Math.sin(angle) * reach) };
     const d = steps8(at, s.player);
     if (d < Math.max(near, YETI.sight + 1) || d > far || isVisible(s, at.x, at.y) || !inYetiLand(s, at)) continue;
-    s.mobs.push({ id: 0, kind: "yeti", ...at, wait: 1000, cool: 1000, hp: YETI.hp });
+    s.mobs.push({ id: newMobId(s), kind: "yeti", ...at, wait: 1000, cool: 1000, hp: YETI.hp });
     return;
   }
 }
@@ -770,13 +780,13 @@ function yetiStep(s: GameState, mob: Mob, chase: boolean): void {
  */
 function yetis(s: GameState): void {
   if (!yetiBelieved(s)) {
-    if (s.mobs.length) s.mobs = [];
+    if (s.mobs.some(isYeti)) s.mobs = s.mobs.filter((m) => !isYeti(m));
     return;
   }
   yetiComesOut(s);
-  if (!s.mobs.length) return;
+  if (!s.mobs.some(isYeti)) return;
   const home = inYetiLand(s, s.player);
-  for (const mob of s.mobs) {
+  for (const mob of s.mobs.filter(isYeti)) {
     mob.wait = Math.max(0, mob.wait - STEP_MS);
     mob.cool = Math.max(0, mob.cool - STEP_MS);
     const near = steps8(mob, s.player);
@@ -793,7 +803,84 @@ function yetis(s: GameState): void {
     mob.wait = YETI.moveMs;
     yetiStep(s, mob, !!mob.hunting);
   }
-  s.mobs = s.mobs.filter((m) => (m.lost ?? 0) < YETI.giveUpMs);
+  s.mobs = s.mobs.filter((m) => !isYeti(m) || (m.lost ?? 0) < YETI.giveUpMs);
+}
+
+const isYeti = (mob: Mob): boolean => mob.kind === "yeti";
+const isDeer = (mob: Mob): boolean => mob.kind === "deer";
+/** A number no creature on this layer has yet. */
+const newMobId = (s: GameState): number => s.mobs.reduce((top, m) => Math.max(top, m.id), -1) + 1;
+
+// ---- Deer of the plains and forests
+
+const inDeerLand = (s: GameState, at: Point): boolean => DEER.biomes.includes(biomeAt(at.x, at.y, s.seed));
+
+/** Open ground of its own biomes, not water nor a hill, with nothing else on it. */
+function deerCanStand(s: GameState, mob: Mob | null, x: number, y: number): boolean {
+  if (x === s.player.x && y === s.player.y) return false;
+  const [, kind] = terrain(x, y, s.seed);
+  return inDeerLand(s, { x, y }) && kind !== "t-water" && kind !== "t-hill" && !s.mobs.some((other) => other !== mob && other.x === x && other.y === y);
+}
+
+/** Now and then, in the plains and forests, a deer turns up a fair way off and out of sight. */
+function deerComeOut(s: GameState): void {
+  if (s.time % DEER.everyMs !== 0 || s.mobs.filter(isDeer).length >= DEER.cap || !inDeerLand(s, s.player)) return;
+  const rng = rngFrom(Math.imul(s.seed + 17, 2654435761) ^ Math.floor(s.time / 100));
+  if (rng() >= DEER.chance) return;
+  const [near, far] = DEER.away;
+  for (let tries = 0; tries < 60; tries += 1) {
+    const angle = rng() * Math.PI * 2;
+    const reach = near + rng() * (far - near);
+    const at = { x: Math.round(s.player.x + Math.cos(angle) * reach), y: Math.round(s.player.y + (Math.sin(angle) * reach) / CELL_ASPECT) };
+    const d = steps8(at, s.player);
+    if (d < near || d > far || isVisible(s, at.x, at.y) || !deerCanStand(s, null, at.x, at.y)) continue;
+    s.mobs.push({ id: newMobId(s), kind: "deer", ...at, wait: 1000, cool: 0, hp: DEER.hp });
+    return;
+  }
+}
+
+/** A deer grazes about, and runs from a player who comes close: always to the open cell furthest from them. */
+function deer(s: GameState): void {
+  deerComeOut(s);
+  s.mobs = s.mobs.filter((m) => !isDeer(m) || steps8(m, s.player) <= DEER.forgetAway);
+  for (const mob of s.mobs.filter(isDeer)) {
+    mob.wait = Math.max(0, mob.wait - STEP_MS);
+    if (mob.wait > 0) continue;
+    const fleeing = steps8(mob, s.player) <= DEER.flee;
+    mob.wait = fleeing ? DEER.fleeMs : DEER.moveMs;
+    const options = AROUND.map(([dx, dy]) => ({ x: mob.x + dx, y: mob.y + dy })).filter((p) => deerCanStand(s, mob, p.x, p.y));
+    if (!options.length) continue;
+    let to: Point | undefined;
+    if (fleeing) {
+      const span = (p: Point) => Math.hypot(p.x - s.player.x, (p.y - s.player.y) * CELL_ASPECT);
+      to = options.sort((a, b) => span(b) - span(a))[0];
+      if (span(to) <= span(mob)) to = undefined; // cornered: it stands
+    } else if (hash(mob.id * 17 + mob.x, mob.y, Math.floor(s.time / 100)) < 0.5) {
+      to = options[Math.floor(hash(mob.id, mob.x + mob.y, Math.floor(s.time / 100) + 1) * options.length)];
+    }
+    if (to) {
+      mob.x = to.x;
+      mob.y = to.y;
+    }
+  }
+}
+
+/** Surface life: the yeti in its snowfield, and deer in the plains and forests. */
+function surfaceLife(s: GameState): void {
+  yetis(s);
+  deer(s);
+}
+
+/** What a beast leaves when killed goes straight into the bag, as much as can be carried. Says what was taken. */
+function takeDrops(s: GameState, mob: Mob): Record<string, number> {
+  const got: Record<string, number> = {};
+  if (!isDeer(mob)) return got;
+  for (const [id, n] of Object.entries(DEER.drops)) {
+    let taken = 0;
+    while (taken < n && carried(s) + itemWeight(id) <= carryLimit(s) && addTo(s.inv, id, 1) === 1) taken += 1;
+    if (taken) got[id] = taken;
+  }
+  return got;
 }
 
 /**
@@ -923,7 +1010,9 @@ export function creaturesInSight(s: GameState): Mob[] {
  * the ground waits; otherwise it works the place underfoot. C closes in on a creature, so F never walks.
  */
 export function actionKey(s: GameState): "fight" | "work" | "none" {
-  if (creaturesInSight(s).length) return "fight";
+  // A deer is no danger: grazing nearby, it leaves F to the ground underfoot until it is within a blow.
+  const reach = weaponOf(s).range;
+  if (creaturesInSight(s).some((m) => !isPrey(m) || steps8(m, s.player) <= reach)) return "fight";
   return siteHere(s) ? "work" : "none";
 }
 
@@ -3058,7 +3147,7 @@ export function step(s: GameState, walkMs = STEP_MS): void {
   if (s.probe !== null && s.path.length) s.probe = null;
   if (s.probe !== null && s.time - s.probe >= CAVES.probeMs) finishProbe(s);
   if (s.z < 0) creatures(s);
-  else yetis(s);
+  else surfaceLife(s);
   survive(s);
   turnSeason(s);
   if (s.time % SPRING_LEAK_MS === 0) leakForce(s);

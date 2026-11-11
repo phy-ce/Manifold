@@ -6,7 +6,7 @@
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
     "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "pyrite": "황철석", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
-    "wood": "나무", "stone": "돌", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
+    "wood": "나무", "stone": "돌", "meat": "날고기", "roast_meat": "구운 고기", "hide": "가죽", "antler": "사슴뿔", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
     "steam_drum": "증기 드럼", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
     "steel_plate": "강판", "steel_shaft": "강철 축", "copper_wire": "구리선", "port_flange": "포트 증설 플랜지",
@@ -14,15 +14,17 @@
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "wood": 1, "stone": 2, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
+    "wood": 1, "stone": 2, "meat": 0.5, "roast_meat": 0.5, "hide": 1, "antler": 0.5, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
   },
   "stockpiled": ["slag", "coal_tar", "sulfur"],
-  "awaitingUse": ["wood", "stone"],
+  "awaitingUse": ["wood", "stone", "hide", "antler"],
   "food": {
     "Be": { "hunger": 10, "hp": 0 },
     "Mu": { "hunger": 8, "hp": 0 },
     "Bc": { "hunger": 30, "hp": 5 },
-    "Mc": { "hunger": 25, "hp": 15 }
+    "Mc": { "hunger": 25, "hp": 15 },
+    "meat": { "hunger": 12, "hp": 0 },
+    "roast_meat": { "hunger": 40, "hp": 10 }
   },
   "sources": {
     "Be": { "rate": 1 }, "Mu": { "rate": 1 },
@@ -103,6 +105,7 @@
     { "id": "open_brick", "machine": "open_kiln", "time": 12, "in": { "clay": 2 }, "out": { "brick": 1 } },
     { "id": "open_berry", "machine": "open_kiln", "time": 8, "in": { "Be": 1 }, "out": { "Bc": 1 } },
     { "id": "open_mushroom", "machine": "open_kiln", "time": 8, "in": { "Mu": 1 }, "out": { "Mc": 1 } },
+    { "id": "open_meat", "machine": "open_kiln", "time": 10, "in": { "meat": 1 }, "out": { "roast_meat": 1 } },
     { "id": "bloomery_bloom", "machine": "bloomery", "time": 10, "in": { "iron_ore": 3 }, "out": { "bloom": 1, "slag": 1 } },
     { "id": "pyrite_roast", "machine": "bloomery", "time": 12, "in": { "pyrite": 4 }, "out": { "bloom": 1, "sulfur": 2 } },
     { "id": "copper", "machine": "bloomery", "time": 8, "in": { "copper_oxide": 2 }, "out": { "copper": 1, "slag": 1 } },
@@ -117,6 +120,7 @@
 
     { "id": "cook_berry", "machine": "brick_kiln", "time": 5, "in": { "Be": 1 }, "out": { "Bc": 1 } },
     { "id": "cook_mushroom", "machine": "brick_kiln", "time": 5, "in": { "Mu": 1 }, "out": { "Mc": 1 } },
+    { "id": "cook_meat", "machine": "brick_kiln", "time": 6, "in": { "meat": 1 }, "out": { "roast_meat": 1 } },
 
     { "id": "pump_water", "machine": "drainage_pump", "time": 0.5, "in": {}, "out": { "water": 1 } },
     { "id": "boil", "machine": "steam_boiler", "time": 4, "in": { "water": 2 }, "out": { "steam": 2 } },
