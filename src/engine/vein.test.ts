@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 import { gameWithVeins } from "./testWorld";
 import { BIOMES, CAVE, CAVES, DRUM, FORAGE, LAYERS, RICHNESS, SURFACE_ORES, VEINS, WATER, forageSeasons, inLayer, layerOres } from "../content";
 import {
-  GameState, createGame, harvestTarget, knownReserve, loadSave, mine, nextVeinCell, siteHere, standBeside, startProbe, step, walkTo,
+  GameState, createGame, gatherSpot, harvestTarget, knownReserve, loadSave, mine, nextVeinCell, siteHere, standBeside, startProbe, step, walkTo,
 } from "./game";
 import {
-  BASE, CELL_ASPECT, FLOOR, ROCK, Site, VeinCell, biomeAt, cellsOf, chunkSites, emptiedOn, generateSites, laterVeins, orderSites, rngFrom, rollVein, terrain, underCell, underSites,
+  BASE, CELL_ASPECT, FLOOR, ROCK, Site, VeinCell, biomeAt, cellsOf, chunkSites, emptiedOn, generateSites, groundGather, laterVeins, orderSites, rngFrom, rollVein, terrain, underCell, underSites,
 } from "./world";
 
 /** The cells of a vein on the surface, and those below it. */
@@ -23,6 +23,57 @@ describe("search order", () => {
     const sites = [site(CAVE, 0, 3), site("Lm", 0, 1), site("Lm", 40, 2)];
     const shown = orderSites(sites, (v) => v.x, true).map((v) => v.ore);
     expect(shown).toEqual(["Lm", CAVE]);
+  });
+
+  it("fells a big tree (T) and breaks a stone outcrop, and only those", () => {
+    const s = createGame(1);
+    const near = (want: string) => {
+      for (let r = 1; r < 400; r += 1) for (let x = BASE.x - r; x <= BASE.x + r; x += 1) for (const y of [BASE.y - r, BASE.y + r]) {
+        if (groundGather(x, y, s.seed) === want && !s.sites.some((v) => v.x === x && v.y === y)) return { x, y };
+      }
+      throw new Error(`no ${want}`);
+    };
+    for (const ore of ["wood", "stone"]) {
+      const at = near(ore);
+      // Standing on it makes it a place to work, as arriving by a step does.
+      s.player = { ...at };
+      s.path = [];
+      gatherSpot(s);
+      const site = s.sites.find((v) => v.x === at.x && v.y === at.y)!;
+      expect(site.ore).toBe(ore);
+      expect(siteHere(s)).toBe(site);
+      const before = site.left;
+      expect(mine(s)).toBe(true);
+      expect(site.left).toBe(before - 1);
+      expect(s.inv.some((slot) => slot?.id === ore)).toBe(true);
+      // Standing there again doesn't make a second one.
+      gatherSpot(s);
+      expect(s.sites.filter((v) => v.x === at.x && v.y === at.y)).toHaveLength(1);
+      s.inv = s.inv.map(() => null);
+    }
+    // Small trees and plain ground give nothing.
+    for (let x = -50; x < 50; x += 1) for (let y = -50; y < 50; y += 1) {
+      const [ch, kind] = terrain(x, y, s.seed);
+      const got = groundGather(x, y, s.seed);
+      if (ch === "t") expect(got).toBeNull();
+      if (got === "stone") expect(kind).toBe("t-hill");
+    }
+  });
+
+  it("keeps big trees and stone outcrops rare: a few in a hundred cells of their ground", () => {
+    let forest = 0, trees = 0, hills = 0, outcrops = 0;
+    for (let x = -600; x < 600; x += 2) for (let y = -600; y < 600; y += 2) {
+      const [ch, kind] = terrain(x, y, 7);
+      const biome = biomeAt(x, y, 7);
+      if (biome === "forest" && kind === "t-forest") forest += 1;
+      if (ch === "T") trees += 1;
+      if (biome === "mountain" && kind === "t-hill") hills += 1;
+      if (groundGather(x, y, 7) === "stone") outcrops += 1;
+    }
+    expect(trees / forest).toBeGreaterThan(0.02);
+    expect(trees / forest).toBeLessThan(0.07);
+    expect(outcrops / hills).toBeGreaterThan(0.04);
+    expect(outcrops / hills).toBeLessThan(0.12);
   });
 
   it("judges a vein emptied on one layer by that layer's cells alone", () => {

@@ -6,7 +6,7 @@
   "items": {
     "power": "동력", "all": "전부 순서대로", "main": "주 산출물", "byproduct": "부산물", "Be": "산딸기", "Mu": "버섯", "Bc": "구운 산딸기", "Mc": "구운 버섯",
     "steam": "증기", "water_drum": "물 드럼통", "iron_ore": "철광석", "coal": "석탄", "clay": "점토", "copper_ore": "구리광", "copper_oxide": "산화 구리광", "copper_sulfide": "황화 구리광", "pyrite": "황철석", "copper_matte": "구리 매트", "water": "물", "limestone": "석회석",
-    "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
+    "wood": "나무", "stone": "돌", "brick": "벽돌", "bloom": "철 덩이", "iron": "철 주괴", "pig_iron": "선철", "copper": "구리 주괴", "slag": "슬래그", "sulfur": "황가루",
     "steam_drum": "증기 드럼", "steam_engine_unit": "증기기관", "steam_module": "증기 모듈",
     "coke": "코크스", "coal_tar": "콜타르", "steel": "강철", "scrap": "고철",
     "steel_plate": "강판", "steel_shaft": "강철 축", "copper_wire": "구리선", "port_flange": "포트 증설 플랜지",
@@ -14,7 +14,7 @@
   },
   "weights": {
     "Lm": 2, "Ml": 2, "Lg": 1, "Kn": 2, "Be": 0.5, "Mu": 0.5, "Bc": 0.5, "Mc": 0.5,
-    "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
+    "wood": 1, "stone": 2, "brick": 2, "bloom": 3, "slag": 2, "steam_drum": 30, "steam_engine_unit": 50, "steam_module": 10, "water": 1, "water_drum": 6
   },
   "stockpiled": ["slag", "coal_tar", "sulfur"],
   "food": {

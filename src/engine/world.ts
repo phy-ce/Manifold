@@ -312,8 +312,20 @@ export function terrain(x: number, y: number, seed: number): [string, string, nu
     const height = Math.min(biome.maxHeight ?? 1, 1 + Math.floor((land - start) / HILL_STEP));
     return [" ^AM"[height], "t-hill", height];
   }
+  const kind = biome.id === "plains" ? "t-plain" : `t-${biome.id}`;
+  // A big tree, the only kind worth felling: a few among the small ones (t).
+  if (biome.trees && hash(x, y, seed + 22) < biome.trees) return ["T", kind, 0];
   const glyph = biome.glyphs[Math.floor(hash(x, y, seed + 21) * biome.glyphs.length)];
-  return [glyph, biome.id === "plains" ? "t-plain" : `t-${biome.id}`, 0];
+  return [glyph, kind, 0];
+}
+
+/** What can be gathered from the ground here: wood from a big tree, stone from an outcrop on a mountain hill. */
+export function groundGather(x: number, y: number, seed: number): string | null {
+  const [ch, kind] = terrain(x, y, seed);
+  if (ch === "T") return "wood";
+  if (kind !== "t-hill") return null;
+  const share = BIOMES[biomeAt(x, y, seed)].stone ?? 0;
+  return hash(x, y, seed + 23) < share ? "stone" : null;
 }
 
 /** The biome's ground colour for a ground class, for the map. */

@@ -62,6 +62,15 @@ const food: Record<string, { hunger: number; hp: number }> = era.food;
 /** Foraged foods and how much a vein of them holds. */
 export const FORAGE: string[] = oreData.forage.ids;
 export const FORAGE_SIZE: number[] = oreData.forage.size;
+
+/**
+ * Wood and stone, taken from the ground itself: a big tree (T) in a forest, a stone outcrop on a mountain hill.
+ * How much one holds, and which grow back each season.
+ */
+const gatherData: { size: Record<string, number[]>; regrow: string[] } = oreData.gather;
+export const GATHER: string[] = Object.keys(gatherData.size);
+export const gatherSize = (id: string): number[] => gatherData.size[id];
+export const regrows = (id: string): boolean => gatherData.regrow.includes(id);
 const forageSeasonList: Record<string, number[]> = oreData.forage.seasons;
 
 /** Seasons a food can be picked in, or nothing if it isn't seasonal. */
@@ -134,6 +143,9 @@ export interface Biome {
   caves?: number;
   /** How much likelier a rich vein is. */
   rich?: number;
+  /** Share of flat ground with a big tree (T) to fell, and of hills with stone to break. */
+  trees?: number;
+  stone?: number;
   rules?: { walk?: number; hunger?: number; winterHunger?: number; vision?: number };
 }
 const biomeData = localize(biomeJson) as unknown as {
@@ -473,7 +485,7 @@ export const burners = (stage = 0): string[] => machinesAt(stage).filter((type) 
 
 // ---- Item order
 
-const rawItems = [...Object.keys(ores), WATER, ...FORAGE];
+const rawItems = [...Object.keys(ores), WATER, ...FORAGE, ...GATHER];
 const metalOrder = Object.keys(materials.metals);
 const formOrder = ["ingot", ...Object.keys(materials.forms)];
 
@@ -525,7 +537,7 @@ function knownRecipes(stage: number): Recipe[] {
   const opened = machinesAt(stage);
   const open = opened.flatMap(machineRecipes).filter((r) => !r.disposal && (!isBuilder(r.machine) || opened.includes(r.form!)));
   // Caves are open from the start, so their layer counts too.
-  const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE]);
+  const have = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER]);
   const obtainable = (key: string) => [...have].some((id) => matches(id, key));
   const known: Recipe[] = [];
   for (let grew = true; grew;) {
@@ -548,7 +560,7 @@ export const familyMembers = (id: string): string[] => allSurfaceOres.filter((or
 
 /** Every item the player can meet right now, so later tiers stay a surprise. */
 export function indexItems(stage = 0): string[] {
-  const seen = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE]);
+  const seen = new Set<string>([...stageOres(stage), ...layerOres(1, stage), ...FORAGE, ...GATHER]);
   for (const recipe of knownRecipes(stage)) {
     for (const id of [...Object.keys(recipe.in), ...Object.keys(recipe.out)]) {
       if (!groupMembers(id).length) seen.add(id);
@@ -570,7 +582,7 @@ export const buildUses = (id: string, stage = 0): [string, Record<string, number
 /** Where a raw item comes from, for items no machine makes. */
 export function itemSource(id: string): string | null {
   if (allSurfaceOres.includes(id)) return tr("지도의 광맥에서 캡니다");
-  if (FORAGE.includes(id)) return tr("지도에서 채집합니다");
+  if (FORAGE.includes(id) || GATHER.includes(id)) return tr("지도에서 채집합니다");
   if (id === WATER) return tr("강가에서 펌프로 끌어옵니다");
   if (Object.values(DRUM.fills).includes(id)) return tr("빈 드럼통을 들고 펌프의 출력을 눌러 채웁니다");
   return null;

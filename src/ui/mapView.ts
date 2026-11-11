@@ -1,9 +1,9 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
-import { BIOMES, CAVE, CAVES, WATER, YETI, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
+import { BIOMES, CAVE, CAVES, GATHER, WATER, YETI, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
 import { GameState, NOTE_MAX, actionKey, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, mine, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
-import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
+import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { CLICK, keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
 import { FightPanel } from "./fightPanel";
@@ -266,7 +266,7 @@ const notedSpots = (s: GameState): Map<string, Site> =>
   new Map(s.sites.filter((site) => site.note).map((site) => [`${site.x},${site.y}`, site]));
 
 /** The word on the F hint for what working a site does. */
-const actionWord = (site: Site): string => (site.ore === WATER ? tr("뜨기") : forageSeasons(site.ore) ? tr("줍기") : tr("캐기"));
+const actionWord = (site: Site): string => (site.ore === WATER ? tr("뜨기") : forageSeasons(site.ore) ? tr("줍기") : site.ore === "wood" ? tr("베기") : tr("캐기"));
 
 const siteName = (s: GameState, site: Site): string =>
   site.ore === CAVE ? tr("자연 동굴") : site.ore === WATER ? `${WATER_SITE[waterKind(site.x, site.y, s.seed)]} ${site.code ?? ""}`.trim() : itemName(site.ore) + (emptiedOn(site, s.z) ? tr(" (고갈됨)") : canHarvest(s, site) ? "" : tr(" (수확 불가)"));
@@ -788,7 +788,13 @@ export class MapView {
         else if (x === BASE.x && y === BASE.y) [glyph, color] = ["H", COLOR.base];
         else if (doors.has(key)) [glyph, color] = [">", COLOR.cave];
         else if (spot && spot.site.cells && spot.cell.left <= 0) [glyph, color] = [STONE, COLOR.stone];
-        else if (spot) {
+        else if (spot && GATHER.includes(spot.site.ore)) {
+          // A tree or outcrop keeps its own look: a felled tree is a stump, broken stone bare hill.
+          const [ch, , height] = terrain(x, y, s.seed);
+          const left = spot.site.left > 0;
+          glyph = left || spot.site.ore !== "wood" ? ch : ",";
+          color = left ? itemColor(spot.site.ore) : spot.site.ore === "wood" ? COLOR.stone : COLOR[`t-hill${height}`];
+        } else if (spot) {
           const site = spot.site;
           glyph = site.ore === WATER ? "W" : site.left <= 0 ? "x" : !canHarvest(s, site) ? "'" : ORE_GLYPH;
           color = itemColor(site.ore);
@@ -797,6 +803,11 @@ export class MapView {
           const [ch, cls, height] = terrain(x, y, s.seed);
           glyph = ch;
           color = cls === "t-hill" ? COLOR[`t-hill${height}`] : groundColor(cls) ?? COLOR[cls] ?? COLOR["t-plain"];
+          // Big trees and stone outcrops stand out from the ground around them.
+          if (ch === "T" || cls === "t-hill") {
+            const gather = groundGather(x, y, s.seed);
+            if (gather) color = itemColor(gather);
+          }
         }
         if (this.markCell(vx, vy, key)) color = "#10151c";
         if (glyph === " ") continue;

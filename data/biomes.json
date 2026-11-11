@@ -17,12 +17,12 @@
       "rules": { "vision": 2 }
     },
     "forest": {
-      "name": "숲", "ground": "#4f7a4a", "glyphs": "  ,tT", "water": "river", "hills": 0.84,
+      "name": "숲", "ground": "#4f7a4a", "glyphs": "  ,,tt", "trees": 0.04, "water": "river", "hills": 0.84,
       "family": { "coal": 1.6, "copper_ore": 0.6 }, "forage": ["Mu", "Be"], "forageChance": 1.6,
       "rules": { "vision": -1 }
     },
     "mountain": {
-      "name": "산지", "ground": "#5a6472", "glyphs": "  .:", "hills": 0.42, "maxHeight": 3,
+      "name": "산지", "ground": "#5a6472", "glyphs": "  .:", "hills": 0.42, "maxHeight": 3, "stone": 0.08,
       "family": { "iron_ore": 1.3, "limestone": 1.8, "clay": 0.4 }, "extraOres": ["Py"], "ores": { "Py": 2 },
       "forage": [], "caves": 3
     },

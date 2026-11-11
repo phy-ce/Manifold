@@ -1,8 +1,8 @@
 // Game rules. Plain data in, plain data out, no DOM, so saves are just JSON.
 import { tr } from "../i18n";
 import { TutorialState, advanceTutorial, newTutorial } from "./tutorial";
-import { FORAGE, namesItem, BIOMES, Biome, YETI, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
-import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
+import { FORAGE, gatherSize, regrows, namesItem, BIOMES, Biome, YETI, BELT_DRIVE, lineage, SELF_PUSHING, PRESSURE_PUMP, PRESS, CONSTRUCTION, WORKBENCH, isBuilder, DRIVE, formOf, CAVE, CAVES, layerOres, fuelValue, isFuel, machineBurn, machineTier, tierRank, ALL, BYPRODUCT, DRUM, ENGINE, MAIN, MANIFOLD, MAX_PORTS, MODULE, MOTOR, PLAYABLE_STAGES, isSteamReady, SPLITTER, isPassive, isStore, laterOres, POWER, PUMP, RIVER, Recipe, STAGES, SURFACE_ORES, TANK, TAR, WAREHOUSE, WATER, gearOf, compareItems, isFluid, isMachine, machinePower, machinePowerOut, machinesAt, foodEffect, forageSeasons, formLabel, itemWeight, machineCost, machineDifficulty, machineForms, machineManual, machineName, matches, processOf } from "../content";
+import { AROUND, BASE, CELL_ASPECT, CHUNK, HABITAT, Point, ROCK, Site, VeinCell, cellsOf, cellInChunk, entrancesIn, hash, layerOf, nearEntrance, rngFrom, chunkKey, chunkOf, chunkSites, generateSites, groundGather, laterVeins, linePath, nearCave, riverBanks, safePath, terrain, biomeAt, underCell, underSites } from "./world";
 
 /** Version 19 put the caves into one underground layer under the surface. */
 export const SAVE_VERSION = 19;
@@ -1318,6 +1318,8 @@ function turnSeason(s: GameState): void {
   for (const site of s.sites) {
     const kind = harvestKind(site);
     if (kind && HARVEST[kind].refill === "season" && forageSeasons(site.ore)?.includes(season)) refillSite(site);
+    // A felled tree grows back by the next season; stone never comes back.
+    else if (regrows(site.ore)) refillSite(site);
   }
 }
 
@@ -2693,7 +2695,22 @@ export function walk(s: GameState, ms: number): void {
   if (s.passing && !cost) s.passing = false;
   reveal(s, s.player, ...sightOf(s, s.player), s.facing);
   nameRivers(s);
+  gatherSpot(s);
   if (cost) hurt(s, cost, terrain(next.x, next.y, s.seed)[1] === "t-water" ? "water" : "hill");
+}
+
+/**
+ * Stepping onto a big tree or a stone outcrop makes it a place to work, like a vein: F fells or breaks it.
+ * Only the ones the player has stood on are kept, so the world doesn't fill up with every tree it has.
+ */
+export function gatherSpot(s: GameState): void {
+  if (s.z !== 0) return;
+  const { x, y } = s.player;
+  const ore = groundGather(x, y, s.seed);
+  if (!ore || s.sites.some((site) => site.x === x && site.y === y && (site.z ?? 0) === 0)) return;
+  const [low, high] = gatherSize(ore);
+  const total = low + Math.floor(hash(x, y, s.seed + 24) * (high - low + 1));
+  addSite(s, { ore, x, y, total, left: total, seed: s.seed + Math.abs(x * 389 + y * 53) });
 }
 
 function hurt(s: GameState, amount: number, cause: HurtCause): void {

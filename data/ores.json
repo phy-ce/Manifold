@@ -13,6 +13,7 @@
   "river": { "reserve": 300, "regenMs": 2000 },
   "familyWeight": { "iron_ore": 35, "coal": 35, "copper_ore": 20, "clay": 10, "limestone": 15 },
   "forageChance": 0.25,
+  "gather": { "size": { "wood": [3, 5], "stone": [6, 10] }, "regrow": ["wood"] },
   "veins": { "sizeScale": 4, "perChunk": [0.08, 0.01], "coreWeight": 3,
     "starter": { "families": ["clay"], "distance": [12, 32] },
     "surfaceCells": { "scarce": [3, 4], "normal": [3, 5], "rich": [5, 6] },

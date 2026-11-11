@@ -31,6 +31,8 @@ interface Lump {
 
 const LUMPS: Record<string, Lump> = {
   Ls: { seed: 15, grain: 0.35 },
+  stone: { seed: 31, grain: 0.45 },
+  wood: { seed: 32, grain: 0.25 },
   coke: { seed: 42, grain: 0.8, holes: 14 },
   Lm: { seed: 11 }, Ml: { seed: 12 }, Lg: { seed: 13 }, Kn: { seed: 14, grain: 0.7 },
   Py: { seed: 21, grain: 0.5, mineral: "pyrite" },

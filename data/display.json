@@ -8,6 +8,8 @@
   "copper_ore": { "code": "cu", "color": "#35b779" },
   "coal": { "code": "co", "color": "#9a7350" },
   "clay": { "code": "cy", "color": "#d9cfc0" },
+  "wood": { "code": "Wo", "color": "#c8925a" },
+  "stone": { "code": "Rk", "color": "#d8bf8a" },
   "brick": { "code": "Br", "color": "#c8694a" },
   "bloom": { "code": "Bl", "color": "#8d8a86" },
   "iron": { "code": "Fe", "color": "#a9bacb" },
