@@ -46,6 +46,18 @@ describe("digging", () => {
     expect(s.dig).toBeNull();
   });
 
+  it("won't start with the bag full or too heavy a load, and says which", () => {
+    const s = onVein();
+    s.inv = s.inv.map(() => ({ id: "stick", n: 1 }));
+    expect(startDig(s)).toBe(false);
+    expect(s.blocked?.why).toBe("full");
+    const t = onVein();
+    t.inv = t.inv.map(() => null);
+    t.inv[0] = { id: "iron", n: 999 };
+    expect(startDig(t)).toBe(false);
+    expect(t.blocked?.why).toBe("heavy");
+  });
+
   it("stops when the player walks off, and gives nothing", () => {
     const s = onVein();
     const ore = harvestTarget(s)!.site.ore;

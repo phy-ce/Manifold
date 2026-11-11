@@ -278,6 +278,8 @@ export interface GameState {
   broke?: { id: string; at: number };
   /** What the last carcass gave up into the bag, and when, for the screen to show. */
   drop?: { got: Record<string, number>; at: number };
+  /** The last time carrying stopped a dig, pick or butchering, and why, for the screen to say. */
+  blocked?: { why: "heavy" | "full"; at: number };
   /** Beasts killed lie where they fell until the player stands on them and takes what they have. */
   corpses?: Corpse[];
   /** A dig, pick or fill under way at a cell: how long it has gone and how long it takes, in ms. */
@@ -941,7 +943,11 @@ export function lootCorpse(s: GameState): boolean {
     else corpse.items[id] = n - taken;
   }
   if (!Object.keys(corpse.items).length) s.corpses = (s.corpses ?? []).filter((c) => c !== corpse);
-  if (!Object.keys(got).length) return false;
+  if (!Object.keys(got).length) {
+    // Nothing came off: either nothing on it would fit in the bag, or everything would be too heavy.
+    noteBlocked(s, Object.keys(corpse.items).some((id) => bagRoom(s, id) > 0) ? "heavy" : "full");
+    return false;
+  }
   s.drop = { got, at: s.time };
   return true;
 }
@@ -1379,6 +1385,21 @@ export function tooHeavyToWork(s: GameState): boolean {
   return !!spot && !!kind && canWork(s, spot) && carried(s) + HARVEST[kind].adds(spot.site) > carryLimit(s);
 }
 
+/** Why what the next dig or pick brings up couldn't be carried: too heavy, or no room in the bag. Null if it could. */
+export function cantCarry(s: GameState): "heavy" | "full" | null {
+  if (tooHeavyToWork(s)) return "heavy";
+  const spot = harvestTarget(s);
+  const kind = spot && harvestKind(spot.site);
+  if (!spot || (kind !== "ore" && kind !== "forage") || !canWork(s, spot)) return null;
+  return bagRoom(s, spot.site.ore) < 1 ? "full" : null;
+}
+
+/** Notes that carrying stopped the player, for the screen to say; held keys repeat, so once a second at most. */
+function noteBlocked(s: GameState, why: "heavy" | "full"): void {
+  if (s.blocked?.why === why && s.time - s.blocked.at < 1000) return;
+  s.blocked = { why, at: s.time };
+}
+
 const harvestKind = (site: Site): HarvestKindId | null =>
   site.ore === CAVE ? null : site.ore === WATER ? "water" : FORAGE.includes(site.ore) ? "forage" : "ore";
 
@@ -1482,7 +1503,12 @@ export function digTime(s: GameState, site: Site): number {
 export function startDig(s: GameState): boolean {
   if (s.dig) return false;
   const spot = harvestTarget(s);
-  if (!spot || !canWork(s, spot) || tooHeavyToWork(s)) return false;
+  if (!spot || !canWork(s, spot)) return false;
+  const why = cantCarry(s);
+  if (why) {
+    noteBlocked(s, why);
+    return false;
+  }
   s.dig = { x: spot.cell.x, y: spot.cell.y, z: s.z, done: 0, ms: digTime(s, spot.site) };
   s.probe = null;
   return true;
@@ -1504,8 +1530,13 @@ function digOn(s: GameState): void {
   if (dig.done < dig.ms) return;
   s.dig = null;
   const job = jobOf(spot.site);
-  if (!mine(s)) return;
-  s.dug = { x: dig.x, y: dig.y, at: s.time };
+  if (!mine(s)) {
+    // The bag filled or grew too heavy while the dig went on: what came up stays in the ground, and the screen says why.
+    const why = cantCarry(s);
+    if (why) noteBlocked(s, why);
+    return;
+  }
+  s.dug ={ x: dig.x, y: dig.y, at: s.time };
   // The tool that did the job wears by one use.
   const tool = toolFor(s, job);
   if (tool) wearTool(s, tool.hand);

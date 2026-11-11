@@ -2,7 +2,7 @@
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
 import { BIOMES, DEER, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
-import { GameState, NOTE_MAX, actionKey, corpsesHere, lootCorpse, digProgress, startDig, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
+import { GameState, NOTE_MAX, actionKey, corpsesHere, lootCorpse, digProgress, startDig, knownReserve, cantCarry, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
@@ -323,6 +323,7 @@ export class MapView {
   private dugShown: number | null = null;
   /** When the last broken tool shown broke; null until the first draw. */
   private brokeShown: number | null = null;
+  private blockedShown: string | null = null;
   /** The too-steep cell last noted, so the note shows once per stop. */
   private steepShown = "";
   private haltShown = "";
@@ -613,8 +614,8 @@ export class MapView {
     if (use === "fight") {
       if (!repeat || canStrike(s)) this.fight.strikeNearest();
     } else if (use === "loot") {
-      // One press, one carcass: what didn't fit stays on it, and a full load jolts the meter.
-      if (!repeat && !lootCorpse(s)) window.dispatchEvent(new Event("manifold:too-heavy"));
+      // One press, one carcass: what didn't fit stays on it, and the screen says why (s.blocked).
+      if (!repeat) lootCorpse(s);
       this.changed();
     } else if (use === "work") {
       // Held, F starts the next dig as soon as one ends; a dig under way just goes on.
@@ -629,10 +630,8 @@ export class MapView {
     if (s.dig) return;
     if (startDig(s)) {
       // Nothing to show yet: the bar under the player fills, and the cell flashes when the dig comes up.
-    } else if (tooHeavyToWork(s)) {
-      // The load is the only thing in the way: the load meter jolts, so it is plain why nothing came up.
-      window.dispatchEvent(new Event("manifold:too-heavy"));
-    } else this.pointNext(true);
+    } else if (!cantCarry(s)) this.pointNext(true);
+    // Otherwise carrying is what's in the way, and s.blocked has the screen say so (see the flashes in draw).
     this.changed();
   }
 
@@ -751,7 +750,20 @@ export class MapView {
         this.haltFlash.classList.add("hit");
       }
     }
-    // A beast brought down: what went into the bag, in the same place, in green: "날고기 +2 가죽 +1".
+    // Carrying stopped a dig, pick or butchering: "가방이 가득 참" or "너무 무거움", in the same place, amber.
+    const blocked = s.blocked ? `${s.blocked.why},${s.blocked.at}` : "";
+    if (blocked !== this.blockedShown) {
+      const first = this.blockedShown === null;
+      this.blockedShown = blocked;
+      if (s.blocked && !first) {
+        this.haltFlash.textContent = s.blocked.why === "full" ? tr("가방이 가득 참") : tr("너무 무거움");
+        this.haltFlash.classList.remove("hit", "gain");
+        void this.haltFlash.offsetWidth;
+        this.haltFlash.classList.add("hit");
+        if (s.blocked.why === "heavy") window.dispatchEvent(new Event("manifold:too-heavy"));
+      }
+    }
+    // A beast's carcass taken apart: what went into the bag, in the same place, in green: "날고기 +2 가죽 +1".
     const drop = s.drop?.at ?? -1;
     if (drop !== this.dropShown) {
       const first = this.dropShown === null;
