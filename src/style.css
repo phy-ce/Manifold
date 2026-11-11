@@ -513,6 +513,8 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 /* Safe mode's stop reads the same way in amber: what it saw and what crossing would cost. */
 .halt-flash { color: var(--fire); border-color: var(--fire); }
 .halt-flash.gain { color: var(--go); border-color: var(--go); }
+/* The small line under a flash: what made it, e.g. safe mode being on. */
+.halt-flash .flash-sub { display: block; font-size: var(--text-sm); color: var(--dim); text-align: center; }
 /* Only the colour changes on a hit: moving or bolding the text would shift the bar. */
 .vitals.hit .meter.hp { color: var(--alert); }
 @keyframes hurt-flash { 0%, 60% { opacity: 1; } to { opacity: 0; } }

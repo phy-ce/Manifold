@@ -1,8 +1,8 @@
-// Deer of the plains and forests: where they come out, that they run but can be caught, what they leave, and
+// Deer of the plains and forests: where they come out, that they run but can be caught, what they leave where they fall, and
 // that a deer grazing nearby doesn't take F away from the ground.
 import { describe, expect, it } from "vitest";
 import { DEER } from "../content";
-import { GameState, Mob, actionKey, attack, createGame, mobVisible, step } from "./game";
+import { GameState, Mob, actionKey, attack, corpsesHere, createGame, lootCorpse, mobVisible, step } from "./game";
 import { BASE, Point, biomeAt, terrain } from "./world";
 
 const SEED = 1;
@@ -68,16 +68,62 @@ describe("deer", () => {
     expect(DEER.fleeMs).toBeGreaterThan(150);
   });
 
-  it("leave meat, hide and antler in the bag when killed, and say so", () => {
+  const bag = (s: GameState, id: string) => s.inv.filter((slot) => slot?.id === id).reduce((sum, slot) => sum + slot!.n, 0);
+
+  it("fall where they die, and give meat, hide and antler only when the player stands on them and presses F", () => {
     const s = at(MEADOW);
-    s.mobs = [deer({ x: MEADOW.x + 1, y: MEADOW.y }, { hp: 1, wait: 99999 })];
+    const spot = { x: MEADOW.x + 1, y: MEADOW.y };
+    s.mobs = [deer(spot, { hp: 1, wait: 99999 })];
     expect(mobVisible(s, s.mobs[0])).toBe(true);
     expect(attack(s, 1)).toBe(true);
     expect(s.mobs).toEqual([]);
-    for (const [id, n] of Object.entries(DEER.drops)) {
-      expect(s.inv.filter((slot) => slot?.id === id).reduce((sum, slot) => sum + slot!.n, 0)).toBe(n);
-    }
+    expect(s.corpses).toEqual([expect.objectContaining({ kind: "deer", ...spot, z: 0, items: DEER.drops })]);
+    for (const id of Object.keys(DEER.drops)) expect(bag(s, id)).toBe(0);
+    expect(actionKey(s)).not.toBe("loot");
+    expect(lootCorpse(s)).toBe(false);
+    s.player = { ...spot };
+    expect(corpsesHere(s)).toHaveLength(1);
+    expect(actionKey(s)).toBe("loot");
+    expect(lootCorpse(s)).toBe(true);
+    for (const [id, n] of Object.entries(DEER.drops)) expect(bag(s, id)).toBe(n);
     expect(s.drop?.got).toEqual(DEER.drops);
+    expect(s.corpses).toEqual([]);
+  });
+
+  it("can lie two or more on one cell, each taken by its own press", () => {
+    const s = at(MEADOW);
+    const spot = { x: MEADOW.x + 1, y: MEADOW.y };
+    for (const id of [1, 2, 3]) {
+      s.mobs = [deer(spot, { id, hp: 1, wait: 99999 })];
+      attack(s, id);
+      s.strikeReady = 0;
+    }
+    s.player = { ...spot };
+    expect(corpsesHere(s)).toHaveLength(3);
+    expect(new Set(s.corpses!.map((c) => c.id)).size).toBe(3);
+    for (let left = 2; left >= 0; left -= 1) {
+      expect(lootCorpse(s)).toBe(true);
+      expect(corpsesHere(s)).toHaveLength(left);
+    }
+    expect(bag(s, "meat")).toBe(DEER.drops.meat * 3);
+    expect(actionKey(s)).not.toBe("loot");
+  });
+
+  it("keep what the bag can't hold for later", () => {
+    const s = at(MEADOW);
+    const spot = { x: MEADOW.x + 1, y: MEADOW.y };
+    s.mobs = [deer(spot, { hp: 1, wait: 99999 })];
+    attack(s, 1);
+    s.player = { ...spot };
+    s.inv = s.inv.map(() => ({ id: "stone", n: 1 }));
+    s.inv[0] = null;
+    expect(lootCorpse(s)).toBe(true);
+    const left = corpsesHere(s)[0];
+    expect(left).toBeTruthy();
+    expect(Object.values(left.items).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    s.inv = s.inv.map(() => null);
+    expect(lootCorpse(s)).toBe(true);
+    expect(corpsesHere(s)).toHaveLength(0);
   });
 
   it("leave F to the ground while grazing out of reach, and give it to the fight within a blow", () => {

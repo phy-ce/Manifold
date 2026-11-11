@@ -1,8 +1,8 @@
 // World map and vein panel, shown whenever the player isn't working at the base.
 // The map is one canvas: 1,200 DOM cells were slow to update while walking.
 import { tr } from "../i18n";
-import { BIOMES, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
-import { GameState, NOTE_MAX, actionKey, digProgress, startDig, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
+import { BIOMES, DEER, CAVE, CAVES, GATHER, WATER, forageSeasons, itemCode, itemColor, itemMatches, itemName } from "../content";
+import { GameState, NOTE_MAX, actionKey, corpsesHere, lootCorpse, digProgress, startDig, knownReserve, tooHeavyToWork, VeinSpot, setNote, attack, canStrike, creatureInfo, SEASON_NAMES, clearLine, mobVisible, stairHere, caveDoorHere, underSeenAt, nearestStair, enterCave, leaveCave, onThisMap, siteSpotHere, setSafeWalk, canHarvest, canWork, harvestTarget, isRevealed, isVisible, nextVeinCell, siteHere, standBeside, startProbe, veinCellAt, walkTo } from "../engine/game";
 import { BASE, CELL_ASPECT, Point, ROCK, Site, biomeAt, underCell, cellsOf, emptiedOn, groundColor, groundGather, hash, layerOf, orderSites, terrain, waterKind } from "../engine/world";
 import { keyHintHtml } from "./keyHint";
 import { SOUND } from "./sound";
@@ -54,7 +54,7 @@ const BLINK_MS = 150;
 const COLOR: Record<string, string> = {
   "t-plain": "#3c4955", "t-hill1": "#7c8b9b", "t-hill2": "#a9b6c2", "t-hill3": "#e6ebef", "t-water": "#4d8fc4", "t-ice": "#a9d4ec",
   player: "#8fd16f", base: "#dfe5ea", path: "#ffb238", remembered: "#3a4552", memoryBg: "#141a22", seenBg: "#1d2631",
-  cave: "#c9a27a", rock: "#2b3541", probe: "#ffb238", wolf: "#ff5f56", spitter: "#c678dd", yeti: "#8fe3ff", deer: "#e0a868", shot: "#ff8c5a",
+  cave: "#c9a27a", rock: "#2b3541", probe: "#ffb238", wolf: "#ff5f56", spitter: "#c678dd", yeti: "#8fe3ff", deer: "#e0a868", corpse: "#b0705a", shot: "#ff8c5a",
   stone: "#5b6670",
 };
 /**
@@ -325,6 +325,7 @@ export class MapView {
   private brokeShown: number | null = null;
   /** The too-steep cell last noted, so the note shows once per stop. */
   private steepShown = "";
+  private haltShown = "";
   private veins = new Map<number, Vein>();
   private hit = 0;
   private drawnVein = "";
@@ -611,6 +612,10 @@ export class MapView {
     const use = actionKey(s);
     if (use === "fight") {
       if (!repeat || canStrike(s)) this.fight.strikeNearest();
+    } else if (use === "loot") {
+      // One press, one carcass: what didn't fit stays on it, and a full load jolts the meter.
+      if (!repeat && !lootCorpse(s)) window.dispatchEvent(new Event("manifold:too-heavy"));
+      this.changed();
     } else if (use === "work") {
       // Held, F starts the next dig as soon as one ends; a dig under way just goes on.
       if (!repeat) this.work();
@@ -701,17 +706,22 @@ export class MapView {
     const safeLabel = keyHintHtml("T", tr("안전 모드"), s.safeWalk ? "on" : "off");
     if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;
     this.safe.setAttribute("aria-pressed", String(s.safeWalk));
-    // Where safe mode stopped the walk: what lies ahead, what it costs, and that only turning it off goes on.
+    // Standing on a carcass, the line under the safe switch offers F to take it apart; several on the cell are counted.
+    const corpses = corpsesHere(s);
+    const warning = corpses.length
+      ? `${keyHintHtml("F", `${tr(DEER.name)} ${tr("해체")}`, actionKey(s) === "loot" ? "on" : "off")}${corpses.length > 1 ? ` x${corpses.length}` : ""}`
+      : "";
+    if (this.warn.dataset.shown !== warning) this.warn.innerHTML = this.warn.dataset.shown = warning;
+    // Where safe mode stopped the walk: the cell blinks, then stays boxed in red until the walk goes on, and the
+    // middle of the map says what it saw and what it would cost, with safe mode named small beneath.
     const halt = s.halt;
-    const warning = halt ? `${keyHintHtml("T", tr("끄기"))} -${halt.damage}` : "";
-    if (this.warn.dataset.shown !== warning) {
-      this.warn.dataset.shown = warning;
-      this.warn.innerHTML = warning;
-      // The cell it stopped short of blinks on the map, then stays boxed in red until the walk goes on.
+    const haltKey = halt ? `${halt.x},${halt.y},${halt.target.x},${halt.target.y}` : "";
+    if (haltKey !== this.haltShown) {
+      this.haltShown = haltKey;
       if (halt) {
         this.emphasize([halt], "strong");
-        // And says what it saw, over the top of the map like a hit does: "물 감지 -3".
-        this.haltFlash.textContent = `${halt.kind === "water" ? tr("물") : tr("고도 변화")} ${tr("감지")} -${halt.damage}`;
+        this.haltFlash.innerHTML = `${halt.kind === "water" ? tr("물") : tr("고도 변화")} ${tr("감지")} (-${halt.damage} ${tr("데미지")})` +
+          `<small class="flash-sub">${tr("안전 모드 켜짐")}</small>`;
         this.haltFlash.classList.remove("hit", "gain");
         void this.haltFlash.offsetWidth;
         this.haltFlash.classList.add("hit");
@@ -783,7 +793,7 @@ export class MapView {
     // On the surface the map only changes when the player moves, a cell empties or something blinks; underground creatures move every step.
     const emptied = s.sites.reduce((n, site) => n + (site.left > 0 ? 0 : 1) + (site.found ? 1000 : 0) + (site.note ? 31 : 0) + 7 * (site.cells?.filter((c) => c.left <= 0).length ?? 0), 0);
     const live = cave || s.mobs.length || this.marking() ? `${s.time},${Math.floor(performance.now() / 150)}` : "";
-    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${digging === null ? "" : Math.round(digging * DIG_BAR)},${live}`;
+    const key = `${s.z},${s.player.x},${s.player.y},${s.facing?.x},${s.facing?.y},${s.path.length},${s.sites.length},${emptied},${s.season},${s.halt?.x},${s.halt?.y},${s.steep?.x},${s.steep?.y},${digging === null ? "" : Math.round(digging * DIG_BAR)},${s.corpses?.length ?? 0},${corpsesHere(s).reduce((n, c) => n + Object.keys(c.items).length, 0)},${live}`;
     if (key === this.drawnMap) return;
     this.drawnMap = key;
     this.originX = s.player.x - Math.floor(this.viewW / 2);
@@ -878,6 +888,17 @@ export class MapView {
     }
     // Notes on veins that lie only underground still mark their spot up here.
     for (const site of s.sites) if (site.note && (site.z ?? 0) !== 0) this.noteMark(site.x, site.y, isRevealed(s, site.x, site.y));
+    // Carcasses lie where they fell, seen or remembered; several on one cell draw as one.
+    for (const corpse of s.corpses ?? []) {
+      const vx = corpse.x - this.originX;
+      const vy = corpse.y - this.originY;
+      if (corpse.z !== s.z || !isRevealed(s, corpse.x, corpse.y) || vx < 0 || vy < 0 || vx >= this.viewW || vy >= this.viewH) continue;
+      if (corpse.x === s.player.x && corpse.y === s.player.y) continue;
+      g.fillStyle = COLOR.seenBg;
+      g.fillRect(vx * CELL_W, vy * CELL_H, CELL_W, CELL_H);
+      g.fillStyle = COLOR.corpse;
+      this.glyph("%", vx, vy);
+    }
     // Surface creatures (a yeti, deer) show only where the player can see, like everything else on the map.
     for (const mob of s.mobs) {
       const vx = mob.x - this.originX;

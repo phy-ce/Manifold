@@ -276,8 +276,10 @@ export interface GameState {
   hurtBy?: HurtCause;
   /** A tool that just broke from use, and when, for the screen to show. */
   broke?: { id: string; at: number };
-  /** What the last beast killed left in the bag, and when, for the screen to show. */
+  /** What the last carcass gave up into the bag, and when, for the screen to show. */
   drop?: { got: Record<string, number>; at: number };
+  /** Beasts killed lie where they fell until the player stands on them and takes what they have. */
+  corpses?: Corpse[];
   /** A dig, pick or fill under way at a cell: how long it has gone and how long it takes, in ms. */
   dig?: { x: number; y: number; z: number; done: number; ms: number } | null;
   /** Where and when the last dig came up, for the screen to flash the cell. */
@@ -330,6 +332,7 @@ export function createGame(seed: number): GameState {
     underSeen: {},
     probe: null,
     mobs: [],
+    corpses: [],
     shots: [],
     nodes: [],
     lines: [],
@@ -680,8 +683,7 @@ export function attack(s: GameState, mobId: number): boolean {
   mob.wait = Math.max(mob.wait, STAGGER_MS);
   if (mob.hp <= 0) {
     s.mobs = s.mobs.filter((m) => m !== mob);
-    const got = takeDrops(s, mob);
-    if (Object.keys(got).length) s.drop = { got, at: s.time };
+    leaveCorpse(s, mob);
   }
   return true;
 }
@@ -901,15 +903,47 @@ function surfaceLife(s: GameState): void {
 }
 
 /** What a beast leaves when killed goes straight into the bag, as much as can be carried. Says what was taken. */
-function takeDrops(s: GameState, mob: Mob): Record<string, number> {
+/** A beast lying where it fell, with what it still has to give. */
+export interface Corpse {
+  id: number;
+  kind: Mob["kind"];
+  x: number;
+  y: number;
+  z: number;
+  items: Record<string, number>;
+}
+
+/** A killed beast that has anything to give stays where it fell. Several can lie on one cell. */
+function leaveCorpse(s: GameState, mob: Mob): void {
+  if (!isDeer(mob)) return;
+  const corpses = (s.corpses ??= []);
+  const id = corpses.reduce((top, c) => Math.max(top, c.id), 0) + 1;
+  corpses.push({ id, kind: mob.kind, x: mob.x, y: mob.y, z: s.z, items: { ...DEER.drops } });
+}
+
+/** The corpses lying under the player, oldest first. */
+export const corpsesHere = (s: GameState): Corpse[] =>
+  (s.corpses ?? []).filter((c) => c.x === s.player.x && c.y === s.player.y && c.z === s.z);
+
+/**
+ * Takes what the oldest corpse underfoot has, as much as the bag holds and the player can carry. An emptied
+ * corpse is gone; one with things left stays for later. The next corpse on the cell waits for the next press.
+ */
+export function lootCorpse(s: GameState): boolean {
+  const corpse = corpsesHere(s)[0];
+  if (!corpse || s.path.length) return false;
   const got: Record<string, number> = {};
-  if (!isDeer(mob)) return got;
-  for (const [id, n] of Object.entries(DEER.drops)) {
+  for (const [id, n] of Object.entries(corpse.items)) {
     let taken = 0;
     while (taken < n && carried(s) + itemWeight(id) <= carryLimit(s) && addTo(s.inv, id, 1) === 1) taken += 1;
     if (taken) got[id] = taken;
+    if (taken === n) delete corpse.items[id];
+    else corpse.items[id] = n - taken;
   }
-  return got;
+  if (!Object.keys(corpse.items).length) s.corpses = (s.corpses ?? []).filter((c) => c !== corpse);
+  if (!Object.keys(got).length) return false;
+  s.drop = { got, at: s.time };
+  return true;
 }
 
 /**
@@ -1038,10 +1072,12 @@ export function creaturesInSight(s: GameState): Mob[] {
  * What F is for right now, the one place this is decided: with a creature in sight F only fights, and working
  * the ground waits; otherwise it works the place underfoot. C closes in on a creature, so F never walks.
  */
-export function actionKey(s: GameState): "fight" | "work" | "none" {
+export function actionKey(s: GameState): "fight" | "loot" | "work" | "none" {
   // A deer is no danger: grazing nearby, it leaves F to the ground underfoot until it is within a blow.
   const reach = weaponOf(s).range;
   if (creaturesInSight(s).some((m) => !isPrey(m) || steps8(m, s.player) <= reach)) return "fight";
+  // A carcass underfoot comes before the ground it lies on.
+  if (corpsesHere(s).length) return "loot";
   return siteHere(s) ? "work" : "none";
 }
 
@@ -2056,6 +2092,7 @@ export function upgradeSave(s: GameState): GameState {
   s.dig = null;
   fixGear(s);
   s.mobs ??= [];
+  s.corpses ??= [];
   s.shots ??= [];
   // A yeti is not kept across a load: surface creatures come and go.
   if (s.z === 0) s.mobs = [];
