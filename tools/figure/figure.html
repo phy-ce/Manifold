@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manifold — equipment figure</title>
+<style>
+  /* Preview backing only: no background is painted into the exported canvas. */
+  html { background: #191e21; color: #c6bda9; font: 14px monospace; }
+  body { margin: 24px; text-align: center; }
+  canvas { display: block; margin: auto; width: min(640px, 100%); height: auto; }
+  p { opacity: .7; }
+</style>
+<canvas id="out" width="640" height="1120" aria-label="Front-facing traveller in a hide tunic, rendered in coloured ASCII characters"></canvas>
+<p>640 × 1120 · transparent PNG source · 64 × 70 characters</p>
+<script>
+'use strict';
+(() => {
+  const W = 640, H = 1120, COLS = 64, ROWS = 70;
+  const RAMP = ' .,:;-~=+*xoX#%@';
+  const out = document.getElementById('out');
+  const ctx = out.getContext('2d');
+  // This detached canvas is the shaded painting; only glyphs reach #out.
+  const painting = document.createElement('canvas');
+  painting.width = W; painting.height = H;
+  const g = painting.getContext('2d');
+  const fistRight = { x: 139, y: 610 };
+  const fistLeft = { x: 501, y: 610 };
+  const fraction = (x, y) => ({ x: x / W, y: y / H });
+  // Anatomical handedness: player's right is on the viewer's LEFT.
+  // These are {x,y} fractions of the full intrinsic canvas, not the silhouette.
+  window.FIGURE_SLOTS = {
+    rightHand: fraction(fistRight.x, fistRight.y),
+    leftHand: fraction(fistLeft.x, fistLeft.y),
+    back: fraction(451, 305),
+    feet: fraction(320, 1030),
+  };
+
+  const gradient = (x, y, w, h, light, mid, dark) => {
+    const fill = g.createLinearGradient(x, y, x + w, y + h * .38);
+    fill.addColorStop(0, light); fill.addColorStop(.42, mid); fill.addColorStop(1, dark);
+    return fill;
+  };
+  function polygon(points, fill) {
+    g.beginPath(); points.forEach(([x,y],i) => i ? g.lineTo(x,y) : g.moveTo(x,y));
+    g.closePath(); g.fillStyle = fill; g.fill();
+  }
+  function ellipse(x,y,rx,ry,fill,rotation=0) {
+    g.beginPath(); g.ellipse(x,y,rx,ry,rotation,0,Math.PI*2); g.fillStyle=fill; g.fill();
+  }
+  function stroke(points, color, width) {
+    g.beginPath(); points.forEach(([x,y],i) => i ? g.lineTo(x,y) : g.moveTo(x,y));
+    g.strokeStyle=color; g.lineWidth=width; g.lineCap='round'; g.lineJoin='round'; g.stroke();
+  }
+  const skin = (x,y,w,h) => gradient(x,y,w,h,'#ddb18a','#b88361','#75503f');
+  const hide = gradient(200,270,230,360,'#c5aa74','#967748','#574735');
+  const trouser = (x,y) => gradient(x,y,90,350,'#8f8b70','#666a56','#3b443d');
+
+  // Separate legs and outward-facing moccasins; leave an open gap between them.
+  polygon([[229,590],[313,603],[307,777],[293,990],[230,990],[219,795]],trouser(218,600));
+  polygon([[320,605],[408,593],[421,791],[409,990],[347,990],[326,786]],trouser(324,600));
+  polygon([[240,700],[258,736],[247,948],[235,959]],'#a09b7a');
+  polygon([[284,709],[297,738],[282,964],[268,961]],'#4c5547');
+  polygon([[345,700],[362,739],[365,957],[350,965]],'#85866c');
+  stroke([[232,806],[263,817],[287,804]],'#535a49',9);
+  stroke([[345,813],[375,822],[407,808]],'#4d5548',9);
+  polygon([[230,965],[291,965],[303,1018],[292,1043],[192,1043],[184,1029],[204,1003],[225,995]],gradient(187,974,120,70,'#ad8a5d','#775c3e','#45382c'));
+  polygon([[348,965],[409,965],[414,995],[439,1008],[454,1030],[446,1043],[345,1043],[335,1023]],gradient(336,974,120,70,'#9d7e53','#6b543b','#40362c'));
+  stroke([[193,1043],[289,1043]],'#302d28',12);
+  stroke([[348,1043],[445,1043]],'#302d28',12);
+  stroke([[233,997],[272,1007],[236,1015],[277,1023]],'#c4a477',5);
+  stroke([[364,997],[398,1007],[362,1015],[405,1023]],'#b7986b',5);
+
+  // Arms angle gently outward, with bare elbows, forearms and relaxed closed fists.
+  polygon([[215,282],[254,310],[223,405],[193,492],[165,586],[123,580],[147,474],[170,370]],skin(128,284,116,300));
+  polygon([[426,282],[470,369],[492,474],[517,580],[475,586],[447,490],[417,405],[389,310]],skin(402,284,115,300));
+  stroke([[174,440],[163,487],[144,564]],'#dbad82',12);
+  stroke([[469,440],[481,493],[495,563]],'#bc8b66',10);
+  stroke([[163,458],[183,467]],'#906448',7);
+  stroke([[460,467],[480,459]],'#80593f',7);
+  function fist(x,y,left) {
+    ellipse(x,y,28,37,skin(x-26,y-35,53,70),left?-.12:.12);
+    // Small finger creases on the front and a thumb folded over the inner edge.
+    for(let i=0;i<3;i++) stroke([[x-15+i*12,y+7],[x-14+i*12,y+20]],'#79513e',4);
+    const tx=x+(left?-21:21);
+    ellipse(tx,y-10,12,23,skin(tx-12,y-30,24,45),left?-.3:.3);
+    stroke([[x-13,y-23],[x+6,y-25]],'#e6bc94',6);
+  }
+  fist(fistRight.x,fistRight.y,false); fist(fistLeft.x,fistLeft.y,true);
+
+  // Hide tunic: short cap sleeves, broad chest, waist and an uneven hand-cut hem.
+  polygon([[268,253],[222,269],[190,291],[170,352],[218,377],[237,340],
+    [231,462],[223,532],[211,633],[235,653],[254,642],[275,660],[301,649],
+    [324,664],[347,648],[372,656],[399,642],[426,650],[416,540],[408,463],
+    [403,340],[424,377],[472,351],[448,291],[418,270],[371,253]],hide);
+  polygon([[248,302],[275,286],[270,465],[246,523],[232,615],[247,485]],'#b69a65');
+  polygon([[375,296],[395,321],[388,462],[409,623],[385,611],[367,493]],'#64543a');
+  polygon([[279,525],[296,550],[283,643],[266,633]],'#806b46');
+  polygon([[336,527],[354,551],[369,639],[349,644]],'#b0925e');
+  stroke([[196,350],[218,355]],'#ddc18a',5);
+  stroke([[425,356],[449,348]],'#ab905e',5);
+  // A few irregular seam stitches, rather than an all-over procedural grid.
+  for(let i=0;i<9;i++) {
+    const y=375+i*24;
+    stroke([[239-(y-375)*.055,y],[247-(y-375)*.055,y+4]],'#d2b57e',3);
+  }
+  stroke([[280,298],[319,343],[359,298]],'#503e2d',13);
+  stroke([[283,295],[319,335],[356,295]],'#d6b67f',4);
+
+  // Broad leather belt, a small bone toggle and a hanging end.
+  polygon([[228,476],[408,476],[411,510],[226,510]],gradient(228,475,184,40,'#745338','#503b2d','#352b23'));
+  stroke([[235,480],[400,480]],'#aa8150',5);
+  polygon([[333,505],[356,505],[353,563],[343,575],[333,563]],'#60472e');
+  ellipse(319,492,21,17,'#3c3027');
+  stroke([[308,489],[329,495]],'#e1d1a5',9);
+  stroke([[319,479],[318,505]],'#9e794a',4);
+
+  // Neck and front-facing head. Upper-left cheek, forehead and nose catch light.
+  polygon([[290,205],[350,205],[352,260],[369,272],[320,311],[270,272],[287,257]],skin(279,208,80,105));
+  polygon([[292,219],[347,219],[347,244],[312,257],[291,241]],'#835a43');
+  ellipse(254,168,14,25,skin(241,143,28,50));
+  ellipse(385,168,13,25,skin(372,143,26,50));
+  polygon([[262,113],[281,89],[345,86],[376,112],[382,171],[367,214],[343,238],
+    [308,243],[279,224],[262,192]],skin(259,98,123,149));
+  polygon([[270,151],[298,140],[300,185],[280,196],[270,182]],'#dcb18a');
+  polygon([[350,145],[374,155],[366,200],[346,217],[340,195]],'#9b6b50');
+  stroke([[276,151],[299,149]],'#594333',7);
+  stroke([[341,149],[364,153]],'#4a392d',7);
+  stroke([[280,163],[296,164]],'#342e28',6);
+  stroke([[343,164],[358,165]],'#342e28',6);
+  polygon([[318,157],[327,185],[340,191],[313,194]],'#a67756');
+  stroke([[318,160],[313,186],[321,188]],'#edc49a',6);
+  stroke([[303,211],[321,214],[341,209]],'#704a3b',6);
+  stroke([[310,225],[332,225]],'#cf9e78',5);
+  // Short, uneven hair rather than a hood or helmet.
+  polygon([[254,146],[250,119],[259,91],[277,70],[301,63],[332,64],[359,74],
+    [380,99],[389,128],[381,155],[368,137],[361,111],[345,119],[329,102],
+    [307,118],[292,106],[276,126],[267,153]],gradient(254,65,135,90,'#73604a','#493c30','#282724'));
+  stroke([[269,102],[282,85],[303,78]],'#8b7557',9);
+  stroke([[310,80],[330,84],[342,94]],'#79634b',7);
+  stroke([[358,94],[370,112]],'#574732',7);
+
+  // Average each painted character cell before choosing its colour and density.
+  // All source shapes remain offscreen: output contains coloured text only.
+  const sample = document.createElement('canvas');
+  sample.width=COLS; sample.height=ROWS;
+  const sg=sample.getContext('2d',{willReadFrequently:true});
+  sg.drawImage(painting,0,0,COLS,ROWS);
+  const pixels=sg.getImageData(0,0,COLS,ROWS).data;
+  ctx.clearRect(0,0,W,H);
+  ctx.font='bold 15px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let row=0;row<ROWS;row++) for(let col=0;col<COLS;col++) {
+    const p=(row*COLS+col)*4, alpha=pixels[p+3]/255;
+    if(alpha<.22) continue;
+    const r=pixels[p], green=pixels[p+1], b=pixels[p+2];
+    const brightness=(.2126*r+.7152*green+.0722*b)/255;
+    // Lift low tones enough to preserve the shaded silhouette on a dark UI.
+    const density=Math.min(1,Math.pow(brightness,.68)*1.14);
+    const glyph=RAMP[Math.max(2,Math.round(density*(RAMP.length-1)))];
+    ctx.fillStyle=`rgba(${r},${green},${b},${alpha})`;
+    ctx.fillText(glyph,(col+.5)*W/COLS,(row+.5)*H/ROWS);
+  }
+  // Synchronous rendering with a system monospace font; no assets or network.
+  // Headless export: document.querySelector('#out').toDataURL('image/png').
+  window.FIGURE_READY=true;
+})();
+</script>
+</html>

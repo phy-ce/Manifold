@@ -787,7 +787,7 @@ export class MapView {
       const first = this.spentShown === null;
       this.spentShown = spent;
       if (s.depleted && !first) {
-        this.haltFlash.textContent = `${itemName(s.depleted.ore)} ${tr("고갈됨!")}`;
+        this.haltFlash.textContent = `${itemName(s.depleted.ore)} ${s.depleted.what === "cell" ? tr("칸 고갈됨!") : tr("광맥 고갈됨!")}`;
         this.haltFlash.classList.remove("hit", "gain");
         void this.haltFlash.offsetWidth;
         this.haltFlash.classList.add("hit");

@@ -84,7 +84,17 @@ describe("digging", () => {
     cell.left = 1;
     site.left = 1;
     digOnce(s);
-    expect(s.depleted?.ore).toBe(site.ore);
+    expect(s.depleted).toMatchObject({ ore: site.ore, what: "vein" });
+  });
+
+  it("says when the last of a cell is dug out and the vein goes on", () => {
+    const s = onVein();
+    const { site, cell } = harvestTarget(s)!;
+    if (!site.cells || site.cells.length < 2) return;
+    cell.left = 1;
+    site.left = site.cells.reduce((n, c) => n + c.left, 0);
+    digOnce(s);
+    expect(s.depleted).toMatchObject({ ore: site.ore, what: "cell" });
   });
 
   it("stops when the player walks off, and gives nothing", () => {

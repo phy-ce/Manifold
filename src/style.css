@@ -107,9 +107,10 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .draggable[style*="left"] { position: fixed; margin: 0; z-index: 12; }
 .drag-handle { cursor: grab; user-select: none; }
 .draggable.dragging .drag-handle { cursor: grabbing; }
-/* The figure, scaled up with crisp pixels; each slot centred where it is worn or held, with room round the edges. */
+/* The figure, an ASCII-style picture at its own high resolution shown smaller; each slot centred where it is worn
+   or held, with room round the edges. */
 .gear-figure { position: relative; width: calc(var(--fig-w) + var(--slot) * 1.2); height: calc(var(--fig-h) + var(--slot) * 0.3); }
-.gear-body { position: absolute; left: calc(var(--slot) * 0.6); top: 0; width: var(--fig-w); height: var(--fig-h); image-rendering: pixelated; }
+.gear-body { position: absolute; left: calc(var(--slot) * 0.6); top: 0; width: var(--fig-w); height: var(--fig-h); }
 /* paintSlot rewrites a slot's classes, so the figure's slots are found by where they sit. */
 .gear-figure > .slot { position: absolute; left: calc(var(--slot) * 0.6 + var(--x) - var(--slot) / 2); top: calc(var(--y) - var(--slot) / 2); background: color-mix(in srgb, var(--bg) 80%, transparent); }
 .box { background: color-mix(in srgb, var(--panel) 86%, transparent); border: 1px solid var(--line); padding: var(--gap-lg); min-width: 0; }

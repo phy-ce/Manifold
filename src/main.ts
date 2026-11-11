@@ -25,7 +25,7 @@ import { applyTheme } from "./ui/theme";
 import { installTooltip } from "./ui/tooltip";
 import { keepFitted } from "./ui/fitColumn";
 import { makeDraggable } from "./ui/dragWindow";
-import { FIGURE_H, FIGURE_SCALE, FIGURE_W, SLOT_AT, drawFigure } from "./ui/gearFigure";
+import { FIGURE_H, FIGURE_SRC, FIGURE_W, SLOT_AT } from "./ui/gearFigure";
 
 applyTheme();
 installTooltip();
@@ -609,9 +609,11 @@ gearKey.innerHTML = keyHintHtml("K", "", "on");
 gearTools.append(gearTitle, gearKey);
 const figure = document.createElement("div");
 figure.className = "gear-figure";
-figure.style.setProperty("--fig-w", `${FIGURE_W * FIGURE_SCALE}px`);
-figure.style.setProperty("--fig-h", `${FIGURE_H * FIGURE_SCALE}px`);
-const body = drawFigure();
+figure.style.setProperty("--fig-w", `${FIGURE_W}px`);
+figure.style.setProperty("--fig-h", `${FIGURE_H}px`);
+const body = document.createElement("img");
+body.src = FIGURE_SRC;
+body.alt = "";
 body.className = "gear-body";
 figure.append(body);
 const gearSlots = GEAR_SLOTS.map(([slot, name]) => {
@@ -620,8 +622,8 @@ const gearSlots = GEAR_SLOTS.map(([slot, name]) => {
     redraw();
   });
   const [x, y] = SLOT_AT[slot] ?? [0, 0];
-  b.style.setProperty("--x", `${x * FIGURE_SCALE}px`);
-  b.style.setProperty("--y", `${y * FIGURE_SCALE}px`);
+  b.style.setProperty("--x", `${x * FIGURE_W}px`);
+  b.style.setProperty("--y", `${y * FIGURE_H}px`);
   figure.append(b);
   return { slot, name, b };
 });
