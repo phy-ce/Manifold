@@ -150,10 +150,15 @@ export class ItemIndex {
    * Recipes grouped by the machine that runs them: the machine's icon and name once at the head, its power
    * and heat beside it, and each recipe as a row underneath. Order follows the recipes given.
    */
-  private machineGroups(recipes: Recipe[], focus: string): [HTMLElement, number][] {
+  private machineGroups(recipes: Recipe[], focus: string, room: number): [HTMLElement, number][] {
     const byMachine = new Map<string, Recipe[]>();
     for (const r of recipes) byMachine.set(r.machine, [...(byMachine.get(r.machine) ?? []), r]);
-    return [...byMachine].map(([machine, list]) => {
+    // A machine with more recipes than a page holds, as the tool bench has, splits into cards of a page each,
+    // its head repeated on every one, so the pager turns through them.
+    const perCard = Math.max(1, Math.floor((room - GROUP_HEAD) / RECIPE_ROW));
+    const chunks = [...byMachine].flatMap(([machine, list]) =>
+      Array.from({ length: Math.ceil(list.length / perCard) }, (_, i): [string, Recipe[]] => [machine, list.slice(i * perCard, (i + 1) * perCard)]));
+    return chunks.map(([machine, list]) => {
       const card = document.createElement("div");
       card.className = "card machine-group";
       const head = document.createElement("div");
@@ -363,6 +368,7 @@ export class ItemIndex {
     );
 
     // Cards with their rough heights, so a page holds what fits. Recipes come grouped by the machine that runs them.
+    const room = (this.detail.clientHeight || window.innerHeight / 2) - CARD_HEIGHT;
     const cards: [HTMLElement, number][] = [];
     const text = (t: string): [HTMLElement, number] => [this.textCard(t), TEXT_HEIGHT];
     if (this.tab === "stats") {
@@ -371,15 +377,14 @@ export class ItemIndex {
       if (members.length) cards.push([this.membersCard(members), CARD_HEIGHT]);
     } else if (this.tab === "recipes") {
       if (source) cards.push(text(source));
-      cards.push(...this.machineGroups(recipes, id));
+      cards.push(...this.machineGroups(recipes, id, room));
     } else {
       cards.push(...burns.map((type): [HTMLElement, number] => [this.burnCard(type, id), CARD_HEIGHT]));
-      cards.push(...this.machineGroups(uses, id));
+      cards.push(...this.machineGroups(uses, id, room));
       cards.push(...builds.map(([type, cost]): [HTMLElement, number] => [this.buildCard(type, cost), CARD_HEIGHT]));
     }
     if (!cards.length) cards.push(text(tr("아직 없습니다")));
     // Pages filled in order up to the room the panel has; a card taller than the room gets a page of its own.
-    const room = (this.detail.clientHeight || window.innerHeight / 2) - CARD_HEIGHT;
     const pages: HTMLElement[][] = [[]];
     let used = 0;
     for (const [card, height] of cards) {
