@@ -349,13 +349,18 @@ const gear: Record<string, Gear> = era.gear;
 export const gearOf = (id: string): Gear | undefined => gear[id] ?? (isTool(id) ? { slot: "hand", note: toolNote(id) } : undefined);
 /** The two hands, which hold tools; a weapon is a tool like any other. */
 export const HANDS = ["left", "right"];
-/** Equipment slots and what each is called. */
-export const GEAR_SLOTS: [string, string][] = [["feet", tr("발")], ["back", tr("등")], ["left", tr("왼손")], ["right", tr("오른손")]];
+/** Equipment slots and what each is called: head to feet, the hands, the back, and two for trinkets. */
+export const GEAR_SLOTS: [string, string][] = [
+  ["head", tr("머리")], ["body", tr("상체")], ["waist", tr("허리")], ["legs", tr("하체")], ["feet", tr("신발")],
+  ["right", tr("오른손")], ["left", tr("왼손")], ["back", tr("등")], ["acc1", tr("장신구")], ["acc2", tr("장신구")],
+];
+/** The kind of gear a slot takes: both trinket slots take any trinket (gear with slot "acc"). */
+const slotKind = (slot: string): string => (slot.startsWith("acc") ? "acc" : slot);
 /** Whether an item goes in an equipment slot: any tool in either hand, worn gear in its own slot. */
-export const fitsSlot = (id: string, slot: string): boolean => (HANDS.includes(slot) ? isTool(id) : gear[id]?.slot === slot);
+export const fitsSlot = (id: string, slot: string): boolean => (HANDS.includes(slot) ? isTool(id) : gear[id]?.slot === slotKind(slot));
 /** The items that fit a slot. */
 export const gearFor = (slot: string): string[] =>
-  HANDS.includes(slot) ? Object.keys(variants).filter(isTool) : Object.keys(gear).filter((id) => gear[id].slot === slot);
+  HANDS.includes(slot) ? Object.keys(variants).filter(isTool) : Object.keys(gear).filter((id) => gear[id].slot === slotKind(slot));
 
 /** Machines of the first stage. */
 export const MACHINE_TYPES: string[] = machinesAt(0);
