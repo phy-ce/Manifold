@@ -10,7 +10,7 @@ import { SOUND } from "./sound";
 import { FightPanel } from "./fightPanel";
 import { GatherPanel } from "./gatherPanel";
 import { Finder } from "./finder";
-import { COLOR, siteName } from "./mapLook";
+import { COLOR, siteName, syncMapTheme } from "./mapLook";
 
 /**
  * The window onto the endless map stays centred on the player and fills the middle of the screen, up to this
@@ -484,6 +484,11 @@ export class MapView {
   draw(): void {
     const s = this.game();
     this.changeLayer();
+    // A new age on the page: the map takes its tones, and every cached ground colour and drawn frame goes.
+    if (syncMapTheme()) {
+      backs.clear();
+      this.drawnMap = "";
+    }
     // The safe switch and prospecting read as key hints: lit while on.
     const safeLabel = keyHintHtml("T", tr("안전 모드"), s.safeWalk ? "on" : "off");
     if (this.safe.dataset.shown !== safeLabel) this.safe.innerHTML = this.safe.dataset.shown = safeLabel;

@@ -8,6 +8,7 @@
   /* Colour roles */
   --bg: #10151c; --panel: #171e27; --line: #2f3b49; --fg: #dfe5ea; --dim: #7c8b9b; --faint: #3c4955; --rock: #4a5966;
   --fire: #ffb238; --alert: #ff5f56; --water: #4d8fc4; --go: #8fd16f; --power: #ffd24a;
+  --hp: #e8645c; --hunger: #d9a441; --weight: #8fb0cf;
 
   /* Type scale */
   /* UI text: a pixel font (Galmuri, OFL; src/assets/fonts) for the dot look, crisp only at its own 12px and twice that.
@@ -85,10 +86,10 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 /* The turn of an age (src/ui/eraTransition.ts): over everything; a click skips it and goes no further. */
 .era-turn { position: fixed; inset: 0; z-index: 60; cursor: pointer; }
 .era-turn canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-.era-title { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--gap); pointer-events: none; color: #dfe5ea; text-align: center; }
-.era-title b { font-size: calc(var(--text-lg) * 2); line-height: 1; color: #ffb238; }
+.era-title { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--gap); pointer-events: none; color: var(--fg); text-align: center; }
+.era-title b { font-size: calc(var(--text-lg) * 2); line-height: 1; color: var(--fire); }
 .era-title span { font-size: var(--text-lg); }
-.era-title small { margin-top: var(--gap-lg); font-size: var(--text-sm); color: #94a2b0; }
+.era-title small { margin-top: var(--gap-lg); font-size: var(--text-sm); color: var(--dim); }
 /* The dark back covers the whole screen and a machine or line window sits in the middle of it, like any window;
    while one is open the index column sits above the dark back (main.ts sets #app.index-beside), dimmed like the
    rest and lit while pointed at, so it stays usable beside the window. The top bar dims with everything else. */
@@ -140,9 +141,9 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 /* Health and hunger stand out from the rest of the status line: larger, bright, each bar in its own colour. Low, they turn red and pulse. */
 .meter.vital { color: var(--fg); font-size: var(--text-md); font-weight: 700; }
 .meter.vital b { font-weight: 700; }
-.meter.hp .meter-bar { color: #e8645c; }
-.meter.hunger .meter-bar { color: #d9a441; }
-.meter.weight .meter-bar { color: #8fb0cf; }
+.meter.hp .meter-bar { color: var(--hp); }
+.meter.hunger .meter-bar { color: var(--hunger); }
+.meter.weight .meter-bar { color: var(--weight); }
 /* A dig the load stopped: the load meter jolts red for a moment. */
 .meter.weight.strain, .meter.weight.strain .meter-bar { color: var(--alert); animation: nudge-hard .3s 2; }
 .meter.vital.low, .meter.vital.low .meter-bar { color: var(--alert); animation: pulse .7s steps(2) infinite; }
@@ -204,10 +205,10 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .slot.tool-mid { --life-color: var(--fire); }
 .slot.tool-low { --life-color: var(--alert); }
 .icon { font-family: var(--art-mono); font-size: var(--glyph-icon); line-height: var(--glyph-icon); font-weight: 700; }
-.code, .n { position: absolute; right: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; background: rgb(16 21 28 / 72%); }
+.code, .n { position: absolute; right: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; background: color-mix(in srgb, var(--bg) 72%, transparent); }
 .code { top: 1px; font-weight: 700; }
 /* A group's badge: how many kinds count as it. Top left, clear of the code and the count. */
-.kinds { position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; color: var(--dim); background: rgb(16 21 28 / 72%); }
+.kinds { position: absolute; left: 1px; top: 1px; padding: 0 2px; font-size: var(--text-xs); line-height: 1.1; color: var(--dim); background: color-mix(in srgb, var(--bg) 72%, transparent); }
 .n { bottom: 1px; color: var(--fg); }
 
 /* Map */
@@ -215,9 +216,9 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 /* The map fills the middle with whole cells (MapView sizes its canvas), centred in its box. */
 .map-view { place-items: center; overflow: hidden; position: relative; }
 /* While time is stopped: a mark over the top middle of the map or the board, never in the way of a click. */
-.paused-mark { position: absolute; top: var(--gap-lg); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); color: var(--fire); background: rgb(16 21 28 / 80%); border: 1px solid var(--fire); font-size: var(--text-lg); font-weight: 700; pointer-events: none; }
+.paused-mark { position: absolute; top: var(--gap-lg); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); color: var(--fire); background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--fire); font-size: var(--text-lg); font-weight: 700; pointer-events: none; }
 /* A creature within a blow: "[F] 공격" over the map, under the pause mark's place. */
-.fight-alert { position: absolute; top: calc(var(--gap-lg) * 4); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); background: rgb(16 21 28 / 80%); border: 1px solid var(--alert); font-size: var(--text-lg); pointer-events: none; }
+.fight-alert { position: absolute; top: calc(var(--gap-lg) * 4); left: 50%; transform: translateX(-50%); padding: var(--gap-sm) var(--gap-lg); background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--alert); font-size: var(--text-lg); pointer-events: none; }
 .work-alert { border-color: var(--go); color: var(--go); }
 .graph-view { grid-template-rows: minmax(0, 1fr); }
 .map { display: block; cursor: crosshair; }
@@ -250,7 +251,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .save-list .save-heading { margin-top: var(--gap-sm); text-align: left; }
 .t-plain { color: var(--faint); } .t-hill { color: var(--dim); } .t-water { color: var(--water); }
 .t-path { color: var(--fire); } .t-base { color: var(--fg); font-weight: 700; } .t-me { color: var(--go); font-weight: 700; }
-.t-fog { color: #1e2732; } .t-site { font-weight: 700; }
+.t-fog { color: color-mix(in srgb, var(--bg) 85%, var(--fg)); } .t-site { font-weight: 700; }
 /* The place panel's head: two fixed lines that never wrap, the F hint always at the right of the first. */
 .vein-head { display: grid; gap: var(--gap-sm); margin-bottom: var(--gap-sm); }
 .vein-line { display: flex; align-items: center; gap: var(--gap); min-width: 0; height: calc(var(--text-sm) * 1.8); white-space: nowrap; overflow: hidden; }
@@ -272,7 +273,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .key-hint kbd { display: inline-block; min-width: 18px; line-height: 16px; padding: 0 4px; text-align: center; font: inherit; font-weight: 700; border: 1px solid var(--dim); border-bottom-width: 2px; background: var(--bg); }
 .key-hint.on { color: var(--fire); }
 .key-hint.on kbd { border-color: var(--fire); color: var(--fire); }
-.fight-view { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; margin: var(--gap-sm) auto 0; background: #090d12; image-rendering: pixelated; cursor: crosshair; touch-action: manipulation; }
+.fight-view { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; margin: var(--gap-sm) auto 0; background: color-mix(in srgb, var(--bg) 70%, black); image-rendering: pixelated; cursor: crosshair; touch-action: manipulation; }
 .fight-view:focus-visible { outline: 1px solid var(--go); outline-offset: 2px; }
 .rock { color: var(--rock); } .hit { color: var(--bg); background: var(--fire); }
 
@@ -379,11 +380,7 @@ body.era-s1 :is(.dock, .window, .board-scroll)::after {
 .top-actions { display: flex; align-items: center; gap: var(--gap); flex: none; margin-left: auto; }
 /* How far home is, just left of the button that goes there. */
 .place-line { color: var(--dim); white-space: nowrap; font-size: var(--text-sm); }
-/* The top bar's buttons take the age's look, as the boxes do: its own text and line colours, its metal when lit;
-   dashed in the mythic age. */
-body:is(.era-s0, .era-s1) .top .tech { color: var(--fg); border-color: var(--line); }
-body:is(.era-s0, .era-s1) .top .tech:hover { border-color: var(--era-metal); }
-body:is(.era-s0, .era-s1) .top .tech.selected { color: var(--bg); background: var(--era-metal); border-color: var(--era-metal); }
+/* The top bar's buttons are dashed in the mythic age, as its boxes are. */
 body.era-s0 .top .tech { border-style: dashed; }
 .modes { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
 .reserve-gauges { display: inline-flex; gap: var(--gap); white-space: nowrap; }
@@ -404,6 +401,11 @@ body.era-s0 .top .tech { border-style: dashed; }
 .form-results { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
 .form-results:empty { display: none; }
 .tech.selected { color: var(--bg); background: var(--go); border-color: var(--go); }
+/* Every button takes the age's look, as the boxes do: its own text and line colours, its metal when lit. :where keeps
+   these as weak as plain .tech, so a button with a meaning of its own (demolish, a key hint) keeps its colour. */
+:where(body.era-s0, body.era-s1) .tech { color: var(--fg); }
+:where(body.era-s0, body.era-s1) .tech:hover { border-color: var(--era-metal); }
+:where(body.era-s0, body.era-s1) .tech.selected { color: var(--bg); background: var(--era-metal); border-color: var(--era-metal); }
 /* Board layers: each button wears its own line colour. */
 .layers .tech[data-layer="fluid"] { color: var(--water); }
 .layers .tech[data-layer="power"] { color: var(--power); }
@@ -413,7 +415,7 @@ body.era-s0 .top .tech { border-style: dashed; }
 .demolish:hover, .demolish.armed { color: var(--alert); border-color: var(--alert); }
 
 /* Windows: one at a time, covering the base */
-.window-back, .win { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: calc(var(--gap) * 2); background: rgb(8 11 15 / 82%); overflow: hidden; }
+.window-back, .win { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: calc(var(--gap) * 2); background: color-mix(in srgb, color-mix(in srgb, var(--bg) 60%, black) 82%, transparent); overflow: hidden; }
 .window { display: grid; gap: var(--gap-lg); max-width: 100%; padding: var(--gap-lg); background: var(--panel); border: 1px solid var(--dim); }
 /*
  * Windows keep one size whatever they show. Each is sized for its fullest state, kept as narrow as that allows:
@@ -471,9 +473,9 @@ body.era-s0 .top .tech { border-style: dashed; }
 @keyframes nudge { 50% { transform: translate(1px, 1px); } }
 @keyframes nudge-hard { 25% { transform: translate(-3px, 1px); } 50% { transform: translate(3px, -1px); } 75% { transform: translate(-2px, 0); } }
 /* Light only where it comes from: a flash where a tool lands, a glow over a fire. Both blend onto the picture. */
-.strike-flash { position: absolute; width: calc(var(--gap) * 4); height: calc(var(--gap) * 3); margin: calc(var(--gap) * -1.5) 0 0 calc(var(--gap) * -2); background: radial-gradient(closest-side, #fff8e0, rgb(255 178 56 / 60%) 55%, transparent); mix-blend-mode: screen; animation: strike-flash 150ms steps(3) forwards; }
+.strike-flash { position: absolute; width: calc(var(--gap) * 4); height: calc(var(--gap) * 3); margin: calc(var(--gap) * -1.5) 0 0 calc(var(--gap) * -2); background: radial-gradient(closest-side, color-mix(in srgb, var(--fire) 15%, white), color-mix(in srgb, var(--fire) 60%, transparent) 55%, transparent); mix-blend-mode: screen; animation: strike-flash 150ms steps(3) forwards; }
 @keyframes strike-flash { from { opacity: 1; } to { opacity: 0; } }
-.fire-glow { position: absolute; width: calc(var(--gap) * 7); height: calc(var(--gap) * 5); margin: calc(var(--gap) * -2.5) 0 0 calc(var(--gap) * -3.5); background: radial-gradient(closest-side, rgb(255 210 120 / 90%), rgb(224 84 30 / 45%) 60%, transparent); mix-blend-mode: screen; }
+.fire-glow { position: absolute; width: calc(var(--gap) * 7); height: calc(var(--gap) * 5); margin: calc(var(--gap) * -2.5) 0 0 calc(var(--gap) * -3.5); background: radial-gradient(closest-side, color-mix(in srgb, var(--fire) 90%, transparent), color-mix(in srgb, var(--alert) 45%, transparent) 60%, transparent); mix-blend-mode: screen; }
 /* The beat for rhythm machines: beats slide left to the strike line. */
 .lane { position: relative; height: calc(var(--gap) * 5); background: var(--bg); border: 1px solid var(--line); overflow: hidden; font: 700 var(--text-lg)/calc(var(--gap) * 5 - 2px) var(--mono); }
 .lane-line { position: absolute; top: 0; bottom: 0; left: calc(var(--gap) * 8 - 1px); width: 2px; background: var(--faint); }
@@ -482,7 +484,7 @@ body.era-s0 .top .tech { border-style: dashed; }
 .lane-beat.done { color: var(--go); }
 .lane-beat.missed { color: var(--faint); }
 /* A bellows furnace's gauge: the green band is where the work moves, the red top burns the batch. */
-.blast-gauge { position: relative; align-self: stretch; width: calc(var(--gap) * 3); background: linear-gradient(to top, var(--bg) 40%, #1c2d1d 40% 80%, #36200f 80%); border: 1px solid var(--line); cursor: pointer; }
+.blast-gauge { position: relative; align-self: stretch; width: calc(var(--gap) * 3); background: linear-gradient(to top, var(--bg) 40%, color-mix(in srgb, var(--go) 15%, var(--bg)) 40% 80%, color-mix(in srgb, var(--fire) 20%, var(--bg)) 80%); border: 1px solid var(--line); cursor: pointer; }
 .blast-fill { position: absolute; left: 5px; right: 5px; bottom: 0; background: var(--fire); }
 .blast-fill.in { background: var(--go); }
 .blast-fill.over { background: var(--alert); }
@@ -533,7 +535,7 @@ body.era-s0 .top .tech { border-style: dashed; }
 
 /* Taking damage */
 /* What a hit cost and what dealt it, "체력 -3 늑대", over the top of the map long enough to read. */
-.hurt { position: fixed; top: calc(var(--gap) * 8); left: 50%; transform: translateX(-50%); z-index: 35; padding: var(--gap-sm) var(--gap); color: var(--alert); background: rgb(16 21 28 / 80%); border: 1px solid var(--alert); font-size: var(--text-lg); font-weight: 700; white-space: nowrap; pointer-events: none; opacity: 0; }
+.hurt { position: fixed; top: calc(var(--gap) * 8); left: 50%; transform: translateX(-50%); z-index: 35; padding: var(--gap-sm) var(--gap); color: var(--alert); background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--alert); font-size: var(--text-lg); font-weight: 700; white-space: nowrap; pointer-events: none; opacity: 0; }
 .hurt.hit { animation: hurt-flash 1.6s ease-out; }
 /* Safe mode's stop reads the same way in amber: what it saw and what crossing would cost. */
 .halt-flash { color: var(--fire); border-color: var(--fire); }
@@ -544,7 +546,7 @@ body.era-s0 .top .tech { border-style: dashed; }
 .vitals.hit .meter.hp { color: var(--alert); }
 @keyframes hurt-flash { 0%, 60% { opacity: 1; } to { opacity: 0; } }
 /* The red edge on taking damage: a vignette, clear in the middle, strongest at the corners, gone in half a second. */
-.hurt-edge { position: fixed; inset: 0; z-index: 34; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, rgb(200 30 30 / 55%) 100%); box-shadow: inset 0 0 calc(var(--gap) * 6) rgb(255 60 50 / 45%); }
+.hurt-edge { position: fixed; inset: 0; z-index: 34; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 55%, color-mix(in srgb, var(--alert) 55%, transparent) 100%); box-shadow: inset 0 0 calc(var(--gap) * 6) color-mix(in srgb, var(--alert) 45%, transparent); }
 .hurt-edge.hit { animation: hurt-edge .55s ease-out; }
 @keyframes hurt-edge { from { opacity: var(--hurt, 1); } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .hurt-edge.hit { animation-duration: .25s; } }
@@ -557,7 +559,7 @@ body.era-s0 .top .tech { border-style: dashed; }
 .tip-code { font-weight: 700; }
 .tip-value { color: var(--fire); text-align: right; }
 
-@keyframes pulse { 50% { background: #3a1a1a; } }
+@keyframes pulse { 50% { background: color-mix(in srgb, var(--alert) 20%, var(--bg)); } }
 @media (prefers-reduced-motion: reduce) { .slot.full, .node[data-status="blocked"], .meter.vital.low, .meter.weight.strain { animation: none; } }
 .top .tutorial-target { outline-offset: -2px; }
 /* The section's steps as a checklist: done ones dim, the current one lit. */
