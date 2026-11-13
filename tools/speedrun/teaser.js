@@ -1,4 +1,5 @@
-// A ~30-second teaser for the README, for tools/speedrun/record.mjs (SPEEDRUN_BOT=teaser). It plays a short
+// A ~20-second teaser for the README, for tools/speedrun/record.mjs (SPEEDRUN_BOT=teaser; SPEEDRUN_LANG=en for
+// README.md, ko for README.ko.md). It plays a short
 // run and marks in window.__keep only the moments worth showing; the recorder cuts the rest. Between those
 // moments things are simply set up (a deer laid in front, the warehouse stocked), so nothing waits on luck.
 async () => {
@@ -27,18 +28,7 @@ async () => {
   };
   const key = (code) => window.dispatchEvent(new KeyboardEvent("keydown", { code, key: code.slice(3).toLowerCase(), bubbles: true }));
   const store = () => s().nodes.find((n) => n.type === "warehouse");
-  const bagHas = (item) => s().inv.reduce((sum, slot) => sum + (slot && C.matches(slot.id, item) ? slot.n : 0), 0);
   const stock = (item, n) => E.addTo(store().store, item, n);
-  const toBag = (item, n) => {
-    let need = n - bagHas(item);
-    store().store.forEach((slot, i) => {
-      if (need <= 0 || !slot || !C.matches(slot.id, item)) return;
-      const moved = E.addTo(s().inv, slot.id, Math.min(need, slot.n));
-      slot.n -= moved;
-      need -= moved;
-      if (!slot.n) store().store[i] = null;
-    });
-  };
   const space = () => window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true }));
   const walk = async (to) => {
     E.walkTo(s(), to);
@@ -78,11 +68,10 @@ async () => {
   async function build(type, ms = 0) {
     note(`build ${type}`);
     const bench = s().nodes.find((n) => C.isBuilder(n.type) && C.machineForms(n.type).includes(type));
-    // The bench takes the cost from the bag; the warehouse is stocked with it first, so nothing is short.
-    for (const [id, n] of Object.entries(C.machineCost(type))) {
-      stock(id, n);
-      toBag(id, n);
-    }
+    // The bench takes its cost from the bag. The bag is emptied into the warehouse first and given exactly the
+    // cost, so a stack of the wrong kind of clay already in it can't leave the bench short.
+    s().inv.forEach((_, i) => E.moveToNode(s(), i, store().id));
+    for (const [id, n] of Object.entries(C.machineCost(type))) E.addTo(s().inv, id, n);
     E.setForm(s(), bench.id, type);
     E.fillFromBag(s(), bench.id, E.recipeOf(bench), 1);
     if (ms) {
@@ -174,7 +163,7 @@ async () => {
   stock("wood", 32);
   stock("stone", 32);
   await wait(500);
-  await build("open_kiln", 3500);
+  await build("open_kiln", 4500);
   await build("tool_bench");
   await wait(300);
   roll();
