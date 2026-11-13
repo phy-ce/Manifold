@@ -6,7 +6,7 @@
 
 A text-art factory game inspired by Minecraft tech modpacks.
 
-![A 20-second tour: digging clay on the map with both hands at work, spearing a deer and cutting up its carcass in the gathering window, the bag and the equipment figure, striking on the beat at the workbench, and the item index](docs/media/manifold-teaser.gif)
+![A 30-second tour: digging clay on the map with both hands at work, spearing a deer and cutting up its carcass in the gathering window, the bag and the equipment figure, striking on the beat at the workbench, a first steam-age line on belts, and the item index](docs/media/manifold-teaser.gif)
 
 ## How it plays
 

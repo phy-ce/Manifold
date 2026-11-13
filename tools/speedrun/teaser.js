@@ -1,4 +1,4 @@
-// A ~20-second teaser for the README, for tools/speedrun/record.mjs (SPEEDRUN_BOT=teaser; SPEEDRUN_LANG=en for
+// A ~30-second teaser for the README, for tools/speedrun/record.mjs (SPEEDRUN_BOT=teaser; SPEEDRUN_LANG=en for
 // README.md, ko for README.ko.md). It plays a short
 // run and marks in window.__keep only the moments worth showing; the recorder cuts the rest. Between those
 // moments things are simply set up (a deer laid in front, the warehouse stocked), so nothing waits on luck.
@@ -165,9 +165,46 @@ async () => {
   await wait(500);
   await build("open_kiln", 4500);
   await build("tool_bench");
+
+  // ---- The steam age's first line, laid out on the board: the warehouse feeds a brick kiln, its bricks go to a
+  // yard, and a wound spring turns a belt drive that runs the belts. Each machine and line goes down on camera.
+  note("line");
+  s().stage = 1;
+  s().announced = null;
+  stock("Kn", 32);
+  stock("Lg", 32);
+  M.redraw();
+  // The age turns: its title card is clicked away off camera.
   await wait(300);
+  document.querySelector(".era-turn:not([hidden])")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await wait(600);
+  const home = store();
+  // Laid out beside the warehouse, so the whole line is in view: the kiln and the yard to its right, the spring
+  // and the drive below.
+  const put = async (type, dx, dy) => {
+    const node = E.placeMachine(s(), type, home.x + dx, home.y + dy);
+    M.redraw();
+    await wait(450);
+    return node;
+  };
   roll();
-  await wait(1500);
+  const kiln = await put("brick_kiln", 260, 0);
+  const yard = await put("warehouse", 520, 0);
+  const motor = await put("spring_motor", 0, 170);
+  const drive = await put("belt_drive", 260, 170);
+  motor.energy = E.SPRING_MAX;
+  for (const [a, b, kind] of [[home.id, kiln.id, "all"], [kiln.id, yard.id, "main"], [motor.id, drive.id, "power"], [drive.id, home.id, "drive"]]) {
+    E.connect(s(), a, b, kind);
+    M.redraw();
+    await wait(500);
+  }
+  // Running: clay and coal ride the belts in, bricks come out to the yard.
+  const end = performance.now() + 5000;
+  while (performance.now() < end) {
+    fed();
+    motor.energy = E.SPRING_MAX;
+    await wait(200);
+  }
   cut();
 
   // ---- The item index: what a stick is for, turned page by page.
