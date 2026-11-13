@@ -1,6 +1,6 @@
 // Films the speedrun bot playing the game on the dev server, in a headless Chrome, and saves the frames.
 // Usage: node tools/speedrun/record.mjs <out-dir> [chrome-path]
-// Needs the dev server on http://localhost:5173 and tools/speedrun/<bot>.js (SPEEDRUN_BOT, default bot; SPEEDRUN_LANG, default ko). Writes frames/*.jpg and
+// Needs the dev server on http://localhost:5173 (or SPEEDRUN_SITE) and tools/speedrun/<bot>.js (SPEEDRUN_BOT, default bot; SPEEDRUN_LANG, default ko). Writes frames/*.jpg and
 // frames.txt (an ffmpeg concat list with each frame's real duration) into <out-dir>, then turn them into a
 // video with ffmpeg. Nothing but Node itself: Chrome is driven through its DevTools protocol.
 import { spawn } from "node:child_process";
@@ -72,7 +72,7 @@ socket.addEventListener("message", (event) => {
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { ...VIEW, deviceScaleFactor: 1, mobile: false });
-await send("Page.navigate", { url: "http://localhost:5173/speedrun-start.html" });
+await send("Page.navigate", { url: `${process.env.SPEEDRUN_SITE ?? "http://localhost:5173"}/speedrun-start.html` });
 
 const evaluate = async (expression, awaitPromise = false) =>
   (await send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true })).result?.value;

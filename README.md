@@ -6,7 +6,7 @@
 
 A text-art factory game that keeps the best part of tech modpacks, designing production lines, and cuts most of the walking and grinding. You build your factory as a node graph.
 
-![A 30-second tour: digging clay on the map, striking on the beat at the workbench, working the bloomery's bellows, exploring a cave, a first smelter and brick kiln on belts, and the item index](docs/media/manifold-teaser.gif)
+![A 20-second tour: digging clay on the map with both hands at work, spearing a deer and cutting up its carcass in the gathering window, the bag and the equipment figure, striking on the beat at the workbench, and the item index](docs/media/manifold-teaser.gif)
 
 ## How it plays
 
