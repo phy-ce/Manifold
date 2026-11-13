@@ -1,4 +1,4 @@
-// A ~30-second teaser for the README, for tools/speedrun/record.mjs (SPEEDRUN_BOT=teaser; SPEEDRUN_LANG=en for
+// A ~40-second teaser for the README, for tools/speedrun/record.mjs (SPEEDRUN_BOT=teaser; SPEEDRUN_LANG=en for
 // README.md, ko for README.ko.md). It plays a short
 // run and marks in window.__keep only the moments worth showing; the recorder cuts the rest. Between those
 // moments things are simply set up (a deer laid in front, the warehouse stocked), so nothing waits on luck.
@@ -29,6 +29,46 @@ async () => {
   const key = (code) => window.dispatchEvent(new KeyboardEvent("keydown", { code, key: code.slice(3).toLowerCase(), bubbles: true }));
   const store = () => s().nodes.find((n) => n.type === "warehouse");
   const stock = (item, n) => E.addTo(store().store, item, n);
+  // A cursor drawn on the page (a headless browser shows none): an arrow that glides to where it clicks.
+  const cursor = document.createElement("div");
+  cursor.innerHTML = '<svg width="22" height="28" viewBox="0 0 22 28"><path d="M1 1 L1 22 L7 17 L11 26 L15 24 L11 15 L19 15 Z" fill="#fff" stroke="#111" stroke-width="1.5"/></svg>';
+  cursor.style.cssText = "position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;transition:transform .08s;filter:drop-shadow(0 2px 2px rgb(0 0 0 / 60%))";
+  document.body.append(cursor);
+  let at = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  const place = () => {
+    cursor.style.left = `${at.x}px`;
+    cursor.style.top = `${at.y}px`;
+  };
+  place();
+  const moveTo = async (x, y, ms = 260) => {
+    const from = { ...at };
+    const steps = Math.max(1, Math.round(ms / 16));
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const ease = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+      at = { x: from.x + (x - from.x) * ease, y: from.y + (y - from.y) * ease };
+      place();
+      await wait(16);
+    }
+  };
+  /** Glides to the middle of an element and clicks it there, with the events a real click sends. */
+  const click = async (el) => {
+    if (!el) throw new Error("nothing to click");
+    const r = el.getBoundingClientRect();
+    await moveTo(r.left + r.width / 2, r.top + r.height / 2);
+    await wait(60);
+    cursor.style.transform = "scale(.85)";
+    const o = { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y, button: 0, pointerId: 1, view: window };
+    el.dispatchEvent(new PointerEvent("pointerdown", o));
+    el.dispatchEvent(new MouseEvent("mousedown", o));
+    await wait(90);
+    el.dispatchEvent(new PointerEvent("pointerup", o));
+    el.dispatchEvent(new MouseEvent("mouseup", o));
+    el.dispatchEvent(new MouseEvent("click", o));
+    cursor.style.transform = "";
+    M.redraw();
+    await wait(120);
+  };
   const space = () => window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true }));
   const walk = async (to) => {
     E.walkTo(s(), to);
@@ -193,13 +233,30 @@ async () => {
   const motor = await put("spring_motor", 0, 170);
   const drive = await put("belt_drive", 260, 170);
   motor.energy = E.SPRING_MAX;
-  for (const [a, b, kind] of [[home.id, kiln.id, "all"], [kiln.id, yard.id, "main"], [motor.id, drive.id, "power"], [drive.id, home.id, "drive"]]) {
-    E.connect(s(), a, b, kind);
-    M.redraw();
-    await wait(500);
-  }
+  // Each line laid by hand, as a player does: the layer, the [+] on the machine it leaves, the machine it goes
+  // to, then the line ticked in the window that opens, and the window closed. The cursor is drawn on the page,
+  // since a headless browser shows none, and every click lands on the real button under it.
+  for (const id of ["iron_belt", "iron_rod"]) E.addTo(s().inv, id, 8);
+  const node = (id) => document.querySelector(`.node[data-id="${id}"]`);
+  const lay = async (from, to, kind) => {
+    const layer = E.lineLayer(s(), from, kind);
+    await click(document.querySelector(`[data-layer="${layer}"]`));
+    await click(node(from).querySelector(".link"));
+    await click(node(to).querySelector(".node-body"));
+    await wait(150);
+    const rows = [...document.querySelectorAll(".route-window .route-row")];
+    const row = rows.find((r) => r.textContent.includes(C.itemCode(kind))) ?? rows.find((r) => !r.disabled);
+    await click(row);
+    await wait(250);
+    await click(document.querySelector(".route-window .tech.push"));
+  };
+  await lay(home.id, kiln.id, "all");
+  await lay(kiln.id, yard.id, "main");
+  await lay(motor.id, drive.id, "power");
+  await lay(drive.id, home.id, "drive");
+  await moveTo(window.innerWidth * 0.55, window.innerHeight * 0.75);
   // Running: clay and coal ride the belts in, bricks come out to the yard.
-  const end = performance.now() + 5000;
+  const end = performance.now() + 3500;
   while (performance.now() < end) {
     fed();
     motor.energy = E.SPRING_MAX;

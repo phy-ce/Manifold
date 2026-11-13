@@ -6,7 +6,7 @@
 
 A text-art factory game inspired by Minecraft tech modpacks.
 
-![A 30-second tour: digging clay on the map with both hands at work, spearing a deer and cutting up its carcass in the gathering window, the bag and the equipment figure, striking on the beat at the workbench, a first steam-age line on belts, and the item index](docs/media/manifold-teaser.gif)
+![A 40-second tour: digging clay on the map with both hands at work, spearing a deer and cutting up its carcass in the gathering window, the bag and the equipment figure, striking on the beat at the workbench, laying a first steam-age line by hand and setting it running, and the item index](docs/media/manifold-teaser.gif)
 
 ## How it plays
 
@@ -27,44 +27,19 @@ Press `?` in the game to see the controls.
 
 | Stage | Content | Goal | Status |
 |---|---|---|---|
+| S0 | Mythic age: tools of wood, stone and bone, hunting, the first kilns and forges | A construction bench | Playable |
 | S1-1 | Steam engine and copper piping | 1 steam engine | Playable |
-| S1-2 | Steam power | 120 iron plates | Playable |
+| S1-2 | Steam power | A coke oven | Playable |
 | S1-3 | Coke and blast furnaces | 100 steel | Playable |
 | S1-4 | Steam machine tools | 6 port flanges | Designed only |
 | S1-5 | Steam generator | 3 steam generators | Designed only |
 | S2 | Electric era | | Planned |
 
-## Development
+## Feedback
 
-Requires Node.js 22.
+Found a bug or have an idea? Open an [issue](https://github.com/phy-ce/Manifold/issues). If you enjoy the game, a star helps others find it.
 
-```sh
-npm install
-npm run dev
-```
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Start the dev server |
-| `npm run build` | Type-check and build |
-| `npm test` | Game rule and translation tests |
-| `npm run check:data` | Validate recipe data |
-
-Every push to `main` runs the data check, tests and build in GitHub Actions, then deploys to GitHub Pages.
-
-Built with TypeScript and Vite. Machine art is drawn with PixiJS. The game rules are kept apart from the UI code, so they can be tested without a browser.
-
-| Path | Contents |
-|---|---|
-| `data/` | Materials, machines, recipes and ores |
-| `src/engine/` | Game rules, separate from the UI |
-| `src/ui/` | UI |
-| `src/ui/theme.ts` | Size units |
-| `src/i18n.ts` | Languages and English translation |
-| `DESIGN.md` | Overall design rules and list of documents (Korean) |
-| `docs/design/` | Detailed design documents (Korean) |
-
-The recipes are designed by hand, based on real industrial processes.
+Want to run it yourself or change something? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
