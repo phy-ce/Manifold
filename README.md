@@ -68,4 +68,4 @@ The recipes are designed by hand, based on real industrial processes.
 
 ## License
 
-[GNU GPL v3](LICENSE) or later. You may copy, change and share it, but anything you distribute that is based on it must also be released under the GPL with its source code, keeping the [NOTICE](NOTICE). Versions published before this change were released under Apache 2.0, and earlier ones under MIT.
+[GNU GPL v3](LICENSE) or later. You may copy, change and share it, but anything you distribute that is based on it must also be released under the GPL with its source code, keeping the [NOTICE](NOTICE).
